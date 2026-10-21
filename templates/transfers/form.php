@@ -1,16 +1,20 @@
-<header class="page-head"><div><h1>Điều chuyển kho</h1><p class="muted">Một phiếu điều chuyển đi tại kho nguồn; khi xác nhận, hệ thống trừ kho đi và cộng kho đến trong <b>cùng một giao dịch</b> và lập đủ chứng từ ở cả hai nơi.</p></div></header>
+<header class="page-head"><div><h1>Điều chuyển kho</h1><p class="muted">Một phiếu điều chuyển đi tại kho nguồn; khi xác nhận, hệ thống trừ kho đi và cộng kho đến trong <b>cùng một giao dịch</b> và lập đủ phiếu nhập xuất ở cả hai nơi.</p></div></header>
 <?php if (!$from): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu điều chuyển.</p></section>
 <?php else: ?>
 <form method="post" action="/transfers" class="card form" data-once>
   <input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="idem" value="<?= e($idem) ?>">
   <div class="route">
-    <label>Kho đi<select name="from_wh" required><?= wh_options($from, null, 'Chọn kho đi…') ?></select></label>
+    <?php if (!$user->isAdmin && $myWarehouse): ?>
+      <?= wh_fixed($myWarehouse, 'Kho đi (kho của bạn)', 'from_wh') ?>
+    <?php else: ?>
+      <label>Kho đi<select name="from_wh" required data-addr-for="addr-from"><?= wh_options($from, null, 'Chọn kho đi…') ?></select><small class="muted wh-addr" id="addr-from"></small></label>
+    <?php endif; ?>
     <span class="route-arrow" aria-hidden="true"><?= icon('truck') ?></span>
-    <label>Kho đến<select name="to_wh" required><?= wh_options($to, null, 'Chọn kho đến…') ?></select></label>
+    <label>Kho đến<select name="to_wh" required data-addr-for="addr-to"><?= wh_options($user->isAdmin ? $to : array_values(array_filter($to, fn($w) => (int)$w['id'] !== (int)$user->warehouseId)), null, 'Chọn kho đến…') ?></select><small class="muted wh-addr" id="addr-to"></small></label>
   </div>
   <label>Ghi chú<input name="note" maxlength="255" placeholder="Lý do điều chuyển, đơn vị vận chuyển…"></label>
-  <?php require __DIR__ . '/../partials/lines.php'; ?>
+  <?php $checkStock = true; require __DIR__ . '/../partials/lines.php'; ?>
   <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Huỷ</a></div>
 </form>
 <?php endif; ?>

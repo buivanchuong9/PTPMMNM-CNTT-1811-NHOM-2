@@ -9,6 +9,7 @@ use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
 use StockFlow\Core\View;
+use StockFlow\Domain\Permission;
 use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
 use StockFlow\Service\StockQuery;
@@ -22,12 +23,13 @@ final class InventoryController extends Controller
 
     public function index(Request $r, array $p, ?User $user): Response
     {
+        $this->need($user, Permission::XemTonKho);
         $visible = $this->auth->visibleWarehouseIds($user);
         $wh = $r->int('warehouse');
         $scope = $wh && in_array($wh, $visible, true) ? [$wh] : $visible;
         $byBatch = $r->str('view') === 'batch';
         $q = $r->str('q');
-        $warehouses = $visible ? $this->db->all('SELECT id, code, name FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY code') : [];
+        $warehouses = $visible ? $this->db->all('SELECT id, ma, ten FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY ma') : [];
         [$rows, $pg] = Paginator::of($byBatch ? $this->query->onHand($scope, $q, true) : $this->query->matrix($scope, $q), $r);
         return $this->render('inventory/index', $user, 'inventory', [
             'warehouses' => $warehouses,

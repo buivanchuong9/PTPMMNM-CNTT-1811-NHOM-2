@@ -1,18 +1,75 @@
-<?php /** @var array $rows @var array $stats */ ?>
-<header class="page-head"><div><h1>Kho</h1><p class="muted">Các điểm kho trong hệ thống.</p></div></header>
-<div class="grid-main">
-  <section class="card flush"><div class="table-wrap"><table class="dense">
-    <thead><tr><th>Mã</th><th>Tên kho</th><th>Địa chỉ</th><th class="num">Đơn vị tồn</th><th class="num">Mã hàng</th><th>Trạng thái</th></tr></thead>
-    <tbody>
-    <?php foreach ($rows as $w): $s = $stats[$w['id']] ?? null; ?>
-      <tr><td><span class="wh-code"><?= e($w['code']) ?></span></td><td><?= e($w['name']) ?></td><td class="muted"><?= e($w['address']) ?></td><td class="num"><?= $s ? n($s['units']) : '<span class="muted" title="Ngoài phạm vi của bạn">—</span>' ?></td><td class="num"><?= $s ? n($s['skus']) : '<span class="muted">—</span>' ?></td>
-        <td><?= $w['active'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-muted">Ngừng</span>' ?></td></tr>
-    <?php endforeach; ?>
-    </tbody></table></div><?= pager($pg) ?></section>
-  <aside><?php if ($user->isAdmin): ?><section class="card"><h2>Thêm kho</h2>
-    <form method="post" class="form" action="/warehouses"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-      <label>Mã kho<input name="code" required maxlength="20" placeholder="VD: HP01" autocomplete="off"></label>
-      <label>Tên kho<input name="name" required maxlength="120"></label>
-      <label>Địa chỉ<input name="address" maxlength="255"></label>
-      <button><?= icon('plus') ?>Thêm kho</button></form></section><?php endif; ?></aside>
-</div>
+<?php /** @var array $rows @var array $stats */
+use StockFlow\Domain\Permission as P;
+// Thêm nhân viên: tài khoản cấp cao thêm cho kho bất kỳ; quản lý kho chỉ cho kho của mình (nếu được giao chức năng này).
+$canAddStaff = fn(array $w) => $w['hoat_dong'] && $auth->allows($user, P::QuanLyNhanVien) && ($user->isAdmin || (int)$user->warehouseId === (int)$w['id']);
+$anyAdd = (bool)array_filter($rows, $canAddStaff);
+?>
+<header class="page-head">
+  <div><h1>Kho &amp; nhân sự</h1><p class="muted">Mỗi kho có <b>một quản lý</b> và <b>nhiều nhân viên</b>. Tài khoản quản lý / nhân viên chỉ thao tác trong kho được gắn; tài khoản cấp cao thấy mọi kho.</p></div>
+  <?php if ($user->isAdmin): ?><div class="actions"><button type="button" data-dialog-open="wh-dlg"><?= icon('plus') ?>Thêm kho</button><a class="btn btn-ghost" href="/users"><?= icon('users') ?>Quản lý tài khoản</a></div><?php endif; ?>
+</header>
+  <?php foreach ($rows as $w): $s = $stats[$w['id']] ?? null; $m = $w['quan_ly']; ?>
+    <section class="card wh-card">
+      <div class="wh-card-head">
+        <div>
+          <h2><span class="wh-code"><?= e($w['ma']) ?></span> <?= e($w['ten']) ?> <?= $w['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-muted">Ngừng</span>' ?></h2>
+          <p class="muted"><?= icon('warehouse') ?> <?= e($w['dia_chi'] ?: 'Chưa có địa chỉ') ?><?= $s ? ' · <b>' . n($s['units']) . '</b> đơn vị đang tồn' : '' ?></p>
+        </div>
+        <?php if ($canAddStaff($w)): ?>
+          <button type="button" data-dialog-open="staff-dlg" data-wh="<?= (int)$w['id'] ?>" data-wh-label="<?= e($w['ma'] . ' — ' . $w['ten']) ?>"><?= icon('plus') ?>Thêm nhân viên</button>
+        <?php endif; ?>
+      </div>
+
+      <div class="wh-manager">
+        <span class="wh-role">Quản lý kho</span>
+        <?php if ($m): ?>
+          <b><?= e($m['ho_ten']) ?></b> <span class="muted">· tài khoản <code><?= e($m['ten_dang_nhap']) ?></code></span>
+          <?= $m['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?>
+        <?php else: ?><span class="tag tag-warn">Chưa có quản lý</span><?php endif; ?>
+      </div>
+
+      <div class="table-wrap"><table class="dense staff-table">
+        <caption class="staff-cap">Nhân viên kho <span class="count"><?= count($w['nhan_vien']) ?></span></caption>
+        <thead><tr><th>#</th><th>Họ và tên</th><th>Tên đăng nhập</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
+        <tbody>
+        <?php foreach ($w['nhan_vien'] as $i => $nv): ?>
+          <tr class="<?= $nv['hoat_dong'] ? '' : 'row-off' ?>">
+            <td class="muted"><?= $i + 1 ?></td>
+            <td class="wrap"><b><?= e($nv['ho_ten']) ?></b></td>
+            <td class="wrap"><code><?= e($nv['ten_dang_nhap']) ?></code></td>
+            <td><?= $nv['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?></td>
+            <td class="muted"><?= e(dt_short($nv['ngay_tao'])) ?></td>
+          </tr>
+        <?php endforeach; if (!$w['nhan_vien']): ?><tr><td colspan="5" class="empty">Kho chưa có nhân viên<?= $canAddStaff($w) ? ' — bấm «Thêm nhân viên» để tạo tài khoản đầu tiên.' : '.' ?></td></tr><?php endif; ?>
+        </tbody>
+      </table></div>
+    </section>
+  <?php endforeach; if (!$rows): ?><section class="card"><p class="empty">Chưa có kho nào.</p></section><?php endif; ?>
+  <section class="card flush"><?= pager($pg) ?></section>
+
+<?php if ($user->isAdmin): ?>
+<dialog id="wh-dlg" class="dlg" aria-labelledby="wh-dlg-t">
+  <form method="post" action="/warehouses" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+    <div class="dlg-head"><h2 id="wh-dlg-t">Thêm kho</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <label>Mã kho<input name="code" required maxlength="20" placeholder="VD: HP01" autocomplete="off"></label>
+    <label>Tên kho<input name="name" required maxlength="120"></label>
+    <label>Địa chỉ<input name="address" maxlength="255"></label>
+    <p class="muted small">Sau khi tạo kho, gắn quản lý ở trang <a href="/users">Tài khoản</a>; quản lý kho sẽ tự thêm nhân viên cho kho của mình tại đây.</p>
+    <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm kho</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+<?php endif; ?>
+<?php if ($anyAdd): ?>
+<dialog id="staff-dlg" class="dlg" aria-labelledby="staff-dlg-title">
+  <form method="post" action="/warehouses/staff" class="form">
+    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+    <input type="hidden" name="warehouse_id" value="">
+    <div class="dlg-head"><h2 id="staff-dlg-title">Thêm nhân viên</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <p class="muted dlg-sub">Kho: <b data-dlg-wh></b></p>
+    <label>Họ và tên<input name="full_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
+    <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" placeholder="chữ thường, số, dấu . _ -" pattern="[A-Za-z0-9._-]{3,40}"></label>
+    <label>Mật khẩu (≥ 8 ký tự)<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm nhân viên</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+<?php endif; ?>

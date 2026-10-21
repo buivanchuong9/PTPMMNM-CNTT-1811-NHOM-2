@@ -24,12 +24,9 @@
       <summary>Tài khoản demo</summary>
       <p>Mật khẩu chung <code>demo1234</code></p>
       <ul>
-        <li><code>hn.keeper</code> — lập phiếu & kiểm kê kho HN01</li>
-        <li><code>hn.approver</code> — duyệt chứng từ kho HN01</li>
-        <li><code>dn.keeper</code> / <code>dn.approver</code> — kho DN01</li>
-        <li><code>hcm.keeper</code> / <code>hcm.approver</code> — kho HCM01</li>
-        <li><code>giamsat</code> — mọi quyền trên cả 3 kho</li>
-        <li><code>admin</code> — quản trị danh mục & tài khoản</li>
+        <li><code>admin</code> — <b>chủ hệ thống</b>: xem thống kê cả 3 kho, quản lý kho / tài khoản / phân quyền (không nhập xuất)</li>
+        <li><code>hn.quanly</code> · <code>dn.quanly</code> · <code>hcm.quanly</code> — <b>quản lý</b> kho HN01 / DN01 / HCM01</li>
+        <li><code>hn.nv1</code>, <code>hn.nv2</code> — <b>nhân viên</b> kho HN01 (tương tự <code>dn.nv1</code>, <code>dn.nv2</code>, <code>hcm.nv1</code>, <code>hcm.nv2</code>)</li>
       </ul>
     </details>
   </section>

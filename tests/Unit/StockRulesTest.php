@@ -11,7 +11,7 @@ same(R::apply(10, 5), 15, 'cộng tồn');
 same(R::apply(10, -10), 0, 'xuất hết về 0');
 throws(fn() => R::apply(3, -4), DomainError::class, 'xuất quá tồn bị chặn');
 
-section('delta — dấu theo loại chứng từ');
+section('delta — dấu theo loại phiếu nhập xuất');
 same(R::delta(T::Receipt, 5), 5, 'nhập: +');
 same(R::delta(T::Issue, 5), -5, 'xuất: −');
 same(R::delta(T::TransferOut, 5), -5, 'điều chuyển đi: −');
@@ -32,8 +32,8 @@ same(R::parseQty(['1']), null, 'mảng bị từ chối');
 same(R::parseQty('1000001'), null, 'vượt trần');
 
 section('normalizeLines');
-same(R::normalizeLines(['1:2', '', '3:4'], ['5', '', '6']), [['item_id' => 1, 'batch_id' => 2, 'qty' => 5], ['item_id' => 3, 'batch_id' => 4, 'qty' => 6]], 'bỏ dòng trống');
-same(R::normalizeLines(['1:2', '1:2'], ['2', '3']), [['item_id' => 1, 'batch_id' => 2, 'qty' => 5]], 'gộp dòng trùng hàng+lô');
+same(R::normalizeLines(['1:2', '', '3:4'], ['5', '', '6']), [['mat_hang_id' => 1, 'lo_hang_id' => 2, 'so_luong' => 5], ['mat_hang_id' => 3, 'lo_hang_id' => 4, 'so_luong' => 6]], 'bỏ dòng trống');
+same(R::normalizeLines(['1:2', '1:2'], ['2', '3']), [['mat_hang_id' => 1, 'lo_hang_id' => 2, 'so_luong' => 5]], 'gộp dòng trùng hàng+lô');
 same(R::normalizeLines(['1:2', '1:3'], ['2', '3']) === [] , false, 'cùng hàng khác lô là hai dòng');
 throws(fn() => R::normalizeLines(['1:2'], ['0']), DomainError::class, 'SL = 0');
 throws(fn() => R::normalizeLines(['abc'], ['1']), DomainError::class, 'khoá hàng/lô sai');

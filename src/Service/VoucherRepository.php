@@ -7,78 +7,78 @@ use StockFlow\Core\Db;
 use StockFlow\Domain\NotFound;
 use StockFlow\Domain\VoucherType;
 
-/** Truy cập dữ liệu chứng từ dùng chung cho các service. */
+/** Truy cập dữ liệu phiếu nhập xuất dùng chung cho các service. */
 final class VoucherRepository
 {
-    private const FIELDS = 'v.*, w.code AS wh_code, w.name AS wh_name, cw.code AS cp_code, cw.name AS cp_name,
-                            cu.full_name AS creator_name, au.full_name AS approver_name';
-    private const FROM = 'FROM chung_tu v JOIN kho w ON w.id = v.warehouse_id
-                            LEFT JOIN kho cw ON cw.id = v.counterpart_wh_id
-                            JOIN nguoi_dung cu ON cu.id = v.created_by LEFT JOIN nguoi_dung au ON au.id = v.confirmed_by';
+    private const FIELDS = 'v.*, w.ma AS wh_code, w.ten AS wh_name, cw.ma AS cp_code, cw.ten AS cp_name,
+                            cu.ho_ten AS creator_name, au.ho_ten AS approver_name';
+    private const FROM = 'FROM phieu_nhap_xuat v JOIN kho w ON w.id = v.kho_id
+                            LEFT JOIN kho cw ON cw.id = v.kho_doi_ung_id
+                            JOIN nguoi_dung cu ON cu.id = v.nguoi_lap_id LEFT JOIN nguoi_dung au ON au.id = v.nguoi_xac_nhan_id';
     private const SELECT = 'SELECT ' . self::FIELDS . ' ' . self::FROM;
 
     public function __construct(private Db $db) {}
 
     public function find(int $id): array
     {
-        return $this->db->one(self::SELECT . ' WHERE v.id = ?', [$id]) ?? throw new NotFound('Không tìm thấy chứng từ');
+        return $this->db->one(self::SELECT . ' WHERE v.id = ?', [$id]) ?? throw new NotFound('Không tìm thấy phiếu nhập xuất');
     }
 
     public function findByKey(string $key): ?array
     {
-        return $this->db->one(self::SELECT . ' WHERE v.idempotency_key = ?', [$key]);
+        return $this->db->one(self::SELECT . ' WHERE v.khoa_chong_trung = ?', [$key]);
     }
 
-    /** Khoá dòng chứng từ (FOR UPDATE) để chuỗi hoá các thao tác xác nhận/huỷ/điều chỉnh. */
+    /** Khoá dòng phiếu nhập xuất (FOR UPDATE) để chuỗi hoá các thao tác xác nhận/huỷ/điều chỉnh. */
     public function lock(int $id): array
     {
-        return $this->db->one('SELECT * FROM chung_tu WHERE id = ? FOR UPDATE', [$id]) ?? throw new NotFound('Không tìm thấy chứng từ');
+        return $this->db->one('SELECT * FROM phieu_nhap_xuat WHERE id = ? FOR UPDATE', [$id]) ?? throw new NotFound('Không tìm thấy phiếu nhập xuất');
     }
 
     public function lines(int $voucherId): array
     {
         return $this->db->all(
-            'SELECT l.*, i.sku, i.name, i.track_batch, u.code AS unit, b.batch_no, b.expiry_date
-             FROM chi_tiet_chung_tu l JOIN mat_hang i ON i.id = l.item_id JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.id = l.batch_id
-             WHERE l.voucher_id = ? ORDER BY l.id',
+            'SELECT l.*, i.ma_hang, i.ten, i.quan_ly_lo, u.ma AS unit, b.so_lo, b.han_dung
+             FROM chi_tiet_phieu_nhap_xuat l JOIN mat_hang i ON i.id = l.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = l.lo_hang_id
+             WHERE l.phieu_nhap_xuat_id = ? ORDER BY l.id',
             [$voucherId]
         );
     }
 
     public function correctionOf(int $id): ?array
     {
-        return $this->db->one('SELECT id, code FROM chung_tu WHERE correction_of = ?', [$id]);
+        return $this->db->one('SELECT id, ma FROM phieu_nhap_xuat WHERE dieu_chinh_cho_id = ?', [$id]);
     }
 
     public function pairOf(array $voucher): ?array
     {
-        if ($voucher['type'] === VoucherType::TransferIn->value && $voucher['ref_voucher_id']) {
-            return $this->db->one('SELECT id, code FROM chung_tu WHERE id = ?', [$voucher['ref_voucher_id']]);
+        if ($voucher['loai'] === VoucherType::TransferIn->value && $voucher['phieu_nhap_xuat_lien_quan_id']) {
+            return $this->db->one('SELECT id, ma FROM phieu_nhap_xuat WHERE id = ?', [$voucher['phieu_nhap_xuat_lien_quan_id']]);
         }
-        if ($voucher['type'] === VoucherType::TransferOut->value) {
-            return $this->db->one('SELECT id, code FROM chung_tu WHERE ref_voucher_id = ? AND type = ?', [$voucher['id'], VoucherType::TransferIn->value]);
+        if ($voucher['loai'] === VoucherType::TransferOut->value) {
+            return $this->db->one('SELECT id, ma FROM phieu_nhap_xuat WHERE phieu_nhap_xuat_lien_quan_id = ? AND loai = ?', [$voucher['id'], VoucherType::TransferIn->value]);
         }
         return null;
     }
 
-    /** Tạo dòng chứng từ + trả về danh sách dòng kèm id (để ghi sổ). */
+    /** Tạo dòng phiếu nhập xuất + trả về danh sách dòng kèm id (để ghi sổ). */
     public function insert(array $v, array $lines): int
     {
         $seq = $this->db->nextSequence('voucher');
-        $type = VoucherType::from($v['type']);
+        $type = VoucherType::from($v['loai']);
         $code = sprintf('%s-%s-%06d', $type->prefix(), gmdate('ymd'), $seq);
-        $confirmed = ($v['status'] ?? 'DRAFT') === 'CONFIRMED';
+        $confirmed = ($v['trang_thai'] ?? 'DRAFT') === 'CONFIRMED';
         $id = $this->db->insert(
-            'INSERT INTO chung_tu (code, type, status, warehouse_id, counterpart_wh_id, ref_voucher_id, correction_of, idempotency_key,
-                                   partner, reason, note, created_by, confirmed_by, confirmed_at)
+            'INSERT INTO phieu_nhap_xuat (ma, loai, trang_thai, kho_id, kho_doi_ung_id, phieu_nhap_xuat_lien_quan_id, dieu_chinh_cho_id, khoa_chong_trung,
+                                   doi_tac, ly_do, ghi_chu, nguoi_lap_id, nguoi_xac_nhan_id, ngay_xac_nhan)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,' . ($confirmed ? 'CURRENT_TIMESTAMP' : 'NULL') . ')',
-            [$code, $v['type'], $v['status'] ?? 'DRAFT', $v['warehouse_id'], $v['counterpart_wh_id'] ?? null, $v['ref_voucher_id'] ?? null,
-             $v['correction_of'] ?? null, $v['idempotency_key'] ?? null, mb_substr($v['partner'] ?? '', 0, 120),
-             mb_substr($v['reason'] ?? '', 0, 255), mb_substr($v['note'] ?? '', 0, 255), $v['created_by'], $confirmed ? $v['created_by'] : null]
+            [$code, $v['loai'], $v['trang_thai'] ?? 'DRAFT', $v['kho_id'], $v['kho_doi_ung_id'] ?? null, $v['phieu_nhap_xuat_lien_quan_id'] ?? null,
+             $v['dieu_chinh_cho_id'] ?? null, $v['khoa_chong_trung'] ?? null, mb_substr($v['doi_tac'] ?? '', 0, 120),
+             mb_substr($v['ly_do'] ?? '', 0, 255), mb_substr($v['ghi_chu'] ?? '', 0, 255), $v['nguoi_lap_id'], $confirmed ? $v['nguoi_lap_id'] : null]
         );
         foreach ($lines as $l) {
-            $this->db->exec('INSERT INTO chi_tiet_chung_tu (voucher_id, item_id, batch_id, qty, note) VALUES (?,?,?,?,?)',
-                [$id, $l['item_id'], $l['batch_id'], $l['qty'], mb_substr($l['note'] ?? '', 0, 255)]);
+            $this->db->exec('INSERT INTO chi_tiet_phieu_nhap_xuat (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id, so_luong, ghi_chu) VALUES (?,?,?,?,?)',
+                [$id, $l['mat_hang_id'], $l['lo_hang_id'], $l['so_luong'], mb_substr($l['ghi_chu'] ?? '', 0, 255)]);
         }
         return $id;
     }
@@ -86,32 +86,32 @@ final class VoucherRepository
     /** @return list<array{voucher_id:int,line_id:int,warehouse_id:int,item_id:int,batch_id:int,delta:int}> */
     public function ops(array $voucher, array $lines): array
     {
-        $type = VoucherType::from($voucher['type']);
+        $type = VoucherType::from($voucher['loai']);
         return array_map(fn(array $l) => [
-            'voucher_id' => (int)$voucher['id'], 'line_id' => (int)$l['id'], 'warehouse_id' => (int)$voucher['warehouse_id'],
-            'item_id' => (int)$l['item_id'], 'batch_id' => (int)$l['batch_id'],
-            'delta' => \StockFlow\Domain\StockRules::delta($type, (int)$l['qty']),
+            'phieu_nhap_xuat_id' => (int)$voucher['id'], 'line_id' => (int)$l['id'], 'kho_id' => (int)$voucher['kho_id'],
+            'mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'],
+            'delta' => \StockFlow\Domain\StockRules::delta($type, (int)$l['so_luong']),
         ], $lines);
     }
 
     public function lockKeys(array $ops): array
     {
-        return array_map(fn($o) => [$o['warehouse_id'], $o['item_id'], $o['batch_id']], $ops);
+        return array_map(fn($o) => [$o['kho_id'], $o['mat_hang_id'], $o['lo_hang_id']], $ops);
     }
 
     /** @return array{0:string,1:list<mixed>} */
     private function searchFilter(array $warehouseIds, ?string $type, ?string $status, string $q): array
     {
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
-        $where = ["v.warehouse_id IN ($in)"];
+        $where = ["v.kho_id IN ($in)"];
         $params = $warehouseIds;
-        if ($type) { $where[] = 'v.type = ?'; $params[] = $type; }
-        if ($status) { $where[] = 'v.status = ?'; $params[] = $status; }
-        if ($q !== '') { $where[] = '(v.code LIKE ? OR v.partner LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
+        if ($type) { $where[] = 'v.loai = ?'; $params[] = $type; }
+        if ($status) { $where[] = 'v.trang_thai = ?'; $params[] = $status; }
+        if ($q !== '') { $where[] = '(v.ma LIKE ? OR v.doi_tac LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
         return [implode(' AND ', $where), $params];
     }
 
-    /** Tổng số chứng từ khớp bộ lọc (để phân trang). */
+    /** Tổng số phiếu nhập xuất khớp bộ lọc (để phân trang). */
     public function searchCount(array $warehouseIds, ?string $type, ?string $status, string $q): int
     {
         if ($warehouseIds === []) {
@@ -121,7 +121,7 @@ final class VoucherRepository
         return (int)$this->db->value('SELECT COUNT(*) ' . self::FROM . ' WHERE ' . $where, $params);
     }
 
-    /** Tìm danh sách chứng từ theo bộ lọc, chỉ trong phạm vi kho cho phép. */
+    /** Tìm danh sách phiếu nhập xuất theo bộ lọc, chỉ trong phạm vi kho cho phép. */
     public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200, int $offset = 0): array
     {
         if ($warehouseIds === []) {
@@ -129,8 +129,8 @@ final class VoucherRepository
         }
         [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q);
         return $this->db->all(
-            'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS line_count,
-                (SELECT COALESCE(SUM(ABS(l.qty)),0) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS total_qty ' . self::FROM . '
+            'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS line_count,
+                (SELECT COALESCE(SUM(ABS(l.so_luong)),0) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS total_qty ' . self::FROM . '
              WHERE ' . $where . ' ORDER BY v.id DESC LIMIT ' . max(1, min(500, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
@@ -144,8 +144,8 @@ final class VoucherRepository
         }
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
         $out = [];
-        foreach ($this->db->all("SELECT status, COUNT(*) AS n FROM chung_tu WHERE warehouse_id IN ($in) GROUP BY status", $warehouseIds) as $r) {
-            $out[$r['status']] = (int)$r['n'];
+        foreach ($this->db->all("SELECT trang_thai, COUNT(*) AS n FROM phieu_nhap_xuat WHERE kho_id IN ($in) GROUP BY trang_thai", $warehouseIds) as $r) {
+            $out[$r['trang_thai']] = (int)$r['n'];
         }
         return $out;
     }

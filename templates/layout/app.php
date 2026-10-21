@@ -1,32 +1,40 @@
 <?php
+use StockFlow\Domain\Permission as P;
 /** @var \StockFlow\Domain\User $user */
+// Menu theo quyền: chức năng bị thu hồi với vai trò của tài khoản thì không hiện (chức năng vẫn còn trong hệ thống).
 $groups = [
     'Tác nghiệp' => [
-        'dashboard' => ['/', 'home', 'Tổng quan'],
-        'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập'],
-        'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất'],
-        'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho'],
-        'vouchers' => ['/vouchers', 'file', 'Chứng từ'],
-        'counts' => ['/counts', 'clipboard', 'Kiểm kê'],
+        'dashboard' => ['/', 'home', 'Tổng quan', [P::XemTongQuan]],
+        'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập', [P::LapPhieuNhap]],
+        'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', [P::LapPhieuXuat]],
+        'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
+        'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
+        'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
     ],
     'Tra cứu & báo cáo' => [
-        'inventory' => ['/inventory', 'layers', 'Tồn kho'],
-        'history' => ['/history', 'clock', 'Lịch sử phát sinh'],
-        'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn'],
-        'reports' => ['/reports', 'chart', 'Báo cáo'],
+        'inventory' => ['/inventory', 'layers', 'Tồn kho', [P::XemTonKho]],
+        'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
+        'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
+        'reports' => ['/reports', 'chart', 'Báo cáo', [P::XemBaoCao]],
     ],
     'Danh mục' => [
-        'warehouses' => ['/warehouses', 'warehouse', 'Kho'],
-        'items' => ['/items', 'box', 'Mặt hàng & lô'],
-    ] + ($user->isAdmin ? ['users' => ['/users', 'users', 'Tài khoản & quyền']] : []),
+        'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],
+        'items' => ['/items', 'box', 'Mặt hàng & lô', [P::XemDanhMuc]],
+    ],
+    'Quản trị hệ thống' => [
+        'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
+        'roles' => ['/roles', 'shield', 'Phân quyền chức năng', [P::PhanQuyen]],
+    ],
 ];
-$roleNames = [];
-foreach ($auth->rolesOf($user) as $rs) {
-    foreach ($rs as $r) {
-        $roleNames[\StockFlow\Domain\Role::from($r)->label()] = true;
+foreach ($groups as $label => $entries) {
+    $groups[$label] = array_filter($entries, fn($e) => array_filter($e[3], fn($perm) => $auth->allows($user, $perm)));
+    if (!$groups[$label]) {
+        unset($groups[$label]);
     }
 }
-$roleSummary = $user->isAdmin ? 'Quản trị viên' : implode(' · ', array_keys($roleNames));
+// Dòng mô tả dưới tên: vai trò + kho được gắn (tài khoản cấp cao thấy mọi kho)
+$whLabel = $myWarehouse ? $myWarehouse['ma'] . ' — ' . $myWarehouse['ten'] : 'Tất cả các kho';
+$roleSummary = $user->role->label() . ' · ' . $whLabel;
 ?><!doctype html>
 <html lang="vi">
 <head>
@@ -44,11 +52,11 @@ $roleSummary = $user->isAdmin ? 'Quản trị viên' : implode(' · ', array_key
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
   <a class="brand" href="/"><img src="/assets/img/logo-mark.svg" alt="" width="32" height="32"><span>Stock<b>Flow</b> <small>WMS</small></span></a>
   <form class="topsearch" action="/history" method="get" role="search">
-    <?= icon('search') ?><input type="search" name="q" placeholder="Tìm mã chứng từ, SKU, số lô…" aria-label="Tìm kiếm nhanh">
+    <?= icon('search') ?><input type="search" name="q" placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>
   <div class="topuser">
     <span class="avatar" aria-hidden="true"><?= e($user->initials()) ?></span>
-    <span class="who"><b><?= e($user->fullName) ?></b><small><?= e($roleSummary ?: 'Chưa được cấp quyền kho') ?></small></span>
+    <span class="who" title="<?= e($myWarehouse ? 'Địa chỉ kho: ' . ($myWarehouse['dia_chi'] ?: '—') : 'Tài khoản cấp cao: thấy và thao tác ở mọi kho') ?>"><b><?= e($user->fullName) ?> <em class="role-badge role-<?= e(strtolower($user->role->value)) ?>"><?= e($user->role->label()) ?></em></b><small><?= e($myWarehouse ? $whLabel : 'Tất cả các kho') ?></small></span>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="icon-btn" title="Đăng xuất" aria-label="Đăng xuất"><?= icon('logout') ?></button></form>
   </div>
 </header>

@@ -67,7 +67,7 @@ final class StockRules
                 throw new DomainError('Số lượng phải là số nguyên dương');
             }
             $key = $m[1] . ':' . $m[2];
-            $merged[$key] = ['item_id' => (int)$m[1], 'batch_id' => (int)$m[2], 'qty' => ($merged[$key]['qty'] ?? 0) + $qty];
+            $merged[$key] = ['mat_hang_id' => (int)$m[1], 'lo_hang_id' => (int)$m[2], 'so_luong' => ($merged[$key]['so_luong'] ?? 0) + $qty];
         }
         return array_values($merged);
     }
@@ -78,7 +78,7 @@ final class StockRules
         return $counted === null ? null : $counted - $system;
     }
 
-    /** Dòng đảo của chứng từ gốc (điều chỉnh sửa chứng từ, không xoá lịch sử). */
+    /** Dòng đảo của phiếu nhập xuất gốc (điều chỉnh sửa phiếu nhập xuất, không xoá lịch sử). */
     public static function reversalQty(VoucherType $type, int $qty): int
     {
         return -self::delta($type, $qty);

@@ -3,205 +3,214 @@
 -- Idempotent: safe to run repeatedly.
 
 -- Điều kiện ràng buộc quan trọng:
---   * ton_kho.quantity >= 0           → tồn không bao giờ âm, kể cả khi code ứng dụng có lỗi.
---   * so_phat_sinh.voucher_line_id UNIQUE → một dòng chứng từ chỉ được ghi sổ đúng một lần.
---   * chung_tu.idempotency_key UNIQUE        → gửi lại cùng một yêu cầu tạo phiếu không sinh phiếu mới.
---   * chung_tu.correction_of UNIQUE          → một chứng từ chỉ bị điều chỉnh đảo một lần.
--- @@
-CREATE TABLE IF NOT EXISTS nguoi_dung (
-    id            integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    username      varchar(40)  NOT NULL,
-    full_name     varchar(120) NOT NULL,
-    password_hash varchar(255) NOT NULL,
-    is_admin      boolean      NOT NULL DEFAULT FALSE,
-    active        boolean      NOT NULL DEFAULT TRUE,
-    created_at    timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (username)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+--   * ton_kho.so_luong >= 0           → tồn không bao giờ âm, kể cả khi code ứng dụng có lỗi.
+--   * so_phat_sinh.chi_tiet_phieu_nhap_xuat_id UNIQUE → một dòng phiếu nhập xuất chỉ được ghi sổ đúng một lần.
+--   * phieu_nhap_xuat.khoa_chong_trung UNIQUE        → gửi lại cùng một yêu cầu tạo phiếu không sinh phiếu mới.
+--   * phieu_nhap_xuat.dieu_chinh_cho_id UNIQUE          → một phiếu nhập xuất chỉ bị điều chỉnh đảo một lần.
 -- @@
 CREATE TABLE IF NOT EXISTS kho (
-    id         integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    code       varchar(20)  NOT NULL,
-    name       varchar(120) NOT NULL,
-    address    varchar(255) NOT NULL DEFAULT '',
-    active     boolean      NOT NULL DEFAULT TRUE,
-    created_at timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (code)
+    id                        integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ma                        varchar(20)  NOT NULL,
+    ten                       varchar(120) NOT NULL,
+    dia_chi                   varchar(255) NOT NULL DEFAULT '',
+    hoat_dong                 boolean      NOT NULL DEFAULT TRUE,
+    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (ma)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
--- Quyền theo từng kho. KEEPER: lập phiếu · APPROVER: xác nhận/điều chỉnh · COUNTER: kiểm kê.
-CREATE TABLE IF NOT EXISTS quyen_kho (
-    user_id      integer NOT NULL,
-    warehouse_id integer NOT NULL,
-    role         enum('KEEPER','APPROVER','COUNTER') NOT NULL,
-    PRIMARY KEY (user_id, warehouse_id, role),
-    CONSTRAINT wr_user_fk FOREIGN KEY (user_id)      REFERENCES nguoi_dung(id),
-    CONSTRAINT wr_wh_fk   FOREIGN KEY (warehouse_id) REFERENCES kho(id)
+-- Tài khoản: ADMIN (cấp cao, toàn quyền, không gắn kho) · MANAGER (quản lý kho — mỗi kho đúng 1) · STAFF (nhân viên kho — nhiều).
+-- Mỗi tài khoản con gắn với đúng một kho (kho_id). quan_ly_kho_id chỉ có giá trị với MANAGER và bằng kho_id;
+-- UNIQUE(quan_ly_kho_id) khiến CSDL từ chối kho thứ hai có quản lý thứ hai (NULL không bị coi là trùng).
+CREATE TABLE IF NOT EXISTS nguoi_dung (
+    id                        integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ten_dang_nhap             varchar(40)  NOT NULL,
+    ho_ten                    varchar(120) NOT NULL,
+    mat_khau_ma_hoa           varchar(255) NOT NULL,
+    vai_tro                   enum('ADMIN','MANAGER','STAFF') NOT NULL DEFAULT 'STAFF',
+    kho_id                    integer      NULL,
+    quan_ly_kho_id            integer      NULL,
+    hoat_dong                 boolean      NOT NULL DEFAULT TRUE,
+    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT nd_kho_theo_vai_tro CHECK ((vai_tro = 'ADMIN' AND kho_id IS NULL) OR (vai_tro <> 'ADMIN' AND kho_id IS NOT NULL)),
+    CONSTRAINT nd_quan_ly_hop_le   CHECK ((vai_tro = 'MANAGER' AND quan_ly_kho_id = kho_id) OR (vai_tro <> 'MANAGER' AND quan_ly_kho_id IS NULL)),
+    CONSTRAINT nd_kho_fk FOREIGN KEY (kho_id) REFERENCES kho(id),
+    UNIQUE (ten_dang_nhap),
+    UNIQUE (quan_ly_kho_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+-- @@
+-- Chức năng nào được dùng theo vai trò (MANAGER / STAFF). ADMIN luôn toàn quyền nên không có dòng ở đây.
+-- Thiếu dòng ⇒ dùng mặc định trong mã nguồn; quản trị viên bật/tắt ở trang «Phân quyền chức năng».
+-- Thu hồi quyền chỉ ẩn/chặn chức năng với vai trò đó — chức năng vẫn nguyên vẹn trong hệ thống.
+CREATE TABLE IF NOT EXISTS phan_quyen_vai_tro (
+    vai_tro                   enum('MANAGER','STAFF') NOT NULL,
+    quyen                     varchar(40) NOT NULL,
+    duoc_phep                 boolean     NOT NULL,
+    PRIMARY KEY (vai_tro, quyen)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 CREATE TABLE IF NOT EXISTS don_vi_tinh (
-    id   integer     NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    code varchar(20) NOT NULL,
-    name varchar(60) NOT NULL,
-    UNIQUE (code)
+    id                        integer     NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ma                        varchar(20) NOT NULL,
+    ten                       varchar(60) NOT NULL,
+    UNIQUE (ma)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 CREATE TABLE IF NOT EXISTS mat_hang (
-    id            integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    sku           varchar(40)  NOT NULL,
-    name          varchar(160) NOT NULL,
-    unit_id       integer      NOT NULL,
-    track_batch   boolean      NOT NULL DEFAULT FALSE,
-    reorder_level integer      NOT NULL DEFAULT 0,
-    active        boolean      NOT NULL DEFAULT TRUE,
-    created_at    timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT items_reorder_nonneg CHECK (reorder_level >= 0),
-    CONSTRAINT items_unit_fk FOREIGN KEY (unit_id) REFERENCES don_vi_tinh(id),
-    UNIQUE (sku)
+    id                        integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ma_hang                   varchar(40)  NOT NULL,
+    ten                       varchar(160) NOT NULL,
+    don_vi_tinh_id            integer      NOT NULL,
+    quan_ly_lo                boolean      NOT NULL DEFAULT FALSE,
+    dinh_muc_toi_thieu        integer      NOT NULL DEFAULT 0,
+    hoat_dong                 boolean      NOT NULL DEFAULT TRUE,
+    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT items_reorder_nonneg CHECK (dinh_muc_toi_thieu >= 0),
+    CONSTRAINT items_unit_fk FOREIGN KEY (don_vi_tinh_id) REFERENCES don_vi_tinh(id),
+    UNIQUE (ma_hang)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 -- Mặt hàng không quản lý theo lô dùng một lô mặc định 'NOLOT' để khoá tồn luôn có dạng (kho, hàng, lô).
 CREATE TABLE IF NOT EXISTS lo_hang (
-    id          integer     NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    item_id     integer     NOT NULL,
-    batch_no    varchar(40) NOT NULL,
-    expiry_date date        NULL,
-    created_at  timestamp   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT batches_item_fk FOREIGN KEY (item_id) REFERENCES mat_hang(id),
-    UNIQUE (item_id, batch_no)
+    id                        integer     NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    mat_hang_id               integer     NOT NULL,
+    so_lo                     varchar(40) NOT NULL,
+    han_dung                  date        NULL,
+    ngay_tao                  timestamp   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT batches_item_fk FOREIGN KEY (mat_hang_id) REFERENCES mat_hang(id),
+    UNIQUE (mat_hang_id, so_lo)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 CREATE TABLE IF NOT EXISTS bo_dem (
-    name  varchar(30) NOT NULL PRIMARY KEY,
-    value bigint      NOT NULL DEFAULT 0
+    ten                       varchar(30) NOT NULL PRIMARY KEY,
+    gia_tri                   bigint      NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
-CREATE TABLE IF NOT EXISTS chung_tu (
-    id                bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    code              varchar(30)  NOT NULL,
-    type              enum('RECEIPT','ISSUE','TRANSFER_OUT','TRANSFER_IN','ADJUSTMENT') NOT NULL,
-    status            enum('DRAFT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'DRAFT',
-    warehouse_id      integer      NOT NULL,
-    counterpart_wh_id integer      NULL,
-    ref_voucher_id    bigint       NULL,
-    correction_of     bigint       NULL,
-    idempotency_key   varchar(64)  NULL,
-    partner           varchar(120) NOT NULL DEFAULT '',
-    reason            varchar(255) NOT NULL DEFAULT '',
-    note              varchar(255) NOT NULL DEFAULT '',
-    created_by        integer      NOT NULL,
-    confirmed_by      integer      NULL,
-    created_at        timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    confirmed_at      timestamp    NULL,
-    CONSTRAINT v_distinct_wh   CHECK (counterpart_wh_id IS NULL OR counterpart_wh_id <> warehouse_id),
-    CONSTRAINT v_confirmed_ts  CHECK (status <> 'CONFIRMED' OR (confirmed_at IS NOT NULL AND confirmed_by IS NOT NULL)),
-    CONSTRAINT v_wh_fk         FOREIGN KEY (warehouse_id)      REFERENCES kho(id),
-    CONSTRAINT v_cp_fk         FOREIGN KEY (counterpart_wh_id) REFERENCES kho(id),
-    CONSTRAINT v_ref_fk        FOREIGN KEY (ref_voucher_id)    REFERENCES chung_tu(id),
-    CONSTRAINT v_corr_fk       FOREIGN KEY (correction_of)     REFERENCES chung_tu(id),
-    CONSTRAINT v_creator_fk    FOREIGN KEY (created_by)        REFERENCES nguoi_dung(id),
-    CONSTRAINT v_confirmer_fk  FOREIGN KEY (confirmed_by)      REFERENCES nguoi_dung(id),
-    UNIQUE (code),
-    UNIQUE (idempotency_key),
-    UNIQUE (correction_of),
-    INDEX v_by_wh_status (warehouse_id, status, id)
+CREATE TABLE IF NOT EXISTS phieu_nhap_xuat (
+    id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ma                        varchar(30)  NOT NULL,
+    loai                      enum('RECEIPT','ISSUE','TRANSFER_OUT','TRANSFER_IN','ADJUSTMENT') NOT NULL,
+    trang_thai                enum('DRAFT','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'DRAFT',
+    kho_id                    integer      NOT NULL,
+    kho_doi_ung_id            integer      NULL,
+    phieu_nhap_xuat_lien_quan_id     bigint       NULL,
+    dieu_chinh_cho_id         bigint       NULL,
+    khoa_chong_trung          varchar(64)  NULL,
+    doi_tac                   varchar(120) NOT NULL DEFAULT '',
+    ly_do                     varchar(255) NOT NULL DEFAULT '',
+    ghi_chu                   varchar(255) NOT NULL DEFAULT '',
+    nguoi_lap_id              integer      NOT NULL,
+    nguoi_xac_nhan_id         integer      NULL,
+    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ngay_xac_nhan             timestamp    NULL,
+    CONSTRAINT v_distinct_wh   CHECK (kho_doi_ung_id IS NULL OR kho_doi_ung_id <> kho_id),
+    CONSTRAINT v_confirmed_ts  CHECK (trang_thai <> 'CONFIRMED' OR (ngay_xac_nhan IS NOT NULL AND nguoi_xac_nhan_id IS NOT NULL)),
+    CONSTRAINT v_wh_fk         FOREIGN KEY (kho_id)      REFERENCES kho(id),
+    CONSTRAINT v_cp_fk         FOREIGN KEY (kho_doi_ung_id) REFERENCES kho(id),
+    CONSTRAINT v_ref_fk        FOREIGN KEY (phieu_nhap_xuat_lien_quan_id)    REFERENCES phieu_nhap_xuat(id),
+    CONSTRAINT v_corr_fk       FOREIGN KEY (dieu_chinh_cho_id)     REFERENCES phieu_nhap_xuat(id),
+    CONSTRAINT v_creator_fk    FOREIGN KEY (nguoi_lap_id)        REFERENCES nguoi_dung(id),
+    CONSTRAINT v_confirmer_fk  FOREIGN KEY (nguoi_xac_nhan_id)      REFERENCES nguoi_dung(id),
+    UNIQUE (ma),
+    UNIQUE (khoa_chong_trung),
+    UNIQUE (dieu_chinh_cho_id),
+    INDEX v_by_wh_status (kho_id, trang_thai, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 -- qty > 0 với phiếu nhập/xuất/điều chuyển; có dấu (≠ 0) với phiếu điều chỉnh — ứng dụng kiểm tra theo loại phiếu.
-CREATE TABLE IF NOT EXISTS chi_tiet_chung_tu (
-    id         bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    voucher_id bigint       NOT NULL,
-    item_id    integer      NOT NULL,
-    batch_id   integer      NOT NULL,
-    qty        integer      NOT NULL,
-    note       varchar(255) NOT NULL DEFAULT '',
-    CONSTRAINT vl_qty_nonzero CHECK (qty <> 0),
-    CONSTRAINT vl_voucher_fk FOREIGN KEY (voucher_id) REFERENCES chung_tu(id),
-    CONSTRAINT vl_item_fk    FOREIGN KEY (item_id)    REFERENCES mat_hang(id),
-    CONSTRAINT vl_batch_fk   FOREIGN KEY (batch_id)   REFERENCES lo_hang(id),
-    UNIQUE (voucher_id, item_id, batch_id)
+CREATE TABLE IF NOT EXISTS chi_tiet_phieu_nhap_xuat (
+    id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    phieu_nhap_xuat_id               bigint       NOT NULL,
+    mat_hang_id               integer      NOT NULL,
+    lo_hang_id                integer      NOT NULL,
+    so_luong                  integer      NOT NULL,
+    ghi_chu                   varchar(255) NOT NULL DEFAULT '',
+    CONSTRAINT vl_qty_nonzero CHECK (so_luong <> 0),
+    CONSTRAINT vl_voucher_fk FOREIGN KEY (phieu_nhap_xuat_id) REFERENCES phieu_nhap_xuat(id),
+    CONSTRAINT vl_item_fk    FOREIGN KEY (mat_hang_id)    REFERENCES mat_hang(id),
+    CONSTRAINT vl_batch_fk   FOREIGN KEY (lo_hang_id)   REFERENCES lo_hang(id),
+    UNIQUE (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 -- Số dư hiện hành, chỉ phục vụ khoá + chặn tồn âm. Nguồn sự thật là so_phat_sinh (xem trang Đối chiếu).
 CREATE TABLE IF NOT EXISTS ton_kho (
-    warehouse_id integer NOT NULL,
-    item_id      integer NOT NULL,
-    batch_id     integer NOT NULL,
-    quantity     integer NOT NULL DEFAULT 0,
-    PRIMARY KEY (warehouse_id, item_id, batch_id),
-    CONSTRAINT sb_nonneg CHECK (quantity >= 0),
-    CONSTRAINT sb_wh_fk    FOREIGN KEY (warehouse_id) REFERENCES kho(id),
-    CONSTRAINT sb_item_fk  FOREIGN KEY (item_id)      REFERENCES mat_hang(id),
-    CONSTRAINT sb_batch_fk FOREIGN KEY (batch_id)     REFERENCES lo_hang(id)
+    kho_id                    integer NOT NULL,
+    mat_hang_id               integer NOT NULL,
+    lo_hang_id                integer NOT NULL,
+    so_luong                  integer NOT NULL DEFAULT 0,
+    PRIMARY KEY (kho_id, mat_hang_id, lo_hang_id),
+    CONSTRAINT sb_nonneg CHECK (so_luong >= 0),
+    CONSTRAINT sb_wh_fk    FOREIGN KEY (kho_id) REFERENCES kho(id),
+    CONSTRAINT sb_item_fk  FOREIGN KEY (mat_hang_id)      REFERENCES mat_hang(id),
+    CONSTRAINT sb_batch_fk FOREIGN KEY (lo_hang_id)     REFERENCES lo_hang(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
--- Sổ phát sinh: bất biến, chỉ INSERT khi chứng từ được xác nhận.
+-- Sổ phát sinh: bất biến, chỉ INSERT khi phiếu nhập xuất được xác nhận.
 CREATE TABLE IF NOT EXISTS so_phat_sinh (
-    id              bigint    NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    voucher_id      bigint    NOT NULL,
-    voucher_line_id bigint    NOT NULL,
-    warehouse_id    integer   NOT NULL,
-    item_id         integer   NOT NULL,
-    batch_id        integer   NOT NULL,
-    qty_change      integer   NOT NULL,
-    balance_after   integer   NOT NULL,
-    posted_at       timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT sm_change_nonzero CHECK (qty_change <> 0),
-    CONSTRAINT sm_balance_nonneg CHECK (balance_after >= 0),
-    CONSTRAINT sm_voucher_fk FOREIGN KEY (voucher_id)      REFERENCES chung_tu(id),
-    CONSTRAINT sm_line_fk    FOREIGN KEY (voucher_line_id) REFERENCES chi_tiet_chung_tu(id),
-    CONSTRAINT sm_wh_fk      FOREIGN KEY (warehouse_id)    REFERENCES kho(id),
-    CONSTRAINT sm_item_fk    FOREIGN KEY (item_id)         REFERENCES mat_hang(id),
-    CONSTRAINT sm_batch_fk   FOREIGN KEY (batch_id)        REFERENCES lo_hang(id),
-    UNIQUE (voucher_line_id),
-    INDEX sm_by_key (warehouse_id, item_id, batch_id),
-    INDEX sm_by_voucher (voucher_id),
-    INDEX sm_by_time (posted_at, id)
+    id                        bigint    NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    phieu_nhap_xuat_id               bigint    NOT NULL,
+    chi_tiet_phieu_nhap_xuat_id      bigint    NOT NULL,
+    kho_id                    integer   NOT NULL,
+    mat_hang_id               integer   NOT NULL,
+    lo_hang_id                integer   NOT NULL,
+    bien_dong                 integer   NOT NULL,
+    ton_sau                   integer   NOT NULL,
+    ngay_ghi_so               timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT sm_change_nonzero CHECK (bien_dong <> 0),
+    CONSTRAINT sm_balance_nonneg CHECK (ton_sau >= 0),
+    CONSTRAINT sm_voucher_fk FOREIGN KEY (phieu_nhap_xuat_id)      REFERENCES phieu_nhap_xuat(id),
+    CONSTRAINT sm_line_fk    FOREIGN KEY (chi_tiet_phieu_nhap_xuat_id) REFERENCES chi_tiet_phieu_nhap_xuat(id),
+    CONSTRAINT sm_wh_fk      FOREIGN KEY (kho_id)    REFERENCES kho(id),
+    CONSTRAINT sm_item_fk    FOREIGN KEY (mat_hang_id)         REFERENCES mat_hang(id),
+    CONSTRAINT sm_batch_fk   FOREIGN KEY (lo_hang_id)        REFERENCES lo_hang(id),
+    UNIQUE (chi_tiet_phieu_nhap_xuat_id),
+    INDEX sm_by_key (kho_id, mat_hang_id, lo_hang_id),
+    INDEX sm_by_voucher (phieu_nhap_xuat_id),
+    INDEX sm_by_time (ngay_ghi_so, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
--- Đợt kiểm kê: OPEN (đang đếm) → REVIEW (đã nhập đủ, chờ duyệt chênh lệch) → CLOSED (đã lập chứng từ điều chỉnh).
+-- Đợt kiểm kê: OPEN (đang đếm) → REVIEW (đã nhập đủ, chờ duyệt chênh lệch) → CLOSED (đã lập phiếu nhập xuất điều chỉnh).
 CREATE TABLE IF NOT EXISTS dot_kiem_ke (
-    id                    bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    code                  varchar(30)  NOT NULL,
-    warehouse_id          integer      NOT NULL,
-    status                enum('OPEN','REVIEW','CLOSED','CANCELLED') NOT NULL DEFAULT 'OPEN',
-    note                  varchar(255) NOT NULL DEFAULT '',
-    created_by            integer      NOT NULL,
-    approved_by           integer      NULL,
-    adjustment_voucher_id bigint       NULL,
-    created_at            timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    submitted_at          timestamp    NULL,
-    closed_at             timestamp    NULL,
-    CONSTRAINT sc_wh_fk      FOREIGN KEY (warehouse_id)          REFERENCES kho(id),
-    CONSTRAINT sc_creator_fk FOREIGN KEY (created_by)            REFERENCES nguoi_dung(id),
-    CONSTRAINT sc_approver_fk FOREIGN KEY (approved_by)          REFERENCES nguoi_dung(id),
-    CONSTRAINT sc_adj_fk     FOREIGN KEY (adjustment_voucher_id) REFERENCES chung_tu(id),
-    UNIQUE (code)
+    id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ma                        varchar(30)  NOT NULL,
+    kho_id                    integer      NOT NULL,
+    trang_thai                enum('OPEN','REVIEW','CLOSED','CANCELLED') NOT NULL DEFAULT 'OPEN',
+    ghi_chu                   varchar(255) NOT NULL DEFAULT '',
+    nguoi_lap_id              integer      NOT NULL,
+    nguoi_duyet_id            integer      NULL,
+    phieu_nhap_xuat_dieu_chinh_id    bigint       NULL,
+    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ngay_nop                  timestamp    NULL,
+    ngay_dong                 timestamp    NULL,
+    CONSTRAINT sc_wh_fk      FOREIGN KEY (kho_id)          REFERENCES kho(id),
+    CONSTRAINT sc_creator_fk FOREIGN KEY (nguoi_lap_id)            REFERENCES nguoi_dung(id),
+    CONSTRAINT sc_approver_fk FOREIGN KEY (nguoi_duyet_id)          REFERENCES nguoi_dung(id),
+    CONSTRAINT sc_adj_fk     FOREIGN KEY (phieu_nhap_xuat_dieu_chinh_id) REFERENCES phieu_nhap_xuat(id),
+    UNIQUE (ma)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 CREATE TABLE IF NOT EXISTS chi_tiet_kiem_ke (
-    count_id    bigint       NOT NULL,
-    item_id     integer      NOT NULL,
-    batch_id    integer      NOT NULL,
-    system_qty  integer      NOT NULL,
-    counted_qty integer      NULL,
-    reason      varchar(255) NOT NULL DEFAULT '',
-    PRIMARY KEY (count_id, item_id, batch_id),
-    CONSTRAINT scl_sys_nonneg CHECK (system_qty >= 0),
-    CONSTRAINT scl_cnt_nonneg CHECK (counted_qty IS NULL OR counted_qty >= 0),
-    CONSTRAINT scl_count_fk FOREIGN KEY (count_id) REFERENCES dot_kiem_ke(id),
-    CONSTRAINT scl_item_fk  FOREIGN KEY (item_id)  REFERENCES mat_hang(id),
-    CONSTRAINT scl_batch_fk FOREIGN KEY (batch_id) REFERENCES lo_hang(id)
+    dot_kiem_ke_id            bigint       NOT NULL,
+    mat_hang_id               integer      NOT NULL,
+    lo_hang_id                integer      NOT NULL,
+    so_luong_so_sach          integer      NOT NULL,
+    so_luong_thuc_dem         integer      NULL,
+    ly_do                     varchar(255) NOT NULL DEFAULT '',
+    PRIMARY KEY (dot_kiem_ke_id, mat_hang_id, lo_hang_id),
+    CONSTRAINT scl_sys_nonneg CHECK (so_luong_so_sach >= 0),
+    CONSTRAINT scl_cnt_nonneg CHECK (so_luong_thuc_dem IS NULL OR so_luong_thuc_dem >= 0),
+    CONSTRAINT scl_count_fk FOREIGN KEY (dot_kiem_ke_id) REFERENCES dot_kiem_ke(id),
+    CONSTRAINT scl_item_fk  FOREIGN KEY (mat_hang_id)  REFERENCES mat_hang(id),
+    CONSTRAINT scl_batch_fk FOREIGN KEY (lo_hang_id) REFERENCES lo_hang(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
 CREATE TABLE IF NOT EXISTS nhat_ky (
-    id         bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id    integer      NULL,
-    action     varchar(40)  NOT NULL,
-    entity     varchar(30)  NOT NULL,
-    entity_id  bigint       NULL,
-    detail     varchar(500) NOT NULL DEFAULT '',
-    created_at timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX audit_by_entity (entity, entity_id),
-    INDEX audit_by_time (created_at)
+    id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nguoi_dung_id             integer      NULL,
+    hanh_dong                 varchar(40)  NOT NULL,
+    doi_tuong                 varchar(30)  NOT NULL,
+    doi_tuong_id              bigint       NULL,
+    chi_tiet                  varchar(500) NOT NULL DEFAULT '',
+    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX audit_by_entity (doi_tuong, doi_tuong_id),
+    INDEX audit_by_time (ngay_tao)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

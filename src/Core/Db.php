@@ -222,16 +222,16 @@ final class Db
         }
     }
 
-    /** Cấp số thứ tự nguyên tử cho mã chứng từ (khoá dòng đến hết giao dịch). */
+    /** Cấp số thứ tự nguyên tử cho mã phiếu nhập xuất (khoá dòng đến hết giao dịch). */
     public function nextSequence(string $name): int
     {
         if ($this->pdo) {
-            $this->exec('INSERT OR IGNORE INTO bo_dem (name, value) VALUES (?, 0)', [$name]);
-            $this->exec('UPDATE bo_dem SET value = value + 1 WHERE name = ?', [$name]);
-            return (int)$this->value('SELECT value FROM bo_dem WHERE name = ?', [$name]);
+            $this->exec('INSERT OR IGNORE INTO bo_dem (ten, gia_tri) VALUES (?, 0)', [$name]);
+            $this->exec('UPDATE bo_dem SET gia_tri = gia_tri + 1 WHERE ten = ?', [$name]);
+            return (int)$this->value('SELECT gia_tri FROM bo_dem WHERE ten = ?', [$name]);
         }
-        $this->exec('INSERT INTO bo_dem (name, value) VALUES (?, 0) ON DUPLICATE KEY UPDATE value = value', [$name]);
-        $this->exec('UPDATE bo_dem SET value = LAST_INSERT_ID(value + 1) WHERE name = ?', [$name]);
+        $this->exec('INSERT INTO bo_dem (ten, gia_tri) VALUES (?, 0) ON DUPLICATE KEY UPDATE gia_tri = gia_tri', [$name]);
+        $this->exec('UPDATE bo_dem SET gia_tri = LAST_INSERT_ID(gia_tri + 1) WHERE ten = ?', [$name]);
         return (int)$this->value('SELECT LAST_INSERT_ID()');
     }
 }

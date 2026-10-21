@@ -27,16 +27,16 @@ $chk = $vs->check($f->keeperA, (int)$px['id']);
 same(array_column($chk, 'ok'), [true, true], 'kiểm tra: đủ hàng');
 $vs->confirm($f->approverA, (int)$px['id']);
 same([$f->stock($f->wa, 'x'), $f->stock($f->wa, 'lot')], [70, 25], 'xuất ⇒ tồn giảm');
-$onHand = array_values(array_filter($q->onHand([$f->wa], $f->it['x']['sku'], true), fn($r) => $r['sku'] === $f->it['x']['sku']));
-same([count($onHand), $onHand[0]['quantity']], [1, 70], 'tra cứu tồn từ sổ phát sinh: x = 70');
+$onHand = array_values(array_filter($q->onHand([$f->wa], $f->it['x']['ma_hang'], true), fn($r) => $r['ma_hang'] === $f->it['x']['ma_hang']));
+same([count($onHand), $onHand[0]['so_luong']], [1, 70], 'tra cứu tồn từ sổ phát sinh: x = 70');
 $hist = $q->history([$f->wa], ['item' => $f->it['x']['item']]);
-same(array_column(array_reverse($hist), 'qty_change'), [100, -30], 'lịch sử hàng x: +100, −30');
-same(array_column(array_reverse($hist), 'balance_after'), [100, 70], 'tồn sau từng bước');
-same(array_column($hist, 'voucher_code'), [$px['code'], $pn['code']], 'mỗi dòng sổ truy được về chứng từ');
-$lotRows = array_values(array_filter($q->onHand([$f->wa], '', true), fn($r) => $r['item_id'] === $f->it['lot']['item']));
-same([$lotRows[0]['batch_no'], $lotRows[0]['quantity']], ['L1', 25], 'tồn theo lô');
+same(array_column(array_reverse($hist), 'bien_dong'), [100, -30], 'lịch sử hàng x: +100, −30');
+same(array_column(array_reverse($hist), 'ton_sau'), [100, 70], 'tồn sau từng bước');
+same(array_column($hist, 'voucher_code'), [$px['ma'], $pn['ma']], 'mỗi dòng sổ truy được về phiếu nhập xuất');
+$lotRows = array_values(array_filter($q->onHand([$f->wa], '', true), fn($r) => $r['mat_hang_id'] === $f->it['lot']['item']));
+same([$lotRows[0]['so_lo'], $lotRows[0]['so_luong']], ['L1', 25], 'tồn theo lô');
 
-section('Tình huống 2: điều chuyển → kiểm kê → xác nhận chênh lệch → chứng từ điều chỉnh');
+section('Tình huống 2: điều chuyển → kiểm kê → xác nhận chênh lệch → phiếu nhập xuất điều chỉnh');
 $t = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 20)], 'Bổ sung cho kho B', null)['voucher'];
 $ts->confirm($f->approverA, (int)$t['id']);
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [50, 20], 'sau điều chuyển: A=50, B=20');
@@ -44,9 +44,9 @@ $cid = $cs->open($f->keeperB, $f->wb, 'Kiểm kê sau nhận hàng');
 $counted = [];
 $why = [];
 foreach ($cs->find($cid)['lines'] as $l) {
-    $key = $l['item_id'] . ':' . $l['batch_id'];
-    $counted[$key] = (int)$l['system_qty'];
-    if ($l['item_id'] === $f->it['x']['item']) {
+    $key = $l['mat_hang_id'] . ':' . $l['lo_hang_id'];
+    $counted[$key] = (int)$l['so_luong_so_sach'];
+    if ($l['mat_hang_id'] === $f->it['x']['item']) {
         $counted[$key] = 18;
         $why[$key] = 'Thất thoát / mất hàng: thùng rách trong vận chuyển';
     }
@@ -55,9 +55,9 @@ $cs->submit($f->keeperB, $cid, $counted, $why);
 $res = $cs->approve($f->approverB, $cid);
 same([$res['adjusted'], $res['net']], [1, -2], 'xác nhận chênh lệch −2');
 same($f->stock($f->wb, 'x'), 18, 'kho B sau điều chỉnh = 18');
-same($res['voucher']['type'], 'ADJUSTMENT', 'có chứng từ điều chỉnh');
+same($res['voucher']['loai'], 'ADJUSTMENT', 'có phiếu nhập xuất điều chỉnh');
 $rec = $q->reconcile([$f->wa, $f->wb]);
-$mine = array_filter($rec['rows'], fn($r) => in_array((int)$r['item_id'], array_column($f->it, 'item'), true));
+$mine = array_filter($rec['rows'], fn($r) => in_array((int)$r['mat_hang_id'], array_column($f->it, 'item'), true));
 same(count(array_filter($mine, fn($r) => $r['balance'] != $r['ledger'])), 0, 'đối chiếu tồn/sổ: khớp');
-same($rec['mismatches'], 0, 'đối chiếu chứng từ/sổ: khớp');
+same($rec['mismatches'], 0, 'đối chiếu phiếu nhập xuất/sổ: khớp');
 finish();

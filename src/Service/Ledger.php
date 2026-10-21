@@ -8,9 +8,9 @@ use StockFlow\Core\Hooks;
 use StockFlow\Domain\InsufficientStock;
 
 /**
- * Lõi ghi sổ. Quy trình cho mọi chứng từ:
+ * Lõi ghi sổ. Quy trình cho mọi phiếu nhập xuất:
  *   1) lock()  — khoá các dòng tồn (kho, hàng, lô) theo thứ tự cố định → không deadlock giữa các giao dịch;
- *   2) post()  — kiểm tra đủ hàng, cập nhật số dư, ghi một dòng so_phat_sinh cho mỗi dòng chứng từ.
+ *   2) post()  — kiểm tra đủ hàng, cập nhật số dư, ghi một dòng so_phat_sinh cho mỗi dòng phiếu nhập xuất.
  * Phải gọi trong giao dịch của người gọi: lỗi ở bất kỳ bước nào ⇒ rollback toàn bộ, không có thay đổi dở dang.
  */
 final class Ledger
@@ -27,10 +27,10 @@ final class Ledger
         $keys = array_values($unique);
         usort($keys, fn($x, $y) => $x <=> $y);
         foreach ($keys as [$w, $i, $b]) {
-            $this->db->exec('INSERT IGNORE INTO ton_kho (warehouse_id, item_id, batch_id, quantity) VALUES (?,?,?,0)', [$w, $i, $b]);
+            $this->db->exec('INSERT IGNORE INTO ton_kho (kho_id, mat_hang_id, lo_hang_id, so_luong) VALUES (?,?,?,0)', [$w, $i, $b]);
         }
         foreach ($keys as [$w, $i, $b]) {
-            $this->db->one('SELECT quantity FROM ton_kho WHERE warehouse_id = ? AND item_id = ? AND batch_id = ? FOR UPDATE', [$w, $i, $b]);
+            $this->db->one('SELECT so_luong FROM ton_kho WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ? FOR UPDATE', [$w, $i, $b]);
         }
         Hooks::fire('ledger.after_lock', ['keys' => $keys]);
     }
@@ -42,28 +42,28 @@ final class Ledger
     {
         foreach ($ops as $op) {
             $cur = (int)$this->db->value(
-                'SELECT quantity FROM ton_kho WHERE warehouse_id = ? AND item_id = ? AND batch_id = ? FOR UPDATE',
-                [$op['warehouse_id'], $op['item_id'], $op['batch_id']]
+                'SELECT so_luong FROM ton_kho WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ? FOR UPDATE',
+                [$op['kho_id'], $op['mat_hang_id'], $op['lo_hang_id']]
             );
             $next = $cur + $op['delta'];
             if ($next < 0) {
                 throw $this->insufficient($op, $cur);
             }
             Hooks::fire('ledger.before_write', $op);
-            $this->db->exec('UPDATE ton_kho SET quantity = ? WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
-                [$next, $op['warehouse_id'], $op['item_id'], $op['batch_id']]);
+            $this->db->exec('UPDATE ton_kho SET so_luong = ? WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
+                [$next, $op['kho_id'], $op['mat_hang_id'], $op['lo_hang_id']]);
             $this->db->exec(
-                'INSERT INTO so_phat_sinh (voucher_id, voucher_line_id, warehouse_id, item_id, batch_id, qty_change, balance_after)
+                'INSERT INTO so_phat_sinh (phieu_nhap_xuat_id, chi_tiet_phieu_nhap_xuat_id, kho_id, mat_hang_id, lo_hang_id, bien_dong, ton_sau)
                  VALUES (?,?,?,?,?,?,?)',
-                [$op['voucher_id'], $op['line_id'], $op['warehouse_id'], $op['item_id'], $op['batch_id'], $op['delta'], $next]
+                [$op['phieu_nhap_xuat_id'], $op['line_id'], $op['kho_id'], $op['mat_hang_id'], $op['lo_hang_id'], $op['delta'], $next]
             );
         }
     }
 
     private function insufficient(array $op, int $available): InsufficientStock
     {
-        $info = $this->db->one('SELECT i.sku, b.batch_no, w.code FROM mat_hang i JOIN lo_hang b ON b.id = ? JOIN kho w ON w.id = ? WHERE i.id = ?',
-            [$op['batch_id'], $op['warehouse_id'], $op['item_id']]) ?? ['sku' => '#' . $op['item_id'], 'batch_no' => '?', 'code' => '#' . $op['warehouse_id']];
-        return new InsufficientStock($info['sku'], $info['batch_no'], $info['code'], $available, abs($op['delta']));
+        $info = $this->db->one('SELECT i.ma_hang, b.so_lo, w.ma FROM mat_hang i JOIN lo_hang b ON b.id = ? JOIN kho w ON w.id = ? WHERE i.id = ?',
+            [$op['lo_hang_id'], $op['kho_id'], $op['mat_hang_id']]) ?? ['ma_hang' => '#' . $op['mat_hang_id'], 'so_lo' => '?', 'ma' => '#' . $op['kho_id']];
+        return new InsufficientStock($info['ma_hang'], $info['so_lo'], $info['ma'], $available, abs($op['delta']));
     }
 }

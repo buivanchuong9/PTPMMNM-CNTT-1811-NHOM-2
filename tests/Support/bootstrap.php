@@ -7,6 +7,7 @@ use StockFlow\Core\Container;
 use StockFlow\Core\Config;
 use StockFlow\Core\Db;
 use StockFlow\Domain\Role;
+use StockFlow\Domain\AccountRole;
 use StockFlow\Domain\User;
 use StockFlow\Service\CatalogService;
 
@@ -59,7 +60,7 @@ function finish(): never
     exit($GLOBALS['t_failed'] === 0 ? 0 : 1);
 }
 
-/** Dữ liệu kiểm thử độc lập (hậu tố ngẫu nhiên): 2 kho A/B, người dùng theo quyền, 3 mặt hàng (1 có lô). */
+/** Dữ liệu kiểm thử độc lập (hậu tố ngẫu nhiên): 2 kho A/B (mỗi kho 1 quản lý + 1 nhân viên), 2 tài khoản cấp cao, 3 mặt hàng (1 có lô). */
 final class Fx
 {
     public const PASSWORD = 'test-pass-123';
@@ -74,7 +75,7 @@ final class Fx
     public User $approverA;
     public User $keeperB;
     public User $approverB;
-    public User $both;   // KEEPER+APPROVER+COUNTER ở cả A và B
+    public User $both;   // ADMIN thứ hai: toàn quyền ở cả A và B
     /** @var array<string,array{item:int,batch:int,sku:string}> */
     public array $it = [];
 
@@ -87,59 +88,53 @@ final class Fx
         $f->tag = strtoupper(bin2hex(random_bytes(3)));
         $cat = $f->c->get(CatalogService::class);
         $hash = password_hash(self::PASSWORD, PASSWORD_DEFAULT);
-        $mk = fn(string $name, bool $admin = false) => new User(
-            $f->db->insert('INSERT INTO nguoi_dung (username, full_name, password_hash, is_admin) VALUES (?,?,?,?)', ["{$name}_{$f->tag}", "Test $name", $hash, (int)$admin]),
-            "{$name}_{$f->tag}", "Test $name", $admin);
-        $f->admin = $mk('admin', true);
-        $f->wa = $cat->addWarehouse($f->admin, "A{$f->tag}", 'Kho test A', '');
-        $f->wb = $cat->addWarehouse($f->admin, "B{$f->tag}", 'Kho test B', '');
-        $f->keeperA = $mk('keeperA');
-        $f->approverA = $mk('approverA');
-        $f->keeperB = $mk('keeperB');
-        $f->approverB = $mk('approverB');
-        $f->both = $mk('both');
-        $cat->grant($f->admin, $f->keeperA->id, $f->wa, Role::Keeper);
-        $cat->grant($f->admin, $f->keeperA->id, $f->wa, Role::Counter);
-        $cat->grant($f->admin, $f->approverA->id, $f->wa, Role::Approver);
-        $cat->grant($f->admin, $f->keeperB->id, $f->wb, Role::Keeper);
-        $cat->grant($f->admin, $f->keeperB->id, $f->wb, Role::Counter);
-        $cat->grant($f->admin, $f->approverB->id, $f->wb, Role::Approver);
-        foreach ([$f->wa, $f->wb] as $w) {
-            foreach (Role::cases() as $r) {
-                $cat->grant($f->admin, $f->both->id, $w, $r);
-            }
-        }
+        // quản trị: tài khoản cấp cao (không gắn kho); quản lý/nhân viên gắn đúng một kho
+        $mk = function (string $name, AccountRole $role, ?int $wh) use ($f, $hash) {
+            $username = "{$name}_{$f->tag}";
+            return new User(
+                $f->db->insert('INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau_ma_hoa, vai_tro, kho_id, quan_ly_kho_id) VALUES (?,?,?,?,?,?)',
+                    [$username, "Test $name", $hash, $role->value, $wh, $role === AccountRole::Manager ? $wh : null]),
+                $username, "Test $name", $role, $wh);
+        };
+        $f->admin = $mk('admin', AccountRole::Admin, null);
+        $f->wa = $cat->addWarehouse($f->admin, "A{$f->tag}", 'Kho test A', 'Địa chỉ kho A');
+        $f->wb = $cat->addWarehouse($f->admin, "B{$f->tag}", 'Kho test B', 'Địa chỉ kho B');
+        $f->keeperA = $mk('keeperA', AccountRole::Staff, $f->wa);        // nhân viên kho A
+        $f->approverA = $mk('approverA', AccountRole::Manager, $f->wa);  // quản lý kho A
+        $f->keeperB = $mk('keeperB', AccountRole::Staff, $f->wb);
+        $f->approverB = $mk('approverB', AccountRole::Manager, $f->wb);
+        $f->both = $mk('both', AccountRole::Admin, null);                // tài khoản cấp cao thứ hai (thao tác được ở cả A và B)
         $unit = $cat->addUnit($f->admin, "u{$f->tag}", 'Đơn vị test');
         foreach (['x' => false, 'y' => false, 'lot' => true] as $k => $tracked) {
             $sku = strtoupper($k) . "-{$f->tag}";
             $id = $cat->addItem($f->admin, $sku, "Hàng test $k", $unit, $tracked, 0);
-            $batch = $tracked ? $cat->addBatch($f->admin, $id, 'L1', '2030-01-01') : (int)$f->db->value('SELECT id FROM lo_hang WHERE item_id = ?', [$id]);
-            $f->it[$k] = ['item' => $id, 'batch' => $batch, 'sku' => $sku];
+            $batch = $tracked ? $cat->addBatch($f->admin, $id, 'L1', '2030-01-01') : (int)$f->db->value('SELECT id FROM lo_hang WHERE mat_hang_id = ?', [$id]);
+            $f->it[$k] = ['item' => $id, 'batch' => $batch, 'ma_hang' => $sku];
         }
         return $f;
     }
 
     public function line(string $k, int $qty): array
     {
-        return ['item_id' => $this->it[$k]['item'], 'batch_id' => $this->it[$k]['batch'], 'qty' => $qty];
+        return ['mat_hang_id' => $this->it[$k]['item'], 'lo_hang_id' => $this->it[$k]['batch'], 'so_luong' => $qty];
     }
 
     /** Tồn tính từ sổ phát sinh. */
     public function stock(int $wh, string $k): int
     {
-        return (int)$this->db->value('SELECT COALESCE(SUM(qty_change),0) FROM so_phat_sinh WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+        return (int)$this->db->value('SELECT COALESCE(SUM(bien_dong),0) FROM so_phat_sinh WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
             [$wh, $this->it[$k]['item'], $this->it[$k]['batch']]);
     }
 
     public function balance(int $wh, string $k): int
     {
-        return (int)$this->db->value('SELECT COALESCE(SUM(quantity),0) FROM ton_kho WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+        return (int)$this->db->value('SELECT COALESCE(SUM(so_luong),0) FROM ton_kho WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
             [$wh, $this->it[$k]['item'], $this->it[$k]['batch']]);
     }
 
     public function movements(int $wh): int
     {
-        return (int)$this->db->value('SELECT COUNT(*) FROM so_phat_sinh WHERE warehouse_id = ?', [$wh]);
+        return (int)$this->db->value('SELECT COUNT(*) FROM so_phat_sinh WHERE kho_id = ?', [$wh]);
     }
 
     /** Nhập hàng nhanh: lập + duyệt phiếu nhập tại kho. */
