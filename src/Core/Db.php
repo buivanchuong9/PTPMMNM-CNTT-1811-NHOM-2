@@ -42,7 +42,8 @@ final class Db
             $c->set_charset('utf8mb4');
             $c->query("SET time_zone = '+00:00'");
             $c->query("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY'");
-            $c->query('SET SESSION transaction_isolation = "READ-COMMITTED"');
+            // MySQL 8 dùng transaction_isolation; MariaDB (XAMPP) < 11.1 chỉ có tx_isolation.
+            $c->query('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
             return new self($c, null);
         } catch (mysqli_sql_exception $e) {
             throw new RuntimeException('DATABASE_UNAVAILABLE', (int)$e->getCode(), $e);
