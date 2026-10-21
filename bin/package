@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Đóng gói bản phát hành: dist/stockflow-<version>.tar.gz (+ SHA256). Giải nén là chạy được (xem README: Chạy thử).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+version="$(cat VERSION)"
+name="stockflow-$version"
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"' EXIT
+mkdir -p "$stage/$name" dist
+cp -R bin public src templates database docker tests README.md LICENSE VERSION composer.json Dockerfile docker-compose.yml .gitignore "$stage/$name/"
+mkdir -p "$stage/$name/docs" && cp -R docs/images "$stage/$name/docs/"
+tar -czf "dist/$name.tar.gz" -C "$stage" "$name"
+( cd dist && { shasum -a 256 "$name.tar.gz" 2>/dev/null || sha256sum "$name.tar.gz"; } > "$name.tar.gz.sha256" )
+echo "✔ dist/$name.tar.gz"; cat "dist/$name.tar.gz.sha256"

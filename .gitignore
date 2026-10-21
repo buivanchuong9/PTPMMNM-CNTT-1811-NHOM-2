@@ -1,0 +1,11 @@
+# Cấu hình & dữ liệu cục bộ (chứa mật khẩu CSDL — không bao giờ commit)
+.local/
+.env
+*.log
+dist/
+.DS_Store
+.idea/
+.vscode/
+
+# Các bài lab gốc (mỗi bài là một git repo riêng) — giữ ở máy, không đẩy lên
+lab*/

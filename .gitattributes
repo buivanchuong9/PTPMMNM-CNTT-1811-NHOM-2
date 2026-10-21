@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.png binary
+bin/stockflow text eol=lf
+docs/images/* linguist-documentation

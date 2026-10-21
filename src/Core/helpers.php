@@ -1,0 +1,106 @@
+<?php
+declare(strict_types=1);
+
+/** Escape HTML đầu ra. */
+function e(mixed $v): string
+{
+    return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/** Số nguyên kiểu Việt Nam: 1.234. */
+function n(int|string|null $v): string
+{
+    return number_format((int)$v, 0, ',', '.');
+}
+
+/** Số có dấu: +5 / −3. */
+function signed(int $v): string
+{
+    return ($v > 0 ? '+' : '') . n($v);
+}
+
+/** Giờ Việt Nam (UTC+7) từ timestamp UTC trong CSDL. */
+function dt(?string $v, bool $time = true): string
+{
+    if (!$v) {
+        return '—';
+    }
+    return gmdate($time ? 'd/m/Y H:i' : 'd/m/Y', strtotime($v . ' UTC') + 7 * 3600);
+}
+
+const STATUS_LABELS = [
+    'DRAFT' => ['Chờ xác nhận', 'warn'], 'CONFIRMED' => ['Đã xác nhận', 'ok'], 'CANCELLED' => ['Đã huỷ', 'muted'],
+    'OPEN' => ['Đang kiểm đếm', 'info'], 'REVIEW' => ['Chờ duyệt chênh lệch', 'warn'], 'CLOSED' => ['Đã đóng', 'ok'],
+];
+
+const TYPE_LABELS = [
+    'RECEIPT' => ['Phiếu nhập', 'in'], 'ISSUE' => ['Phiếu xuất', 'out'], 'TRANSFER_OUT' => ['Điều chuyển đi', 'xfer'],
+    'TRANSFER_IN' => ['Điều chuyển đến', 'xfer'], 'ADJUSTMENT' => ['Điều chỉnh', 'adj'],
+];
+
+/** Nhãn trạng thái dạng "tag" kiểu cổng vận đơn. */
+function status_tag(string $status): string
+{
+    [$label, $tone] = STATUS_LABELS[$status] ?? [$status, 'muted'];
+    return '<span class="tag tag-' . $tone . '">' . e($label) . '</span>';
+}
+
+function type_chip(string $type): string
+{
+    [$label, $tone] = TYPE_LABELS[$type] ?? [$type, 'adj'];
+    return '<span class="chip chip-' . $tone . '">' . e($label) . '</span>';
+}
+
+function icon(string $name): string
+{
+    static $paths = [
+        'home' => '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+        'box' => '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+        'layers' => '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+        'truck' => '<path d="M2 6h11v10H2z"/><path d="M13 9h5l3 3v4h-8"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>',
+        'in' => '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',
+        'out' => '<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 20h16"/>',
+        'clipboard' => '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 13l2 2 4-4"/>',
+        'file' => '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/>',
+        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        'scale' => '<path d="M12 4v16"/><path d="M5 8h14"/><path d="M5 8l-3 7a3 3 0 006 0L5 8z"/><path d="M19 8l-3 7a3 3 0 006 0l-3-7z"/>',
+        'chart' => '<path d="M4 20V4"/><path d="M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/>',
+        'warehouse' => '<path d="M3 21V9l9-6 9 6v12"/><path d="M7 21v-7h10v7"/><path d="M7 17h10"/>',
+        'users' => '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3 3 0 010 5.6M18 14.4c1.8.8 3 2.6 3 5.6"/>',
+        'search' => '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+        'plus' => '<path d="M12 5v14M5 12h14"/>',
+        'download' => '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',
+        'alert' => '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.5"/>',
+        'check' => '<path d="M5 12l4 4 10-10"/>',
+        'shield' => '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>',
+        'logout' => '<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4"/><path d="M20 12H9"/>',
+    ];
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($paths[$name] ?? '') . '</svg>';
+}
+
+/** <option> cho danh sách hàng/lô: value = "item:batch". */
+function pick_options(array $pick, ?string $selected = null): string
+{
+    $html = '<option value="">Chọn mặt hàng / lô…</option>';
+    foreach ($pick as $p) {
+        $lot = $p['track_batch'] ? ' · lô ' . $p['batch_no'] . ($p['expiry_date'] ? ' (HSD ' . dt($p['expiry_date'], false) . ')' : '') : '';
+        $v = $p['item_id'] . ':' . $p['batch_id'];
+        $html .= '<option value="' . e($v) . '"' . ($v === $selected ? ' selected' : '') . '>' . e($p['sku'] . ' — ' . $p['name'] . $lot . ' [' . $p['unit'] . ']') . '</option>';
+    }
+    return $html;
+}
+
+function wh_options(array $rows, ?int $selected = null, string $placeholder = ''): string
+{
+    $html = $placeholder !== '' ? '<option value="">' . e($placeholder) . '</option>' : '';
+    foreach ($rows as $r) {
+        $html .= '<option value="' . (int)$r['id'] . '"' . ((int)$r['id'] === $selected ? ' selected' : '') . '>' . e($r['code'] . ' — ' . $r['name']) . '</option>';
+    }
+    return $html;
+}
+
+/** Giờ ngắn gọn cho bảng dày: 21/10 15:00. */
+function dt_short(?string $v): string
+{
+    return $v ? gmdate('d/m H:i', strtotime($v . ' UTC') + 7 * 3600) : '—';
+}

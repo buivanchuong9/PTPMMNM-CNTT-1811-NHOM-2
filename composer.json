@@ -1,0 +1,18 @@
+{
+  "name": "stockflow/wms",
+  "description": "Hệ thống quản lý kho, điều chuyển hàng và kiểm kê tại nhiều điểm (PHP 8.1+, MySQL 8.0.16+, không phụ thuộc thư viện).",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.1",
+    "ext-mysqli": "*"
+  },
+  "autoload": {
+    "psr-4": { "StockFlow\\": "src/" },
+    "files": ["src/Core/helpers.php"]
+  },
+  "scripts": {
+    "test": "php tests/run.php",
+    "serve": "php bin/stockflow serve"
+  }
+}

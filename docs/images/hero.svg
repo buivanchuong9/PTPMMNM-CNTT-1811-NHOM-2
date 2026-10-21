@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" role="img" aria-label="StockFlow WMS: hàng hoá di chuyển giữa các kho">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7a45"/><stop offset=".55" stop-color="#ee4d2d"/><stop offset="1" stop-color="#c9361a"/></linearGradient>
+    <linearGradient id="road" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".15"/><stop offset=".5" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity=".15"/></linearGradient>
+    <g id="wh"><path d="M-46 38V-8L0 -38L46 -8V38Z" fill="#fff" fill-opacity=".97"/><rect x="-24" y="8" width="48" height="30" rx="3" fill="#ee4d2d"/><path d="M-24 18H24M-24 28H24" stroke="#fff" stroke-opacity=".75" stroke-width="2"/></g>
+    <g id="box"><rect x="-11" y="-11" width="22" height="22" rx="4" fill="#ffd166"/><path d="M-11 -2H11" stroke="#b45309" stroke-width="2.5"/><path d="M0 -11V-2" stroke="#b45309" stroke-width="2.5"/></g>
+  </defs>
+  <rect width="1200" height="380" fill="url(#bg)"/>
+  <g opacity=".12" fill="#fff"><circle cx="90" cy="60" r="140"/><circle cx="1120" cy="330" r="190"/></g>
+  <g stroke="#fff" stroke-opacity=".09"><path d="M0 80H1200M0 160H1200M0 240H1200M0 320H1200"/><path d="M150 0V380M350 0V380M550 0V380M750 0V380M950 0V380"/></g>
+  <path id="r1" d="M200 215 C 380 95, 540 95, 600 190" fill="none" stroke="url(#road)" stroke-width="3" stroke-dasharray="8 10"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.2s" repeatCount="indefinite"/></path>
+  <path id="r2" d="M600 190 C 660 95, 820 95, 1000 215" fill="none" stroke="url(#road)" stroke-width="3" stroke-dasharray="8 10"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.2s" repeatCount="indefinite"/></path>
+  <path id="r3" d="M200 250 C 420 340, 780 340, 1000 250" fill="none" stroke="url(#road)" stroke-width="3" stroke-dasharray="8 10"><animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.2s" repeatCount="indefinite"/></path>
+  <use href="#wh" x="170" y="215"/><use href="#wh" x="600" y="190"/><use href="#wh" x="1030" y="215"/>
+  <g fill="#fff" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-weight="700" font-size="15" text-anchor="middle">
+    <text x="170" y="283">HN01 · Hà Nội</text><text x="600" y="258">DN01 · Đà Nẵng</text><text x="1030" y="283">HCM01 · TP.HCM</text>
+  </g>
+  <use href="#box"><animateMotion dur="4s" repeatCount="indefinite" begin="0s"><mpath href="#r1"/></animateMotion></use>
+  <use href="#box"><animateMotion dur="4s" repeatCount="indefinite" begin="-2s"><mpath href="#r1"/></animateMotion></use>
+  <use href="#box"><animateMotion dur="4.5s" repeatCount="indefinite" begin="-1s"><mpath href="#r2"/></animateMotion></use>
+  <use href="#box"><animateMotion dur="5s" repeatCount="indefinite" begin="-0.5s"><mpath href="#r3"/></animateMotion></use>
+  <use href="#box"><animateMotion dur="5s" repeatCount="indefinite" begin="-3s"><mpath href="#r3"/></animateMotion></use>
+  <g font-family="system-ui,-apple-system,Segoe UI,sans-serif" fill="#fff" text-anchor="middle">
+    <text x="600" y="62" font-size="54" font-weight="800" letter-spacing="-1.5">Stock<tspan fill="#ffd166">Flow</tspan> <tspan font-size="22" font-weight="700" letter-spacing="3" dy="-18">WMS</tspan></text>
+    <text x="600" y="102" font-size="19" fill-opacity=".95">Quản lý kho · Điều chuyển hàng · Kiểm kê tại nhiều điểm</text>
+  </g>
+</svg>

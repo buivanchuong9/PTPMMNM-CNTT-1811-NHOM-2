@@ -1,0 +1,124 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * StockFlow CLI.  Dùng:  bin/stockflow <lệnh>
+ */
+require __DIR__ . '/../src/bootstrap.php';
+
+use StockFlow\Core\Config;
+use StockFlow\Core\Db;
+use StockFlow\Core\Migrator;
+
+const USAGE = <<<TXT
+Cách dùng: bin/stockflow <lệnh>
+  db-config   nhập thông tin MySQL → .local/db.json (chmod 600)
+  check       kiểm tra kết nối + phiên bản MySQL
+  migrate     tạo/cập nhật bảng (chạy lại an toàn)
+  seed        nạp dữ liệu mẫu (3 kho, 30 mặt hàng, ≥200 dòng phát sinh); bỏ qua nếu đã có dữ liệu
+  setup       migrate + seed
+  serve       chạy web tại http://127.0.0.1:8080  (PORT=9000 để đổi cổng)
+  test        chạy toàn bộ kiểm thử (cần CSDL cho integration/http)
+
+TXT;
+
+function connect(): Db
+{
+    return Db::connect(Config::database());
+}
+
+function cmdCheck(): int
+{
+    try {
+        $db = connect();
+        $v = $db->one('SELECT DATABASE() AS db, CURRENT_USER() AS u, VERSION() AS v');
+        if (stripos($v['v'], 'mariadb') !== false || version_compare($v['v'], '8.0.16', '<')) {
+            throw new RuntimeException('Cần MySQL >= 8.0.16 (MariaDB chưa được hỗ trợ), hiện là ' . $v['v']);
+        }
+        echo "✔ CSDL={$v['db']} · USER={$v['u']} · MySQL {$v['v']}\n";
+        return 0;
+    } catch (Throwable $e) {
+        fwrite(STDERR, '✘ ' . $e->getMessage() . "\n  Chạy bin/stockflow db-config (hoặc đặt DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS).\n");
+        return 2;
+    }
+}
+
+function cmdMigrate(): int
+{
+    foreach ((new Migrator(connect()))->migrate() as $line) {
+        echo $line, "\n";
+    }
+    return 0;
+}
+
+function cmdSeed(array $argv): int
+{
+    require __DIR__ . '/../database/seeds/DemoSeed.php';
+    return \StockFlow\Seeds\DemoSeed::run(connect(), in_array('--force', $argv, true));
+}
+
+function cmdServe(): int
+{
+    $port = getenv('PORT') ?: '8080';
+    $root = Config::root();
+    @mkdir("$root/.local/sessions", 0700, true);
+    echo "▶ StockFlow tại http://127.0.0.1:$port  (Ctrl+C để dừng)\n";
+    passthru(sprintf('php -d session.save_path=%s -S 127.0.0.1:%s -t %s %s',
+        escapeshellarg("$root/.local/sessions"), escapeshellarg($port), escapeshellarg("$root/public"), escapeshellarg("$root/public/index.php")), $rc);
+    return $rc;
+}
+
+function cmdDbConfig(): int
+{
+    $ask = function (string $label, string $default): string {
+        echo "$label [$default]: ";
+        $v = trim((string)fgets(STDIN));
+        return $v === '' ? $default : $v;
+    };
+    $c = ['host' => $ask('Máy chủ MySQL', '127.0.0.1'), 'port' => $ask('Cổng', '3306'),
+          'database' => $ask('Tên CSDL', 'stockflow'), 'user' => $ask('Tài khoản', 'stockflow')];
+    if (!stream_isatty(STDIN)) {
+        fwrite(STDERR, "Hãy chạy trong terminal tương tác để nhập mật khẩu (hoặc dùng biến môi trường DB_*).\n");
+        return 2;
+    }
+    exec('stty -echo');
+    try {
+        echo 'Mật khẩu (không hiển thị): ';
+        $c['password'] = rtrim((string)fgets(STDIN), "\r\n");
+    } finally {
+        exec('stty echo');
+        echo "\n";
+    }
+    try {
+        Db::connect($c);
+    } catch (Throwable $e) {
+        fwrite(STDERR, '✘ Không kết nối được: ' . $e->getMessage() . "\n");
+        return 2;
+    }
+    $dir = Config::root() . '/.local';
+    $old = umask(0077);
+    @mkdir($dir, 0700, true);
+    file_put_contents("$dir/db.json", json_encode($c, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    chmod("$dir/db.json", 0600);
+    umask($old);
+    echo "✔ Đã lưu .local/db.json (chỉ trên máy này, đã nằm trong .gitignore)\n";
+    return 0;
+}
+
+$cmd = $argv[1] ?? 'help';
+try {
+    exit(match ($cmd) {
+        'db-config' => cmdDbConfig(),
+        'check' => cmdCheck(),
+        'migrate' => cmdMigrate(),
+        'seed' => cmdSeed($argv),
+        'setup' => cmdMigrate() ?: cmdSeed($argv),
+        'serve' => cmdServe(),
+        'test' => (function () { passthru('php ' . escapeshellarg(Config::root() . '/tests/run.php'), $rc); return $rc; })(),
+        default => (function () { echo USAGE; return 0; })(),
+    });
+} catch (Throwable $e) {
+    fwrite(STDERR, '✘ ' . $e->getMessage() . "\n");
+    exit(1);
+}
