@@ -1,0 +1,43 @@
+<?php
+declare(strict_types=1);
+
+namespace StockFlow\Core;
+
+/** Phân trang: 20 dòng / trang. Trang ngoài phạm vi được kẹp về trang hợp lệ gần nhất. */
+final class Paginator
+{
+    public const PER_PAGE = 20;
+
+    public readonly int $pages;
+    public readonly int $page;
+    public readonly int $offset;
+
+    public function __construct(public readonly int $total, ?int $page, public readonly int $per = self::PER_PAGE, public readonly string $param = 'page')
+    {
+        $this->pages = max(1, (int)ceil($total / $per));
+        $this->page = min(max(1, $page ?? 1), $this->pages);
+        $this->offset = ($this->page - 1) * $per;
+    }
+
+    /** Phân trang trên mảng đã có sẵn trong bộ nhớ (danh mục nhỏ). */
+    public static function of(array $rows, Request $r, string $param = 'page'): array
+    {
+        $pg = new self(count($rows), $r->int($param), self::PER_PAGE, $param);
+        return [$pg->slice($rows), $pg];
+    }
+
+    public function slice(array $rows): array
+    {
+        return array_slice($rows, $this->offset, $this->per);
+    }
+
+    public function from(): int
+    {
+        return $this->total === 0 ? 0 : $this->offset + 1;
+    }
+
+    public function to(): int
+    {
+        return min($this->total, $this->offset + $this->per);
+    }
+}

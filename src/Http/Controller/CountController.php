@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace StockFlow\Http\Controller;
 
 use StockFlow\Core\Db;
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -26,8 +27,9 @@ final class CountController extends Controller
     {
         $ids = $this->auth->visibleWarehouseIds($user);
         $countable = $this->auth->warehousesWith($user, Role::Counter);
+        [$rows, $pg] = Paginator::of($this->counts->list($ids), $r);
         return $this->render('counts/index', $user, 'counts', [
-            'rows' => $this->counts->list($ids),
+            'rows' => $rows, 'pg' => $pg,
             'warehouses' => $countable ? $this->db->all('SELECT id, code, name FROM kho WHERE active AND id IN (' . implode(',', array_map('intval', $countable)) . ') ORDER BY code') : [],
         ], 'Kiểm kê');
     }

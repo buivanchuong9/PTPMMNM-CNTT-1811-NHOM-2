@@ -15,7 +15,7 @@
           <select name="warehouse_id" aria-label="Kho"><?php foreach ($warehouses as $w): ?><option value="<?= (int)$w['id'] ?>"><?= e($w['code']) ?></option><?php endforeach; ?></select>
           <select name="role" aria-label="Vai trò"><?php foreach ($roles as $r): ?><option value="<?= e($r->value) ?>"><?= e($r->label()) ?></option><?php endforeach; ?></select><button class="btn-ghost">Cấp</button></form><?php endif; ?></td></tr>
     <?php endforeach; ?>
-    </tbody></table></div></section>
+    </tbody></table></div><?= pager($pg) ?></section>
   <aside><section class="card"><h2>Tạo tài khoản</h2>
     <form method="post" action="/users" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off"></label>

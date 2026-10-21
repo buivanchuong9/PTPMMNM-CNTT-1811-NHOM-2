@@ -9,7 +9,7 @@
         <td class="num"><?= (int)$c['variances'] > 0 ? '<span class="tag tag-warn">' . n($c['variances']) . '</span>' : '<span class="muted">0</span>' ?></td>
         <td><?= $c['adjustment_voucher_id'] ? '<a href="/vouchers/' . (int)$c['adjustment_voucher_id'] . '">Xem chứng từ</a>' : '<span class="muted">—</span>' ?></td><td class="muted"><?= e(dt($c['created_at'])) ?></td></tr>
     <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="empty">Chưa có đợt kiểm kê.</td></tr><?php endif; ?>
-    </tbody></table></div></section>
+    </tbody></table></div><?= pager($pg) ?></section>
   <aside><section class="card">
     <h2>Mở đợt kiểm kê</h2>
     <?php if (!$warehouses): ?><p class="muted">Bạn chưa có quyền «Phụ trách kiểm kê» ở kho nào.</p><?php else: ?>

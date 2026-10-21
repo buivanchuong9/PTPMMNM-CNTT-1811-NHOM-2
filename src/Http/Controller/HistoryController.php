@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace StockFlow\Http\Controller;
 
 use StockFlow\Core\Db;
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -30,8 +31,9 @@ final class HistoryController extends Controller
     {
         $ids = $this->auth->visibleWarehouseIds($user);
         $f = $this->filters($r);
+        $pg = new Paginator($this->query->historyCount($ids, $f), $r->int('page'));
         return $this->render('history/index', $user, 'history', [
-            'rows' => $this->query->history($ids, $f), 'f' => $f,
+            'rows' => $this->query->history($ids, $f, $pg->per, $pg->offset), 'pg' => $pg, 'f' => $f,
             'warehouses' => $ids ? $this->db->all('SELECT id, code FROM kho WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') ORDER BY code') : [],
             'items' => $this->db->all('SELECT id, sku, name FROM mat_hang ORDER BY sku'),
         ], 'Lịch sử phát sinh');
@@ -41,7 +43,9 @@ final class HistoryController extends Controller
     {
         $ids = $this->auth->visibleWarehouseIds($user);
         $res = $this->query->reconcile($ids);
-        return $this->render('history/reconcile', $user, 'reconcile', ['res' => $res], 'Đối chiếu tồn');
+        $rows = $res['mismatches'] === 0 ? array_values(array_filter($res['rows'], fn($x) => (int)$x['balance'] !== 0 || (int)$x['ledger'] !== 0)) : $res['rows'];
+        [$res['rows'], $pg] = Paginator::of($rows, $r);
+        return $this->render('history/reconcile', $user, 'reconcile', ['res' => $res, 'pg' => $pg], 'Đối chiếu tồn');
     }
 
     public function reports(Request $r, array $p, ?User $user): Response

@@ -15,6 +15,32 @@
     requestAnimationFrame(tick);
   });
 
+  // Biểu đồ (Chart.js nạp cục bộ từ /assets/vendor)
+  const initCharts = () => {
+    if (!window.Chart) return;
+    const palette = ['#e60012', '#2b2f3a', '#f59e0b', '#2563eb', '#16a34a', '#7a8190', '#7c3aed'];
+    Chart.defaults.font.family = '"Be Vietnam Pro", system-ui, sans-serif';
+    Chart.defaults.color = '#7b8794';
+    document.querySelectorAll('canvas[data-chart]').forEach((cv) => {
+      const labels = JSON.parse(cv.dataset.labels || '[]');
+      if (cv.dataset.chart === 'doughnut') {
+        new Chart(cv, { type: 'doughnut',
+          data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: palette, borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] },
+          options: { cutout: '66%', maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
+            plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
+      } else {
+        new Chart(cv, { type: 'bar',
+          data: { labels, datasets: [
+            { label: 'Số mã hàng', data: JSON.parse(cv.dataset.skus || '[]'), backgroundColor: '#e60012', borderRadius: 2, maxBarThickness: 38 },
+            { label: 'Phiếu chờ xác nhận', data: JSON.parse(cv.dataset.drafts || '[]'), backgroundColor: '#2b2f3a', borderRadius: 2, maxBarThickness: 38 } ] },
+          options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f5' }, border: { display: false } } },
+            plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
+      }
+    });
+  };
+  if (document.readyState === 'complete') initCharts(); else addEventListener('load', initCharts);
+
   // Menu trên mobile
   const toggle = document.querySelector('[data-menu-toggle]');
   if (toggle) toggle.addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));

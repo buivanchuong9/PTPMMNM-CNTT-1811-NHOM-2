@@ -18,4 +18,4 @@
       <td><span class="wh-code"><?= e($m['wh_code']) ?></span></td><td><b><?= e($m['sku']) ?></b> <span class="muted"><?= e($m['name']) ?></span><?= $m['batch_no'] !== 'NOLOT' ? ' <small class="tag tag-muted">' . e($m['batch_no']) . '</small>' : '' ?></td>
       <td class="num <?= $m['qty_change'] > 0 ? 'pos' : 'neg' ?>"><b><?= signed((int)$m['qty_change']) ?></b></td><td class="num"><?= n($m['balance_after']) ?></td><td class="muted"><?= e($m['reason'] ?: $m['note']) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="9" class="empty">Không có phát sinh phù hợp.</td></tr><?php endif; ?>
-  </tbody></table></div></section>
+  </tbody></table></div><?= pager($pg) ?></section>

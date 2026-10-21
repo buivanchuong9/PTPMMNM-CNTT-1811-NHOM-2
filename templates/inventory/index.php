@@ -28,4 +28,4 @@
   <?php endforeach; if (!$rows): ?><tr><td colspan="<?= count($shown) + 3 ?>" class="empty">Không có tồn phù hợp.</td></tr><?php endif; ?>
   </tbody>
 <?php endif; ?>
-</table></div></section>
+</table></div><?= pager($pg) ?></section>

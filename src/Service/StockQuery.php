@@ -62,12 +62,9 @@ final class StockQuery
         return array_values($by);
     }
 
-    /** Lịch sử phát sinh có lọc; chỉ trong phạm vi kho cho phép. */
-    public function history(array $warehouseIds, array $f = [], int $limit = 200): array
+    /** @return array{0:string,1:list<mixed>} mệnh đề WHERE + tham số của bộ lọc lịch sử */
+    private function historyFilter(array $warehouseIds, array $f): array
     {
-        if ($warehouseIds === []) {
-            return [];
-        }
         $where = ['m.warehouse_id IN (' . $this->in($warehouseIds) . ')'];
         $params = $warehouseIds;
         if (!empty($f['warehouse'])) { $where[] = 'm.warehouse_id = ?'; $params[] = (int)$f['warehouse']; }
@@ -76,11 +73,32 @@ final class StockQuery
         if (!empty($f['q'])) { $where[] = '(v.code LIKE ? OR i.sku LIKE ? OR i.name LIKE ? OR b.batch_no LIKE ?)'; array_push($params, ...array_fill(0, 4, '%' . $f['q'] . '%')); }
         if (!empty($f['from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['from'])) { $where[] = 'm.posted_at >= ?'; $params[] = $f['from'] . ' 00:00:00'; }
         if (!empty($f['to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['to'])) { $where[] = 'm.posted_at < DATE_ADD(?, INTERVAL 1 DAY)'; $params[] = $f['to'] . ' 00:00:00'; }
+        return [implode(' AND ', $where), $params];
+    }
+
+    private const HISTORY_FROM = 'FROM so_phat_sinh m JOIN chung_tu v ON v.id = m.voucher_id JOIN kho w ON w.id = m.warehouse_id
+             JOIN mat_hang i ON i.id = m.item_id JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.id = m.batch_id';
+
+    /** Tổng số dòng phát sinh khớp bộ lọc (để phân trang). */
+    public function historyCount(array $warehouseIds, array $f = []): int
+    {
+        if ($warehouseIds === []) {
+            return 0;
+        }
+        [$where, $params] = $this->historyFilter($warehouseIds, $f);
+        return (int)$this->db->value('SELECT COUNT(*) ' . self::HISTORY_FROM . ' WHERE ' . $where, $params);
+    }
+
+    /** Lịch sử phát sinh có lọc; chỉ trong phạm vi kho cho phép. */
+    public function history(array $warehouseIds, array $f = [], int $limit = 200, int $offset = 0): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        [$where, $params] = $this->historyFilter($warehouseIds, $f);
         return $this->db->all(
-            'SELECT m.*, w.code AS wh_code, i.sku, i.name, u.code AS unit, b.batch_no, v.code AS voucher_code, v.type, v.reason, v.note
-             FROM so_phat_sinh m JOIN chung_tu v ON v.id = m.voucher_id JOIN kho w ON w.id = m.warehouse_id
-             JOIN mat_hang i ON i.id = m.item_id JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.id = m.batch_id
-             WHERE ' . implode(' AND ', $where) . ' ORDER BY m.id DESC LIMIT ' . max(1, min(5000, $limit)),
+            'SELECT m.*, w.code AS wh_code, i.sku, i.name, u.code AS unit, b.batch_no, v.code AS voucher_code, v.type, v.reason, v.note '
+            . self::HISTORY_FROM . ' WHERE ' . $where . ' ORDER BY m.id DESC LIMIT ' . max(1, min(5000, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
     }

@@ -104,3 +104,36 @@ function dt_short(?string $v): string
 {
     return $v ? gmdate('d/m H:i', strtotime($v . ' UTC') + 7 * 3600) : '—';
 }
+
+/** Thanh phân trang (giữ nguyên các tham số lọc hiện có trên URL). Không hiển thị gì nếu chỉ có một trang. */
+function pager(\StockFlow\Core\Paginator $pg): string
+{
+    if ($pg->total === 0) {
+        return '';
+    }
+    $path = (string)parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $link = function (int $page, string $label, string $class = '', string $aria = '') use ($pg, $path): string {
+        $q = $_GET;
+        $page > 1 ? $q[$pg->param] = $page : $q[$pg->param] = null;
+        $qs = http_build_query(array_filter($q, fn($v) => $v !== null && $v !== ''));
+        return '<a class="' . $class . '" href="' . e($path . ($qs !== '' ? '?' . $qs : '')) . '"' . ($aria ? ' aria-label="' . e($aria) . '"' : '') . '>' . $label . '</a>';
+    };
+    $info = '<span class="pager-info">Hiển thị <b>' . n($pg->from()) . '–' . n($pg->to()) . '</b> / ' . n($pg->total) . '</span>';
+    if ($pg->pages === 1) {
+        return '<div class="pager">' . $info . '</div>';
+    }
+    $pages = array_unique(array_filter([1, $pg->pages, ...range(max(1, $pg->page - 2), min($pg->pages, $pg->page + 2))], fn($p) => $p >= 1 && $p <= $pg->pages));
+    sort($pages);
+    $nav = '';
+    $nav .= $pg->page > 1 ? $link($pg->page - 1, '‹', 'pg', 'Trang trước') : '<span class="pg off">‹</span>';
+    $prev = 0;
+    foreach ($pages as $p) {
+        if ($prev && $p - $prev > 1) {
+            $nav .= '<span class="pg gap">…</span>';
+        }
+        $nav .= $p === $pg->page ? '<span class="pg on" aria-current="page">' . $p . '</span>' : $link($p, (string)$p, 'pg');
+        $prev = $p;
+    }
+    $nav .= $pg->page < $pg->pages ? $link($pg->page + 1, '›', 'pg', 'Trang sau') : '<span class="pg off">›</span>';
+    return '<nav class="pager" aria-label="Phân trang">' . $info . '<span class="pager-nav">' . $nav . '</span></nav>';
+}

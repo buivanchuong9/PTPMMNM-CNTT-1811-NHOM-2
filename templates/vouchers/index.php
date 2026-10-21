@@ -27,4 +27,4 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
       <td class="muted wrap"><?= e($v['partner'] ?: ($v['reason'] ?: '—')) ?></td><td class="num"><b><?= n($v['total_qty']) ?></b> <small class="muted"><?= n($v['line_count']) ?> dòng</small></td><td><?= status_tag($v['status']) ?></td>
       <td class="nw"><?= e($v['creator_name']) ?></td><td class="muted"><?= e(dt_short($v['created_at'])) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="8" class="empty">Không có chứng từ phù hợp.</td></tr><?php endif; ?>
-  </tbody></table></div></section>
+  </tbody></table></div><?= pager($pg) ?></section>

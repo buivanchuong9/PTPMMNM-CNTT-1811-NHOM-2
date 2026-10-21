@@ -5,13 +5,13 @@
     <section class="card flush"><div class="table-wrap"><table class="dense">
       <thead><tr><th>SKU</th><th>Tên hàng</th><th>ĐVT</th><th>Quản lý lô</th><th class="num">Định mức tối thiểu</th></tr></thead>
       <tbody>
-      <?php foreach ($items as $i): ?>
+      <?php foreach ($pageItems as $i): ?>
         <tr><td><b><?= e($i['sku']) ?></b></td><td><?= e($i['name']) ?></td><td><?= e($i['unit']) ?></td><td><?= $i['track_batch'] ? '<span class="tag tag-info">Theo lô · ' . n($i['lots']) . ' lô</span>' : '<span class="muted">—</span>' ?></td><td class="num"><?= n($i['reorder_level']) ?></td></tr>
       <?php endforeach; ?>
-      </tbody></table></div></section>
+      </tbody></table></div><?= pager($pg) ?></section>
     <?php if ($batches): ?><section class="card flush"><div class="card-head pad"><h2>Danh sách lô</h2></div><div class="table-wrap"><table class="dense"><thead><tr><th>SKU</th><th>Lô</th><th>Hạn dùng</th></tr></thead><tbody>
       <?php foreach ($batches as $b): ?><tr><td><b><?= e($b['sku']) ?></b> <span class="muted"><?= e($b['name']) ?></span></td><td><?= e($b['batch_no']) ?></td><td><?= e(dt($b['expiry_date'], false)) ?></td></tr><?php endforeach; ?>
-    </tbody></table></div></section><?php endif; ?>
+    </tbody></table></div><?= pager($bpg) ?></section><?php endif; ?>
   </div>
   <aside>
     <?php if ($canAddBatch): ?><section class="card"><h2>Thêm lô</h2>

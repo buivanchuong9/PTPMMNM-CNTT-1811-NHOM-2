@@ -34,7 +34,9 @@ $roleSummary = $user->isAdmin ? 'Quản trị viên' : implode(' · ', array_key
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title ? $title . ' • ' : '') ?>StockFlow WMS</title>
 <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/vendor/fonts/bvp-vietnamese-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/theme.css">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -69,6 +71,7 @@ $roleSummary = $user->isAdmin ? 'Quản trị viên' : implode(' · ', array_key
     <?= $content ?>
   </main>
 </div>
+<script src="/assets/vendor/chart.umd.min.js" defer></script>
 <script src="/assets/js/app.js" defer></script>
 </body>
 </html>
