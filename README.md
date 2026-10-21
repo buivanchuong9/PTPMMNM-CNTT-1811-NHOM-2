@@ -5,7 +5,7 @@
 <a href="https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-1"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=2600&pause=800&color=EE4D2D&center=true&vCenter=true&width=700&lines=Qu%E1%BA%A3n+l%C3%BD+kho+%C4%91a+%C4%91i%E1%BB%83m;%C4%90i%E1%BB%81u+chuy%E1%BB%83n+h%C3%A0ng+an+to%C3%A0n+nguy%C3%AAn;Ki%E1%BB%83m+k%C3%AA+%E2%86%92+%C4%91i%E1%BB%81u+ch%E1%BB%89nh+c%C3%B3+d%E1%BA%A5u+v%E1%BA%BFt;T%E1%BB%93n+lu%C3%B4n+kh%E1%BB%9Bp+s%E1%BB%95+ph%C3%A1t+sinh" alt="Typing SVG"></a>
 
 [![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
-[![MySQL](https://img.shields.io/badge/MySQL-8.0.16%2B-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![SQLite · MySQL](https://img.shields.io/badge/SQLite%20demo%20·%20MySQL%208%2B-4479A1?logo=sqlite&logoColor=white)](#-chạy-từ-a-đến-z)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#-cấu-trúc)
 [![Tests](https://img.shields.io/badge/tests-263%20passing-ee4d2d)](#-kiểm-thử)
 [![License](https://img.shields.io/badge/license-MIT-fbbf24)](LICENSE)
@@ -31,25 +31,23 @@
 
 ## 🚀 Chạy từ A đến Z
 
-<div align="center"><img src="docs/images/terminal.svg" alt="Cài đặt trong 4 lệnh" width="92%"></div>
+<div align="center"><img src="docs/images/terminal.svg" alt="Chạy demo bằng 3 lệnh" width="92%"></div>
 
-> **Cần:** `git` · **PHP ≥ 8.1** (có `mysqli`) · **MySQL ≥ 8.0.16** (MariaDB chưa hỗ trợ)
+> **Chỉ cần:** `git` + **PHP ≥ 8.1**. Không cần MySQL, không cần cấu hình — dữ liệu mẫu nằm trong một file SQLite tự sinh.
 
-### 1️⃣ Cài PHP + MySQL
+### 1️⃣ Cài PHP (nếu chưa có)
 
 <details open><summary><b>🍎 macOS</b></summary>
 
 ```bash
-brew install php mysql git
-brew services start mysql
+brew install php git
 ```
 </details>
 
 <details><summary><b>🐧 Ubuntu / Debian / WSL</b></summary>
 
 ```bash
-sudo apt update && sudo apt install -y git php-cli php-mysql mysql-server
-sudo service mysql start        # WSL;  Ubuntu thường: sudo systemctl start mysql
+sudo apt update && sudo apt install -y git php-cli php-sqlite3
 ```
 </details>
 
@@ -58,7 +56,7 @@ sudo service mysql start        # WSL;  Ubuntu thường: sudo systemctl start m
 Cài **WSL2** (`wsl --install` trong PowerShell quản trị) rồi làm theo tab Ubuntu.
 </details>
 
-Kiểm tra: `php -v` (≥ 8.1) · `php -m | grep mysqli` · `mysql --version` (≥ 8.0.16)
+Kiểm tra: `php -v` (≥ 8.1) · `php -m | grep sqlite` (phải thấy `pdo_sqlite`)
 
 ### 2️⃣ Lấy mã nguồn
 
@@ -67,44 +65,16 @@ git clone https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-1.git stockflo
 cd stockflow
 ```
 
-### 3️⃣ Tạo CSDL + tài khoản
-
-Mở MySQL (macOS: `mysql -uroot` · Ubuntu: `sudo mysql`) rồi dán:
-
-```sql
-CREATE DATABASE stockflow      CHARACTER SET utf8mb4;
-CREATE DATABASE stockflow_test CHARACTER SET utf8mb4;   -- chỉ để chạy test
-CREATE USER 'stockflow'@'localhost' IDENTIFIED BY 'DoiMatKhauNay';
-GRANT ALL ON stockflow.*      TO 'stockflow'@'localhost';
-GRANT ALL ON stockflow_test.* TO 'stockflow'@'localhost';
-SET GLOBAL log_bin_trust_function_creators = 1;         -- tuỳ chọn: bật khoá bất biến bằng trigger
-EXIT;
-```
-
-### 4️⃣ Khai báo kết nối
+### 3️⃣ Chạy
 
 ```bash
-bin/stockflow db-config
+bin/stockflow demo
 ```
 
-Enter để nhận mặc định `127.0.0.1` · `3306` · `stockflow` · `stockflow`, rồi nhập mật khẩu ở bước 3.
-Lưu vào `.local/db.json` (chmod 600, đã `.gitignore`). *Thích biến môi trường? Đặt `DB_HOST DB_PORT DB_NAME DB_USER DB_PASS`.*
+Lần đầu tự dựng bảng + nạp dữ liệu mẫu (**3 kho · 30 mặt hàng · 235 dòng sổ phát sinh**, đối chiếu **KHỚP**), rồi mở web tại **http://127.0.0.1:8080**.
+Đổi cổng: `PORT=9000 bin/stockflow demo` · Làm lại từ đầu: `bin/stockflow demo --reset`
 
-### 5️⃣ Dựng bảng + dữ liệu mẫu
-
-```bash
-bin/stockflow setup
-```
-
-> ✔ 3 kho · 30 mặt hàng (10 có lô/hạn dùng) · **235 dòng sổ phát sinh** · 7 điều chuyển · 3 đợt kiểm kê · đối chiếu **KHỚP**
-
-### 6️⃣ Chạy
-
-```bash
-bin/stockflow serve        # đổi cổng: PORT=9000 bin/stockflow serve
-```
-
-Mở **http://127.0.0.1:8080** và đăng nhập (mật khẩu chung `demo1234`):
+### 4️⃣ Đăng nhập (mật khẩu chung `demo1234`)
 
 | Tài khoản | Làm được gì |
 |---|---|
@@ -117,12 +87,33 @@ Mở **http://127.0.0.1:8080** và đăng nhập (mật khẩu chung `demo1234`)
 
 | Thông báo | Cách xử lý |
 |---|---|
-| `MYSQLI_EXTENSION_MISSING` | Cài `php-mysql` (Ubuntu) hoặc bật `extension=mysqli` |
-| `DATABASE_UNAVAILABLE` · `Access denied` | MySQL chưa chạy / sai cổng / sai mật khẩu → chạy lại `bin/stockflow db-config` |
-| `Cần MySQL >= 8.0.16` | Nâng cấp MySQL (MariaDB không dùng được) |
-| `⚠ Bỏ qua 002_immutability_triggers` | Tuỳ chọn. `SET GLOBAL log_bin_trust_function_creators = 1;` rồi `bin/stockflow migrate` |
-| Cổng 8080 bận | `PORT=9000 bin/stockflow serve` |
-| Muốn làm lại từ đầu | `DROP DATABASE stockflow; CREATE DATABASE stockflow CHARACTER SET utf8mb4;` rồi `bin/stockflow setup` |
+| `php: command not found` | Cài PHP ở bước 1 rồi mở lại terminal |
+| `PHP chưa có extension pdo_sqlite` | macOS: `brew install php` · Ubuntu: `sudo apt install php-sqlite3` |
+| `Permission denied: bin/stockflow` | `chmod +x bin/stockflow` hoặc chạy `php bin/stockflow demo` |
+| Cổng 8080 bận | `PORT=9000 bin/stockflow demo` |
+</details>
+
+<details><summary><b>🗄 Dùng MySQL thật (tuỳ chọn, cho môi trường chạy lâu dài)</b></summary>
+
+Cần **MySQL ≥ 8.0.16** (MariaDB chưa hỗ trợ). Trong `mysql`:
+
+```sql
+CREATE DATABASE stockflow      CHARACTER SET utf8mb4;
+CREATE DATABASE stockflow_test CHARACTER SET utf8mb4;   -- chỉ để chạy test
+CREATE USER 'stockflow'@'localhost' IDENTIFIED BY 'DoiMatKhauNay';
+GRANT ALL ON stockflow.*      TO 'stockflow'@'localhost';
+GRANT ALL ON stockflow_test.* TO 'stockflow'@'localhost';
+SET GLOBAL log_bin_trust_function_creators = 1;         -- tuỳ chọn: khoá bất biến bằng trigger
+```
+
+```bash
+bin/stockflow db-config    # nhập kết nối → .local/db.json
+bin/stockflow setup        # tạo bảng + nạp dữ liệu mẫu
+bin/stockflow serve        # → http://127.0.0.1:8080
+bin/stockflow test         # 263 test trên CSDL stockflow_test
+```
+
+Lỗi kết nối được giải thích kèm cách xử lý (MySQL chưa chạy / sai mật khẩu / chưa có CSDL / thiếu quyền).
 </details>
 
 <img src="docs/images/divider.svg" width="100%" height="6" alt="">
@@ -142,7 +133,7 @@ Mở **http://127.0.0.1:8080** và đăng nhập (mật khẩu chung `demo1234`)
 ## 🧪 Kiểm thử
 
 ```bash
-bin/stockflow test         # 263 test · tự dựng lại CSDL stockflow_test
+bin/stockflow test         # 263 test · cần MySQL (xem mục MySQL ở trên)
 ```
 
 | Đề bài yêu cầu | Test |
@@ -164,7 +155,7 @@ src/Http/          controller mỏng
 templates/         giao diện
 database/          migrations · seed
 tests/             Unit · Integration · Http
-bin/stockflow      db-config · migrate · seed · setup · serve · test
+bin/stockflow      demo · db-config · migrate · seed · setup · serve · test
 ```
 
 Điểm cốt lõi: tồn **tính từ sổ phát sinh bất biến** · khoá dòng theo thứ tự cố định (không deadlock) · `CHECK quantity ≥ 0` · khoá `idempotency_key` + `UNIQUE voucher_line_id` · sửa bằng chứng từ đảo (`UNIQUE correction_of`).

@@ -21,7 +21,7 @@ try {
     (new Response(
         '<!doctype html><meta charset="utf-8"><title>Chưa kết nối CSDL</title><body style="font-family:system-ui;max-width:560px;margin:15vh auto;padding:0 1rem">'
         . '<h1>Chưa kết nối được CSDL</h1><p>Mã lỗi: <code>' . htmlspecialchars($e->getMessage()) . '</code></p>'
-        . '<p>Chạy <code>bin/stockflow db-config</code> rồi <code>bin/stockflow setup</code> (xem README).</p>',
+        . '<p>Xem thử không cần CSDL: <code>bin/stockflow demo</code>. Dùng MySQL: <code>bin/stockflow db-config</code> rồi <code>bin/stockflow setup</code>.</p>',
         503
     ))->send();
 }

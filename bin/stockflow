@@ -13,6 +13,7 @@ use StockFlow\Core\Migrator;
 
 const USAGE = <<<TXT
 Cách dùng: bin/stockflow <lệnh>
+  demo        chạy NGAY bằng dữ liệu mẫu (SQLite, không cần MySQL): tự dựng + nạp dữ liệu + mở web
   db-config   nhập thông tin MySQL → .local/db.json (chmod 600)
   check       kiểm tra kết nối + phiên bản MySQL
   migrate     tạo/cập nhật bảng (chạy lại an toàn)
@@ -32,6 +33,10 @@ function cmdCheck(): int
 {
     try {
         $db = connect();
+        if ($db->isSqlite()) {
+            echo '✔ SQLite ' . $db->value('SELECT sqlite_version()') . " (chế độ demo)\n";
+            return 0;
+        }
         $v = $db->one('SELECT DATABASE() AS db, CURRENT_USER() AS u, VERSION() AS v');
         if (stripos($v['v'], 'mariadb') !== false || version_compare($v['v'], '8.0.16', '<')) {
             throw new RuntimeException('Cần MySQL >= 8.0.16 (MariaDB chưa được hỗ trợ), hiện là ' . $v['v']);
@@ -39,7 +44,7 @@ function cmdCheck(): int
         echo "✔ CSDL={$v['db']} · USER={$v['u']} · MySQL {$v['v']}\n";
         return 0;
     } catch (Throwable $e) {
-        fwrite(STDERR, '✘ ' . $e->getMessage() . "\n  Chạy bin/stockflow db-config (hoặc đặt DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS).\n");
+        fwrite(STDERR, '✘ ' . Db::explain($e) . "\n  Chạy bin/stockflow db-config (hoặc đặt DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS).\n");
         return 2;
     }
 }
@@ -56,6 +61,31 @@ function cmdSeed(array $argv): int
 {
     require __DIR__ . '/../database/seeds/DemoSeed.php';
     return \StockFlow\Seeds\DemoSeed::run(connect(), in_array('--force', $argv, true));
+}
+
+function cmdDemo(array $argv): int
+{
+    $root = Config::root();
+    $file = "$root/.local/demo.sqlite";
+    if (in_array('--reset', $argv, true)) {
+        foreach (['', '-wal', '-shm'] as $ext) {
+            @unlink($file . $ext);
+        }
+    }
+    putenv('STOCKFLOW_SQLITE=' . $file);
+    if (!extension_loaded('pdo_sqlite')) {
+        fwrite(STDERR, "✘ PHP chưa có extension pdo_sqlite. macOS: brew install php · Ubuntu: sudo apt install php-sqlite3\n");
+        return 2;
+    }
+    $db = connect();
+    foreach ((new Migrator($db))->migrate() as $line) {
+        echo $line, "\n";
+    }
+    require_once "$root/database/seeds/DemoSeed.php";
+    if (\StockFlow\Seeds\DemoSeed::run($db, false) !== 0) {
+        return 1;
+    }
+    return cmdServe();
 }
 
 function cmdServe(): int
@@ -93,7 +123,7 @@ function cmdDbConfig(): int
     try {
         Db::connect($c);
     } catch (Throwable $e) {
-        fwrite(STDERR, '✘ Không kết nối được: ' . $e->getMessage() . "\n");
+        fwrite(STDERR, '✘ Không kết nối được: ' . Db::explain($e) . "\n");
         return 2;
     }
     $dir = Config::root() . '/.local';
@@ -114,11 +144,12 @@ try {
         'migrate' => cmdMigrate(),
         'seed' => cmdSeed($argv),
         'setup' => cmdMigrate() ?: cmdSeed($argv),
+        'demo' => cmdDemo($argv),
         'serve' => cmdServe(),
         'test' => (function () { passthru('php ' . escapeshellarg(Config::root() . '/tests/run.php'), $rc); return $rc; })(),
         default => (function () { echo USAGE; return 0; })(),
     });
 } catch (Throwable $e) {
-    fwrite(STDERR, '✘ ' . $e->getMessage() . "\n");
+    fwrite(STDERR, '✘ ' . Db::explain($e) . "\n");
     exit(1);
 }

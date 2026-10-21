@@ -16,9 +16,13 @@ final class Config
         return dirname(__DIR__, 2);
     }
 
-    /** @return array{host:string,port:string,database:string,user:string,password:string} */
+    /** @return array{driver?:string,path?:string,host?:string,port?:string,database?:string,user?:string,password?:string} */
     public static function database(): array
     {
+        // Chế độ demo: một file SQLite, không cần cài MySQL (bin/stockflow demo).
+        if (($sqlite = getenv('STOCKFLOW_SQLITE')) !== false && $sqlite !== '') {
+            return ['driver' => 'sqlite', 'path' => $sqlite];
+        }
         $env = [
             'host' => getenv('DB_HOST'), 'port' => getenv('DB_PORT'), 'database' => getenv('DB_NAME'),
             'user' => getenv('DB_USER'), 'password' => getenv('DB_PASS'),
