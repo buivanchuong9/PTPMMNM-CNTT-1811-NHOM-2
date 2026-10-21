@@ -80,11 +80,11 @@ same($a->req('POST', '/login', ['username' => 'x', 'password' => 'y'])['status']
 
 section('Nhân viên kho A gửi yêu cầu trực tiếp lên kho B');
 $csrf = $a->csrf('/vouchers/new?type=ISSUE');
-$before = [$count('SELECT COUNT(*) FROM vouchers WHERE warehouse_id = ?', [$f->wb]), $f->movements($f->wb), $f->stock($f->wb, 'x')];
+$before = [$count('SELECT COUNT(*) FROM chung_tu WHERE warehouse_id = ?', [$f->wb]), $f->movements($f->wb), $f->stock($f->wb, 'x')];
 $r = $a->req('POST', '/vouchers', ['csrf' => $csrf, 'type' => 'ISSUE', 'warehouse_id' => $f->wb, 'idem' => bin2hex(random_bytes(16)),
     'line' => ["{$f->it['x']['item']}:{$f->it['x']['batch']}"], 'qty' => ['5'], 'partner' => 'tấn công']);
 same($r['status'], 403, 'POST lập phiếu XUẤT kho B ⇒ 403');
-same($count('SELECT COUNT(*) FROM vouchers WHERE warehouse_id = ?', [$f->wb]), $before[0], 'không có chứng từ mới ở kho B');
+same($count('SELECT COUNT(*) FROM chung_tu WHERE warehouse_id = ?', [$f->wb]), $before[0], 'không có chứng từ mới ở kho B');
 same($a->req('POST', "/vouchers/{$vb['id']}/confirm", ['csrf' => $csrf])['status'], 403, 'POST xác nhận phiếu của kho B ⇒ 403');
 same($a->req('POST', "/vouchers/{$vb['id']}/cancel", ['csrf' => $csrf])['status'], 403, 'POST huỷ phiếu của kho B ⇒ 403');
 same($a->req('GET', "/vouchers/{$vb['id']}")['status'], 403, 'GET xem phiếu kho B ⇒ 403');
@@ -93,7 +93,7 @@ same($a->req('POST', '/transfers', ['csrf' => $csrf, 'from_wh' => $f->wb, 'to_wh
 same($a->req('POST', '/counts', ['csrf' => $csrf, 'warehouse_id' => $f->wb])['status'], 403, 'POST mở kiểm kê kho B ⇒ 403');
 same($a->req('GET', '/users')['status'], 403, 'trang quản trị tài khoản ⇒ 403');
 same($a->req('POST', '/warehouses', ['csrf' => $csrf, 'code' => 'HACK', 'name' => 'x'])['status'], 403, 'tạo kho mới ⇒ 403');
-same([$count('SELECT COUNT(*) FROM vouchers WHERE warehouse_id = ?', [$f->wb]), $f->movements($f->wb), $f->stock($f->wb, 'x')], $before, 'kho B: chứng từ, sổ, tồn đều nguyên vẹn');
+same([$count('SELECT COUNT(*) FROM chung_tu WHERE warehouse_id = ?', [$f->wb]), $f->movements($f->wb), $f->stock($f->wb, 'x')], $before, 'kho B: chứng từ, sổ, tồn đều nguyên vẹn');
 truthy(!str_contains($a->req('GET', '/inventory')['body'], "B{$f->tag}"), 'danh sách tồn không lộ tên kho B');
 truthy(!str_contains($a->req('GET', '/history')['body'], $vb['code']), 'lịch sử không lộ chứng từ kho B');
 truthy(!str_contains($a->req('GET', '/reports/stock.csv')['body'], "B{$f->tag}"), 'báo cáo CSV không có dữ liệu kho B');
@@ -105,7 +105,7 @@ $r1 = $a->req('POST', '/vouchers', $post);
 $r2 = $a->req('POST', '/vouchers', $post);     // gửi lại y hệt (bấm đúp / F5)
 same($r1['status'], 303, 'lập phiếu xuất kho A thành công');
 same($r2['location'], $r1['location'], 'gửi lại ⇒ cùng một chứng từ');
-same($count('SELECT COUNT(*) FROM vouchers WHERE idempotency_key = ?', [$idem]), 1, 'chỉ một chứng từ trong CSDL');
+same($count('SELECT COUNT(*) FROM chung_tu WHERE idempotency_key = ?', [$idem]), 1, 'chỉ một chứng từ trong CSDL');
 same($a->req('POST', $r1['location'] . '/confirm', ['csrf' => $csrf])['status'], 403, 'nhưng nhân viên (không có quyền duyệt) không tự xác nhận được');
 
 section('Người duyệt A: xác nhận, rồi gửi lại yêu cầu xác nhận');

@@ -12,9 +12,9 @@ final class VoucherRepository
 {
     private const FIELDS = 'v.*, w.code AS wh_code, w.name AS wh_name, cw.code AS cp_code, cw.name AS cp_name,
                             cu.full_name AS creator_name, au.full_name AS approver_name';
-    private const FROM = 'FROM vouchers v JOIN warehouses w ON w.id = v.warehouse_id
-                            LEFT JOIN warehouses cw ON cw.id = v.counterpart_wh_id
-                            JOIN users cu ON cu.id = v.created_by LEFT JOIN users au ON au.id = v.confirmed_by';
+    private const FROM = 'FROM chung_tu v JOIN kho w ON w.id = v.warehouse_id
+                            LEFT JOIN kho cw ON cw.id = v.counterpart_wh_id
+                            JOIN nguoi_dung cu ON cu.id = v.created_by LEFT JOIN nguoi_dung au ON au.id = v.confirmed_by';
     private const SELECT = 'SELECT ' . self::FIELDS . ' ' . self::FROM;
 
     public function __construct(private Db $db) {}
@@ -32,14 +32,14 @@ final class VoucherRepository
     /** Khoá dòng chứng từ (FOR UPDATE) để chuỗi hoá các thao tác xác nhận/huỷ/điều chỉnh. */
     public function lock(int $id): array
     {
-        return $this->db->one('SELECT * FROM vouchers WHERE id = ? FOR UPDATE', [$id]) ?? throw new NotFound('Không tìm thấy chứng từ');
+        return $this->db->one('SELECT * FROM chung_tu WHERE id = ? FOR UPDATE', [$id]) ?? throw new NotFound('Không tìm thấy chứng từ');
     }
 
     public function lines(int $voucherId): array
     {
         return $this->db->all(
             'SELECT l.*, i.sku, i.name, i.track_batch, u.code AS unit, b.batch_no, b.expiry_date
-             FROM voucher_lines l JOIN items i ON i.id = l.item_id JOIN units u ON u.id = i.unit_id JOIN batches b ON b.id = l.batch_id
+             FROM chi_tiet_chung_tu l JOIN mat_hang i ON i.id = l.item_id JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.id = l.batch_id
              WHERE l.voucher_id = ? ORDER BY l.id',
             [$voucherId]
         );
@@ -47,16 +47,16 @@ final class VoucherRepository
 
     public function correctionOf(int $id): ?array
     {
-        return $this->db->one('SELECT id, code FROM vouchers WHERE correction_of = ?', [$id]);
+        return $this->db->one('SELECT id, code FROM chung_tu WHERE correction_of = ?', [$id]);
     }
 
     public function pairOf(array $voucher): ?array
     {
         if ($voucher['type'] === VoucherType::TransferIn->value && $voucher['ref_voucher_id']) {
-            return $this->db->one('SELECT id, code FROM vouchers WHERE id = ?', [$voucher['ref_voucher_id']]);
+            return $this->db->one('SELECT id, code FROM chung_tu WHERE id = ?', [$voucher['ref_voucher_id']]);
         }
         if ($voucher['type'] === VoucherType::TransferOut->value) {
-            return $this->db->one('SELECT id, code FROM vouchers WHERE ref_voucher_id = ? AND type = ?', [$voucher['id'], VoucherType::TransferIn->value]);
+            return $this->db->one('SELECT id, code FROM chung_tu WHERE ref_voucher_id = ? AND type = ?', [$voucher['id'], VoucherType::TransferIn->value]);
         }
         return null;
     }
@@ -69,7 +69,7 @@ final class VoucherRepository
         $code = sprintf('%s-%s-%06d', $type->prefix(), gmdate('ymd'), $seq);
         $confirmed = ($v['status'] ?? 'DRAFT') === 'CONFIRMED';
         $id = $this->db->insert(
-            'INSERT INTO vouchers (code, type, status, warehouse_id, counterpart_wh_id, ref_voucher_id, correction_of, idempotency_key,
+            'INSERT INTO chung_tu (code, type, status, warehouse_id, counterpart_wh_id, ref_voucher_id, correction_of, idempotency_key,
                                    partner, reason, note, created_by, confirmed_by, confirmed_at)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,' . ($confirmed ? 'CURRENT_TIMESTAMP' : 'NULL') . ')',
             [$code, $v['type'], $v['status'] ?? 'DRAFT', $v['warehouse_id'], $v['counterpart_wh_id'] ?? null, $v['ref_voucher_id'] ?? null,
@@ -77,7 +77,7 @@ final class VoucherRepository
              mb_substr($v['reason'] ?? '', 0, 255), mb_substr($v['note'] ?? '', 0, 255), $v['created_by'], $confirmed ? $v['created_by'] : null]
         );
         foreach ($lines as $l) {
-            $this->db->exec('INSERT INTO voucher_lines (voucher_id, item_id, batch_id, qty, note) VALUES (?,?,?,?,?)',
+            $this->db->exec('INSERT INTO chi_tiet_chung_tu (voucher_id, item_id, batch_id, qty, note) VALUES (?,?,?,?,?)',
                 [$id, $l['item_id'], $l['batch_id'], $l['qty'], mb_substr($l['note'] ?? '', 0, 255)]);
         }
         return $id;
@@ -112,8 +112,8 @@ final class VoucherRepository
         if ($status) { $where[] = 'v.status = ?'; $params[] = $status; }
         if ($q !== '') { $where[] = '(v.code LIKE ? OR v.partner LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
         return $this->db->all(
-            'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM voucher_lines l WHERE l.voucher_id = v.id) AS line_count,
-                (SELECT COALESCE(SUM(ABS(l.qty)),0) FROM voucher_lines l WHERE l.voucher_id = v.id) AS total_qty ' . self::FROM . '
+            'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS line_count,
+                (SELECT COALESCE(SUM(ABS(l.qty)),0) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS total_qty ' . self::FROM . '
              WHERE ' . implode(' AND ', $where) . ' ORDER BY v.id DESC LIMIT ' . max(1, min(500, $limit)),
             $params
         );
@@ -127,7 +127,7 @@ final class VoucherRepository
         }
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
         $out = [];
-        foreach ($this->db->all("SELECT status, COUNT(*) AS n FROM vouchers WHERE warehouse_id IN ($in) GROUP BY status", $warehouseIds) as $r) {
+        foreach ($this->db->all("SELECT status, COUNT(*) AS n FROM chung_tu WHERE warehouse_id IN ($in) GROUP BY status", $warehouseIds) as $r) {
             $out[$r['status']] = (int)$r['n'];
         }
         return $out;

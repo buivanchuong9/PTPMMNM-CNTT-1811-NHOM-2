@@ -28,7 +28,7 @@ final class CountController extends Controller
         $countable = $this->auth->warehousesWith($user, Role::Counter);
         return $this->render('counts/index', $user, 'counts', [
             'rows' => $this->counts->list($ids),
-            'warehouses' => $countable ? $this->db->all('SELECT id, code, name FROM warehouses WHERE active AND id IN (' . implode(',', array_map('intval', $countable)) . ') ORDER BY code') : [],
+            'warehouses' => $countable ? $this->db->all('SELECT id, code, name FROM kho WHERE active AND id IN (' . implode(',', array_map('intval', $countable)) . ') ORDER BY code') : [],
         ], 'Kiểm kê');
     }
 

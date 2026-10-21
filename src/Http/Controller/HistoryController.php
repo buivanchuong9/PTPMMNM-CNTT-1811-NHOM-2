@@ -32,8 +32,8 @@ final class HistoryController extends Controller
         $f = $this->filters($r);
         return $this->render('history/index', $user, 'history', [
             'rows' => $this->query->history($ids, $f), 'f' => $f,
-            'warehouses' => $ids ? $this->db->all('SELECT id, code FROM warehouses WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') ORDER BY code') : [],
-            'items' => $this->db->all('SELECT id, sku, name FROM items ORDER BY sku'),
+            'warehouses' => $ids ? $this->db->all('SELECT id, code FROM kho WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') ORDER BY code') : [],
+            'items' => $this->db->all('SELECT id, sku, name FROM mat_hang ORDER BY sku'),
         ], 'Lịch sử phát sinh');
     }
 

@@ -17,7 +17,7 @@ $svc = $f->c->get(TransferService::class);
 $repo = $f->c->get(VoucherRepository::class);
 $total = fn(string $k) => $f->stock($f->wa, $k) + $f->stock($f->wb, $k);
 $snapshot = fn() => [$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->stock($f->wa, 'lot'), $f->stock($f->wb, 'lot'), $f->movements($f->wa), $f->movements($f->wb),
-    (int)$f->db->value("SELECT COUNT(*) FROM vouchers WHERE type = 'TRANSFER_IN' AND warehouse_id IN (?,?)", [$f->wa, $f->wb])];
+    (int)$f->db->value("SELECT COUNT(*) FROM chung_tu WHERE type = 'TRANSFER_IN' AND warehouse_id IN (?,?)", [$f->wa, $f->wb])];
 
 $t = $svc->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 20), $f->line('lot', 5)], 'test', null)['voucher'];
 $before = $snapshot();
@@ -53,7 +53,7 @@ same([$out['type'], $out['status'], (int)$out['warehouse_id'], (int)$out['counte
 same([$in['type'], $in['status'], (int)$in['warehouse_id'], (int)$in['counterpart_wh_id']], ['TRANSFER_IN', 'CONFIRMED', $f->wb, $f->wa], 'chứng từ nơi đến: DCN tại kho B');
 same((int)$in['ref_voucher_id'], (int)$out['id'], 'hai chứng từ liên kết với nhau');
 same(count($repo->lines((int)$in['id'])), 2, 'chứng từ nơi đến có đủ dòng hàng');
-same((int)$f->db->value('SELECT COUNT(*) FROM stock_movements WHERE voucher_id IN (?,?)', [$out['id'], $in['id']]), 4, '4 dòng sổ: 2 trừ ở A + 2 cộng ở B');
+same((int)$f->db->value('SELECT COUNT(*) FROM so_phat_sinh WHERE voucher_id IN (?,?)', [$out['id'], $in['id']]), 4, '4 dòng sổ: 2 trừ ở A + 2 cộng ở B');
 
 section('Thiếu hàng ⇒ từ chối, không thay đổi gì');
 $big = $svc->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 5), $f->line('lot', 999)], '', null)['voucher'];

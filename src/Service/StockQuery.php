@@ -6,7 +6,7 @@ namespace StockFlow\Service;
 use StockFlow\Core\Db;
 use StockFlow\Domain\User;
 
-/** Truy vấn tồn / lịch sử / đối chiếu — số tồn luôn được TÍNH TỪ sổ phát sinh (stock_movements). */
+/** Truy vấn tồn / lịch sử / đối chiếu — số tồn luôn được TÍNH TỪ sổ phát sinh (so_phat_sinh). */
 final class StockQuery
 {
     public function __construct(private Db $db, private Authorizer $auth) {}
@@ -21,7 +21,7 @@ final class StockQuery
     {
         return $this->db->all(
             'SELECT i.id AS item_id, b.id AS batch_id, i.sku, i.name, u.code AS unit, i.track_batch, b.batch_no, b.expiry_date
-             FROM items i JOIN units u ON u.id = i.unit_id JOIN batches b ON b.item_id = i.id WHERE i.active ORDER BY i.sku, b.batch_no'
+             FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.item_id = i.id WHERE i.active ORDER BY i.sku, b.batch_no'
         );
     }
 
@@ -36,8 +36,8 @@ final class StockQuery
         $rows = $this->db->all(
             "SELECT w.id AS warehouse_id, w.code AS wh_code, i.id AS item_id, i.sku, i.name, i.reorder_level, u.code AS unit $batchCols,
                     SUM(m.qty_change) AS quantity, MAX(m.posted_at) AS last_move
-             FROM stock_movements m JOIN warehouses w ON w.id = m.warehouse_id JOIN items i ON i.id = m.item_id
-             JOIN units u ON u.id = i.unit_id JOIN batches b ON b.id = m.batch_id
+             FROM so_phat_sinh m JOIN kho w ON w.id = m.warehouse_id JOIN mat_hang i ON i.id = m.item_id
+             JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.id = m.batch_id
              WHERE m.warehouse_id IN ({$this->in($warehouseIds)}) AND (i.sku LIKE ? OR i.name LIKE ?)
              GROUP BY w.id, w.code, i.id, i.sku, i.name, i.reorder_level, u.code $group
              " . ($includeZero ? '' : 'HAVING SUM(m.qty_change) <> 0 ') . 'ORDER BY i.sku, w.code' . ($byBatch ? ', b.batch_no' : ''),
@@ -78,15 +78,15 @@ final class StockQuery
         if (!empty($f['to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['to'])) { $where[] = 'm.posted_at < DATE_ADD(?, INTERVAL 1 DAY)'; $params[] = $f['to'] . ' 00:00:00'; }
         return $this->db->all(
             'SELECT m.*, w.code AS wh_code, i.sku, i.name, u.code AS unit, b.batch_no, v.code AS voucher_code, v.type, v.reason, v.note
-             FROM stock_movements m JOIN vouchers v ON v.id = m.voucher_id JOIN warehouses w ON w.id = m.warehouse_id
-             JOIN items i ON i.id = m.item_id JOIN units u ON u.id = i.unit_id JOIN batches b ON b.id = m.batch_id
+             FROM so_phat_sinh m JOIN chung_tu v ON v.id = m.voucher_id JOIN kho w ON w.id = m.warehouse_id
+             JOIN mat_hang i ON i.id = m.item_id JOIN don_vi_tinh u ON u.id = i.unit_id JOIN lo_hang b ON b.id = m.batch_id
              WHERE ' . implode(' AND ', $where) . ' ORDER BY m.id DESC LIMIT ' . max(1, min(5000, $limit)),
             $params
         );
     }
 
     /**
-     * Đối chiếu: so sánh 3 nguồn — số dư (stock_balances), tổng sổ phát sinh, và tổng dòng chứng từ đã xác nhận.
+     * Đối chiếu: so sánh 3 nguồn — số dư (ton_kho), tổng sổ phát sinh, và tổng dòng chứng từ đã xác nhận.
      * @return array{rows:list<array>,mismatches:int,checked:int,voucher_mismatches:list<array>}
      */
     public function reconcile(array $warehouseIds): array
@@ -98,20 +98,20 @@ final class StockQuery
         $rows = $this->db->all(
             "SELECT k.warehouse_id, w.code AS wh_code, k.item_id, i.sku, k.batch_id, b.batch_no,
                     COALESCE(sb.quantity, 0) AS balance, COALESCE(sm.q, 0) AS ledger
-             FROM (SELECT warehouse_id, item_id, batch_id FROM stock_balances WHERE warehouse_id IN ($in)
-                   UNION SELECT warehouse_id, item_id, batch_id FROM stock_movements WHERE warehouse_id IN ($in)) k
-             LEFT JOIN stock_balances sb ON sb.warehouse_id = k.warehouse_id AND sb.item_id = k.item_id AND sb.batch_id = k.batch_id
-             LEFT JOIN (SELECT warehouse_id, item_id, batch_id, SUM(qty_change) AS q FROM stock_movements GROUP BY warehouse_id, item_id, batch_id) sm
+             FROM (SELECT warehouse_id, item_id, batch_id FROM ton_kho WHERE warehouse_id IN ($in)
+                   UNION SELECT warehouse_id, item_id, batch_id FROM so_phat_sinh WHERE warehouse_id IN ($in)) k
+             LEFT JOIN ton_kho sb ON sb.warehouse_id = k.warehouse_id AND sb.item_id = k.item_id AND sb.batch_id = k.batch_id
+             LEFT JOIN (SELECT warehouse_id, item_id, batch_id, SUM(qty_change) AS q FROM so_phat_sinh GROUP BY warehouse_id, item_id, batch_id) sm
                     ON sm.warehouse_id = k.warehouse_id AND sm.item_id = k.item_id AND sm.batch_id = k.batch_id
-             JOIN warehouses w ON w.id = k.warehouse_id JOIN items i ON i.id = k.item_id JOIN batches b ON b.id = k.batch_id
+             JOIN kho w ON w.id = k.warehouse_id JOIN mat_hang i ON i.id = k.item_id JOIN lo_hang b ON b.id = k.batch_id
              ORDER BY w.code, i.sku, b.batch_no",
             [...$warehouseIds, ...$warehouseIds]
         );
         $mismatch = array_values(array_filter($rows, fn($r) => (int)$r['balance'] !== (int)$r['ledger']));
         // Mỗi dòng chứng từ đã xác nhận phải có đúng một dòng sổ với biến động tương ứng.
         $voucherMismatch = $this->db->all(
-            "SELECT v.code, l.id AS line_id, l.qty, m.qty_change FROM vouchers v JOIN voucher_lines l ON l.voucher_id = v.id
-             LEFT JOIN stock_movements m ON m.voucher_line_id = l.id
+            "SELECT v.code, l.id AS line_id, l.qty, m.qty_change FROM chung_tu v JOIN chi_tiet_chung_tu l ON l.voucher_id = v.id
+             LEFT JOIN so_phat_sinh m ON m.voucher_line_id = l.id
              WHERE v.status = 'CONFIRMED' AND v.warehouse_id IN ($in)
                AND (m.id IS NULL OR m.qty_change <> CASE v.type WHEN 'RECEIPT' THEN l.qty WHEN 'TRANSFER_IN' THEN l.qty WHEN 'ADJUSTMENT' THEN l.qty ELSE -l.qty END)
              LIMIT 100",
@@ -129,25 +129,25 @@ final class StockQuery
         $in = $this->in($ids);
         $perWh = $this->db->all(
             "SELECT w.id, w.code, w.name, w.address, COALESCE(s.units,0) AS units, COALESCE(s.skus,0) AS skus,
-                    (SELECT COUNT(*) FROM vouchers v WHERE v.warehouse_id = w.id AND v.status = 'DRAFT') AS drafts
-             FROM warehouses w LEFT JOIN (SELECT warehouse_id, SUM(qty_change) AS units, COUNT(DISTINCT item_id) AS skus FROM stock_movements GROUP BY warehouse_id) s ON s.warehouse_id = w.id
+                    (SELECT COUNT(*) FROM chung_tu v WHERE v.warehouse_id = w.id AND v.status = 'DRAFT') AS drafts
+             FROM kho w LEFT JOIN (SELECT warehouse_id, SUM(qty_change) AS units, COUNT(DISTINCT item_id) AS skus FROM so_phat_sinh GROUP BY warehouse_id) s ON s.warehouse_id = w.id
              WHERE w.id IN ($in) ORDER BY w.code", $ids);
         $low = $this->db->all(
-            "SELECT i.sku, i.name, i.reorder_level, u.code AS unit, SUM(m.qty_change) AS qty FROM items i JOIN units u ON u.id = i.unit_id
-             LEFT JOIN stock_movements m ON m.item_id = i.id AND m.warehouse_id IN ($in)
+            "SELECT i.sku, i.name, i.reorder_level, u.code AS unit, SUM(m.qty_change) AS qty FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.unit_id
+             LEFT JOIN so_phat_sinh m ON m.item_id = i.id AND m.warehouse_id IN ($in)
              WHERE i.active AND i.reorder_level > 0 GROUP BY i.id, i.sku, i.name, i.reorder_level, u.code
              HAVING COALESCE(SUM(m.qty_change),0) <= i.reorder_level ORDER BY COALESCE(SUM(m.qty_change),0) - i.reorder_level LIMIT 6", $ids);
         $pending = $this->db->all(
             "SELECT v.id, v.code, v.type, v.created_at, w.code AS wh_code, cu.full_name AS creator_name,
-                    (SELECT COUNT(*) FROM voucher_lines l WHERE l.voucher_id = v.id) AS line_count
-             FROM vouchers v JOIN warehouses w ON w.id = v.warehouse_id JOIN users cu ON cu.id = v.created_by
+                    (SELECT COUNT(*) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS line_count
+             FROM chung_tu v JOIN kho w ON w.id = v.warehouse_id JOIN nguoi_dung cu ON cu.id = v.created_by
              WHERE v.status = 'DRAFT' AND v.warehouse_id IN ($in) ORDER BY v.id DESC LIMIT 6", $ids);
         return [
             'warehouses' => $perWh,
             'units' => array_sum(array_column($perWh, 'units')),
             'drafts' => array_sum(array_column($perWh, 'drafts')),
-            'confirmed_today' => (int)$this->db->value("SELECT COUNT(*) FROM vouchers WHERE status = 'CONFIRMED' AND warehouse_id IN ($in) AND confirmed_at >= CURRENT_DATE", $ids),
-            'open_counts' => (int)$this->db->value("SELECT COUNT(*) FROM stock_counts WHERE status IN ('OPEN','REVIEW') AND warehouse_id IN ($in)", $ids),
+            'confirmed_today' => (int)$this->db->value("SELECT COUNT(*) FROM chung_tu WHERE status = 'CONFIRMED' AND warehouse_id IN ($in) AND confirmed_at >= CURRENT_DATE", $ids),
+            'open_counts' => (int)$this->db->value("SELECT COUNT(*) FROM dot_kiem_ke WHERE status IN ('OPEN','REVIEW') AND warehouse_id IN ($in)", $ids),
             'low' => $low,
             'pending' => $pending,
             'recent' => $this->history($ids, [], 8),

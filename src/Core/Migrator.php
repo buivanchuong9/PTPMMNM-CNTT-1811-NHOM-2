@@ -12,12 +12,12 @@ final class Migrator
 
     /** Trigger bất biến bản SQLite (tương đương migration 002 của MySQL). */
     private const SQLITE_TRIGGERS = [
-        "CREATE TRIGGER IF NOT EXISTS stock_movements_no_update BEFORE UPDATE ON stock_movements BEGIN SELECT RAISE(ABORT, 'stock_movements is append-only'); END",
-        "CREATE TRIGGER IF NOT EXISTS stock_movements_no_delete BEFORE DELETE ON stock_movements BEGIN SELECT RAISE(ABORT, 'stock_movements is append-only'); END",
-        "CREATE TRIGGER IF NOT EXISTS vouchers_no_delete BEFORE DELETE ON vouchers BEGIN SELECT RAISE(ABORT, 'vouchers cannot be deleted; cancel or correct them instead'); END",
-        "CREATE TRIGGER IF NOT EXISTS vouchers_confirmed_frozen BEFORE UPDATE ON vouchers WHEN OLD.status = 'CONFIRMED' BEGIN SELECT RAISE(ABORT, 'confirmed vouchers are immutable; issue an adjustment voucher'); END",
-        "CREATE TRIGGER IF NOT EXISTS voucher_lines_no_delete BEFORE DELETE ON voucher_lines BEGIN SELECT RAISE(ABORT, 'voucher lines cannot be deleted'); END",
-        "CREATE TRIGGER IF NOT EXISTS voucher_lines_no_update BEFORE UPDATE ON voucher_lines BEGIN SELECT RAISE(ABORT, 'voucher lines are immutable'); END",
+        "CREATE TRIGGER IF NOT EXISTS so_phat_sinh_khong_sua BEFORE UPDATE ON so_phat_sinh BEGIN SELECT RAISE(ABORT, 'stock_movements is append-only'); END",
+        "CREATE TRIGGER IF NOT EXISTS so_phat_sinh_khong_xoa BEFORE DELETE ON so_phat_sinh BEGIN SELECT RAISE(ABORT, 'stock_movements is append-only'); END",
+        "CREATE TRIGGER IF NOT EXISTS chung_tu_khong_xoa BEFORE DELETE ON chung_tu BEGIN SELECT RAISE(ABORT, 'vouchers cannot be deleted; cancel or correct them instead'); END",
+        "CREATE TRIGGER IF NOT EXISTS chung_tu_da_duyet_khoa BEFORE UPDATE ON chung_tu WHEN OLD.status = 'CONFIRMED' BEGIN SELECT RAISE(ABORT, 'confirmed vouchers are immutable; issue an adjustment voucher'); END",
+        "CREATE TRIGGER IF NOT EXISTS chi_tiet_chung_tu_khong_xoa BEFORE DELETE ON chi_tiet_chung_tu BEGIN SELECT RAISE(ABORT, 'voucher lines cannot be deleted'); END",
+        "CREATE TRIGGER IF NOT EXISTS chi_tiet_chung_tu_khong_sua BEFORE UPDATE ON chi_tiet_chung_tu BEGIN SELECT RAISE(ABORT, 'voucher lines are immutable'); END",
     ];
 
     /**

@@ -26,7 +26,7 @@ final class InventoryController extends Controller
         $scope = $wh && in_array($wh, $visible, true) ? [$wh] : $visible;
         $byBatch = $r->str('view') === 'batch';
         $q = $r->str('q');
-        $warehouses = $visible ? $this->db->all('SELECT id, code, name FROM warehouses WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY code') : [];
+        $warehouses = $visible ? $this->db->all('SELECT id, code, name FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY code') : [];
         return $this->render('inventory/index', $user, 'inventory', [
             'warehouses' => $warehouses,
             'shown' => array_values(array_filter($warehouses, fn($w) => in_array((int)$w['id'], $scope, true))),

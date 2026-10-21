@@ -36,7 +36,7 @@ final class TransferService
         try {
             $id = $this->db->transaction(function () use ($user, $fromWh, $toWh, $lines, $note, $idempotencyKey) {
                 foreach ([$fromWh, $toWh] as $wh) {
-                    if (!$this->db->value('SELECT 1 FROM warehouses WHERE id = ? AND active', [$wh])) {
+                    if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND active', [$wh])) {
                         throw new DomainError('Kho không tồn tại hoặc đã ngừng hoạt động');
                     }
                 }
@@ -75,7 +75,7 @@ final class TransferService
             }
             $from = (int)$out['warehouse_id'];
             $to = (int)$out['counterpart_wh_id'];
-            if (!$this->db->value('SELECT 1 FROM warehouses WHERE id = ? AND active', [$to])) {
+            if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND active', [$to])) {
                 throw new DomainError('Kho đến đã ngừng hoạt động');
             }
             $outLines = $this->repo->lines($outId);
@@ -105,7 +105,7 @@ final class TransferService
             Hooks::fire('transfer.between', ['out' => $outId, 'in' => $inId]);
             $this->ledger->post($inOps);
 
-            $this->db->exec("UPDATE vouchers SET status = 'CONFIRMED', confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $outId]);
+            $this->db->exec("UPDATE chung_tu SET status = 'CONFIRMED', confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $outId]);
             Hooks::fire('transfer.before_commit', ['out' => $outId, 'in' => $inId]);
             $this->audit->record($user->id, 'transfer.confirm', 'voucher', $outId, $out['code'] . ' ⇄ ' . $in['code']);
             return false;
@@ -123,7 +123,7 @@ final class TransferService
         $outId = $peek['type'] === VoucherType::TransferOut->value ? $voucherId : (int)$peek['ref_voucher_id'];
         $newId = $this->db->transaction(function () use ($user, $outId, $reason) {
             $out = $this->repo->lock($outId);
-            $in = $this->db->one('SELECT * FROM vouchers WHERE ref_voucher_id = ? AND type = ? FOR UPDATE', [$outId, VoucherType::TransferIn->value]);
+            $in = $this->db->one('SELECT * FROM chung_tu WHERE ref_voucher_id = ? AND type = ? FOR UPDATE', [$outId, VoucherType::TransferIn->value]);
             if ($out['status'] !== 'CONFIRMED' || !$in) {
                 throw new DomainError('Chỉ điều chuyển đã xác nhận mới cần điều chỉnh');
             }
@@ -161,7 +161,7 @@ final class TransferService
             throw new DomainError('Phiếu cần ít nhất một dòng hàng');
         }
         foreach ($lines as $l) {
-            if (!$this->db->value('SELECT 1 FROM items i JOIN batches b ON b.item_id = i.id WHERE i.id = ? AND b.id = ? AND i.active', [$l['item_id'], $l['batch_id']])) {
+            if (!$this->db->value('SELECT 1 FROM mat_hang i JOIN lo_hang b ON b.item_id = i.id WHERE i.id = ? AND b.id = ? AND i.active', [$l['item_id'], $l['batch_id']])) {
                 throw new DomainError('Mặt hàng/lô không hợp lệ hoặc đã ngừng hoạt động');
             }
             if ((int)$l['qty'] < 1) {

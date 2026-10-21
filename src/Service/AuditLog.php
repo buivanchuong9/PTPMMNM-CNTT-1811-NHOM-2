@@ -12,13 +12,13 @@ final class AuditLog
 
     public function record(?int $userId, string $action, string $entity, ?int $entityId, string $detail = ''): void
     {
-        $this->db->exec('INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES (?,?,?,?,?)',
+        $this->db->exec('INSERT INTO nhat_ky (user_id, action, entity, entity_id, detail) VALUES (?,?,?,?,?)',
             [$userId, $action, $entity, $entityId, mb_substr($detail, 0, 500)]);
     }
 
     public function forEntity(string $entity, int $id): array
     {
-        return $this->db->all('SELECT a.*, u.full_name FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
+        return $this->db->all('SELECT a.*, u.full_name FROM nhat_ky a LEFT JOIN nguoi_dung u ON u.id = a.user_id
                                WHERE a.entity = ? AND a.entity_id = ? ORDER BY a.id', [$entity, $id]);
     }
 }

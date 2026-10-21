@@ -226,12 +226,12 @@ final class Db
     public function nextSequence(string $name): int
     {
         if ($this->pdo) {
-            $this->exec('INSERT OR IGNORE INTO sequences (name, value) VALUES (?, 0)', [$name]);
-            $this->exec('UPDATE sequences SET value = value + 1 WHERE name = ?', [$name]);
-            return (int)$this->value('SELECT value FROM sequences WHERE name = ?', [$name]);
+            $this->exec('INSERT OR IGNORE INTO bo_dem (name, value) VALUES (?, 0)', [$name]);
+            $this->exec('UPDATE bo_dem SET value = value + 1 WHERE name = ?', [$name]);
+            return (int)$this->value('SELECT value FROM bo_dem WHERE name = ?', [$name]);
         }
-        $this->exec('INSERT INTO sequences (name, value) VALUES (?, 0) ON DUPLICATE KEY UPDATE value = value', [$name]);
-        $this->exec('UPDATE sequences SET value = LAST_INSERT_ID(value + 1) WHERE name = ?', [$name]);
+        $this->exec('INSERT INTO bo_dem (name, value) VALUES (?, 0) ON DUPLICATE KEY UPDATE value = value', [$name]);
+        $this->exec('UPDATE bo_dem SET value = LAST_INSERT_ID(value + 1) WHERE name = ?', [$name]);
         return (int)$this->value('SELECT LAST_INSERT_ID()');
     }
 }

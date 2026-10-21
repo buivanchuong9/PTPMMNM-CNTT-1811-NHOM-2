@@ -62,7 +62,7 @@ final class VoucherService
         $result = [];
         foreach ($lines as $l) {
             $available = (int)$this->db->value(
-                'SELECT COALESCE(SUM(qty_change),0) FROM stock_movements WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+                'SELECT COALESCE(SUM(qty_change),0) FROM so_phat_sinh WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
                 [$v['warehouse_id'], $l['item_id'], $l['batch_id']]
             );
             $delta = StockRules::delta(VoucherType::from($v['type']), (int)$l['qty']);
@@ -100,7 +100,7 @@ final class VoucherService
             $ops = $this->repo->ops($v, $lines);
             $this->ledger->lock($this->repo->lockKeys($ops));
             $this->ledger->post($ops);
-            $this->db->exec("UPDATE vouchers SET status = 'CONFIRMED', confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $id]);
+            $this->db->exec("UPDATE chung_tu SET status = 'CONFIRMED', confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $id]);
             $this->audit->record($user->id, 'voucher.confirm', 'voucher', $id, $v['code']);
             return false;
         });
@@ -120,7 +120,7 @@ final class VoucherService
             if ($v['status'] !== 'DRAFT') {
                 throw new DomainError('Chỉ phiếu nháp mới được huỷ');
             }
-            $this->db->exec("UPDATE vouchers SET status = 'CANCELLED' WHERE id = ?", [$id]);
+            $this->db->exec("UPDATE chung_tu SET status = 'CANCELLED' WHERE id = ?", [$id]);
             $this->audit->record($user->id, 'voucher.cancel', 'voucher', $id, $v['code']);
         });
     }
@@ -169,7 +169,7 @@ final class VoucherService
 
     private function requireActiveWarehouse(int $id): void
     {
-        if (!$this->db->value('SELECT 1 FROM warehouses WHERE id = ? AND active', [$id])) {
+        if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND active', [$id])) {
             throw new DomainError('Kho không tồn tại hoặc đã ngừng hoạt động');
         }
     }
@@ -181,7 +181,7 @@ final class VoucherService
             throw new DomainError('Phiếu cần ít nhất một dòng hàng');
         }
         foreach ($lines as $l) {
-            $ok = $this->db->value('SELECT 1 FROM items i JOIN batches b ON b.item_id = i.id WHERE i.id = ? AND b.id = ? AND i.active',
+            $ok = $this->db->value('SELECT 1 FROM mat_hang i JOIN lo_hang b ON b.item_id = i.id WHERE i.id = ? AND b.id = ? AND i.active',
                 [$l['item_id'], $l['batch_id']]);
             if (!$ok) {
                 throw new DomainError('Mặt hàng/lô không hợp lệ hoặc đã ngừng hoạt động');

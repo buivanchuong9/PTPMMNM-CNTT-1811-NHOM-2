@@ -18,30 +18,30 @@ final class CatalogService
     // ───── đọc ─────
     public function warehouses(): array
     {
-        return $this->db->all('SELECT * FROM warehouses ORDER BY code');
+        return $this->db->all('SELECT * FROM kho ORDER BY code');
     }
 
     public function units(): array
     {
-        return $this->db->all('SELECT * FROM units ORDER BY code');
+        return $this->db->all('SELECT * FROM don_vi_tinh ORDER BY code');
     }
 
     public function items(): array
     {
-        return $this->db->all('SELECT i.*, u.code AS unit, (SELECT COUNT(*) FROM batches b WHERE b.item_id = i.id AND b.batch_no <> ?) AS lots
-                               FROM items i JOIN units u ON u.id = i.unit_id ORDER BY i.sku', [self::NO_LOT]);
+        return $this->db->all('SELECT i.*, u.code AS unit, (SELECT COUNT(*) FROM lo_hang b WHERE b.item_id = i.id AND b.batch_no <> ?) AS lots
+                               FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.unit_id ORDER BY i.sku', [self::NO_LOT]);
     }
 
     public function batches(): array
     {
-        return $this->db->all('SELECT b.*, i.sku, i.name FROM batches b JOIN items i ON i.id = b.item_id WHERE b.batch_no <> ? ORDER BY i.sku, b.batch_no', [self::NO_LOT]);
+        return $this->db->all('SELECT b.*, i.sku, i.name FROM lo_hang b JOIN mat_hang i ON i.id = b.item_id WHERE b.batch_no <> ? ORDER BY i.sku, b.batch_no', [self::NO_LOT]);
     }
 
     public function users(): array
     {
-        $users = $this->db->all('SELECT id, username, full_name, is_admin, active FROM users ORDER BY username');
+        $users = $this->db->all('SELECT id, username, full_name, is_admin, active FROM nguoi_dung ORDER BY username');
         $roles = [];
-        foreach ($this->db->all('SELECT r.user_id, r.role, w.code FROM warehouse_roles r JOIN warehouses w ON w.id = r.warehouse_id ORDER BY w.code, r.role') as $r) {
+        foreach ($this->db->all('SELECT r.user_id, r.role, w.code FROM quyen_kho r JOIN kho w ON w.id = r.warehouse_id ORDER BY w.code, r.role') as $r) {
             $roles[(int)$r['user_id']][] = ['wh' => $r['code'], 'role' => $r['role']];
         }
         foreach ($users as &$u) {
@@ -62,8 +62,8 @@ final class CatalogService
         if ($name === '' || mb_strlen($name) > 120 || mb_strlen($address) > 255) {
             throw new DomainError('Tên/địa chỉ kho không hợp lệ');
         }
-        $this->requireUnique('warehouses', 'code', $code, "Mã kho $code đã tồn tại");
-        $id = $this->db->insert('INSERT INTO warehouses (code, name, address) VALUES (?,?,?)', [$code, $name, trim($address)]);
+        $this->requireUnique('kho', 'code', $code, "Mã kho $code đã tồn tại");
+        $id = $this->db->insert('INSERT INTO kho (code, name, address) VALUES (?,?,?)', [$code, $name, trim($address)]);
         $this->audit->record($actor->id, 'warehouse.create', 'warehouse', $id, $code);
         return $id;
     }
@@ -76,8 +76,8 @@ final class CatalogService
         if ($code === '' || mb_strlen($code) > 20 || $name === '' || mb_strlen($name) > 60) {
             throw new DomainError('Đơn vị tính không hợp lệ');
         }
-        $this->requireUnique('units', 'code', $code, "Đơn vị «{$code}» đã tồn tại");
-        return $this->db->insert('INSERT INTO units (code, name) VALUES (?,?)', [$code, $name]);
+        $this->requireUnique('don_vi_tinh', 'code', $code, "Đơn vị «{$code}» đã tồn tại");
+        return $this->db->insert('INSERT INTO don_vi_tinh (code, name) VALUES (?,?)', [$code, $name]);
     }
 
     public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder): int
@@ -94,15 +94,15 @@ final class CatalogService
         if ($reorder < 0) {
             throw new DomainError('Định mức tồn tối thiểu không được âm');
         }
-        if (!$this->db->value('SELECT 1 FROM units WHERE id = ?', [$unitId])) {
+        if (!$this->db->value('SELECT 1 FROM don_vi_tinh WHERE id = ?', [$unitId])) {
             throw new DomainError('Đơn vị tính không hợp lệ');
         }
-        $this->requireUnique('items', 'sku', $sku, "SKU $sku đã tồn tại");
+        $this->requireUnique('mat_hang', 'sku', $sku, "SKU $sku đã tồn tại");
         return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder) {
-            $id = $this->db->insert('INSERT INTO items (sku, name, unit_id, track_batch, reorder_level) VALUES (?,?,?,?,?)',
+            $id = $this->db->insert('INSERT INTO mat_hang (sku, name, unit_id, track_batch, reorder_level) VALUES (?,?,?,?,?)',
                 [$sku, $name, $unitId, (int)$trackBatch, $reorder]);
             if (!$trackBatch) {
-                $this->db->exec('INSERT INTO batches (item_id, batch_no) VALUES (?,?)', [$id, self::NO_LOT]);
+                $this->db->exec('INSERT INTO lo_hang (item_id, batch_no) VALUES (?,?)', [$id, self::NO_LOT]);
             }
             $this->audit->record($actor->id, 'item.create', 'item', $id, $sku);
             return $id;
@@ -119,17 +119,17 @@ final class CatalogService
         if (!preg_match('/^[A-Z0-9._-]{1,40}$/', $batchNo) || $batchNo === self::NO_LOT) {
             throw new DomainError('Số lô gồm 1–40 ký tự A-Z, 0-9, ., _ hoặc -');
         }
-        $item = $this->db->one('SELECT * FROM items WHERE id = ? AND active', [$itemId]);
+        $item = $this->db->one('SELECT * FROM mat_hang WHERE id = ? AND active', [$itemId]);
         if (!$item || !$item['track_batch']) {
             throw new DomainError('Mặt hàng không tồn tại hoặc không quản lý theo lô');
         }
         if ($expiry !== null && $expiry !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry) || !checkdate((int)substr($expiry, 5, 2), (int)substr($expiry, 8, 2), (int)substr($expiry, 0, 4)))) {
             throw new DomainError('Hạn dùng không hợp lệ');
         }
-        if ($this->db->value('SELECT 1 FROM batches WHERE item_id = ? AND batch_no = ?', [$itemId, $batchNo])) {
+        if ($this->db->value('SELECT 1 FROM lo_hang WHERE item_id = ? AND batch_no = ?', [$itemId, $batchNo])) {
             throw new DomainError("Lô $batchNo đã tồn tại cho mặt hàng này");
         }
-        $id = $this->db->insert('INSERT INTO batches (item_id, batch_no, expiry_date) VALUES (?,?,?)', [$itemId, $batchNo, $expiry ?: null]);
+        $id = $this->db->insert('INSERT INTO lo_hang (item_id, batch_no, expiry_date) VALUES (?,?,?)', [$itemId, $batchNo, $expiry ?: null]);
         $this->audit->record($actor->id, 'batch.create', 'batch', $id, "{$item['sku']}/$batchNo");
         return $id;
     }
@@ -147,8 +147,8 @@ final class CatalogService
         if (strlen($password) < 8) {
             throw new DomainError('Mật khẩu tối thiểu 8 ký tự');
         }
-        $this->requireUnique('users', 'username', $username, "Tên đăng nhập $username đã tồn tại");
-        $id = $this->db->insert('INSERT INTO users (username, full_name, password_hash, is_admin) VALUES (?,?,?,?)',
+        $this->requireUnique('nguoi_dung', 'username', $username, "Tên đăng nhập $username đã tồn tại");
+        $id = $this->db->insert('INSERT INTO nguoi_dung (username, full_name, password_hash, is_admin) VALUES (?,?,?,?)',
             [$username, trim($fullName), password_hash($password, PASSWORD_DEFAULT), (int)$isAdmin]);
         $this->audit->record($actor->id, 'user.create', 'user', $id, $username);
         return $id;
@@ -157,10 +157,10 @@ final class CatalogService
     public function grant(User $actor, int $userId, int $warehouseId, Role $role): void
     {
         $this->auth->requireAdmin($actor);
-        if (!$this->db->value('SELECT 1 FROM users WHERE id = ?', [$userId]) || !$this->db->value('SELECT 1 FROM warehouses WHERE id = ?', [$warehouseId])) {
+        if (!$this->db->value('SELECT 1 FROM nguoi_dung WHERE id = ?', [$userId]) || !$this->db->value('SELECT 1 FROM kho WHERE id = ?', [$warehouseId])) {
             throw new DomainError('Tài khoản hoặc kho không tồn tại');
         }
-        $this->db->exec('INSERT IGNORE INTO warehouse_roles (user_id, warehouse_id, role) VALUES (?,?,?)', [$userId, $warehouseId, $role->value]);
+        $this->db->exec('INSERT IGNORE INTO quyen_kho (user_id, warehouse_id, role) VALUES (?,?,?)', [$userId, $warehouseId, $role->value]);
         $this->audit->record($actor->id, 'role.grant', 'user', $userId, "$warehouseId:{$role->value}");
         $this->auth->forget();
     }
@@ -168,7 +168,7 @@ final class CatalogService
     public function revoke(User $actor, int $userId, int $warehouseId, Role $role): void
     {
         $this->auth->requireAdmin($actor);
-        $this->db->exec('DELETE FROM warehouse_roles WHERE user_id = ? AND warehouse_id = ? AND role = ?', [$userId, $warehouseId, $role->value]);
+        $this->db->exec('DELETE FROM quyen_kho WHERE user_id = ? AND warehouse_id = ? AND role = ?', [$userId, $warehouseId, $role->value]);
         $this->audit->record($actor->id, 'role.revoke', 'user', $userId, "$warehouseId:{$role->value}");
         $this->auth->forget();
     }

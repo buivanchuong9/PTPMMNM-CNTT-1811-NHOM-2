@@ -28,7 +28,7 @@ final class DemoSeed
 
     public static function run(Db $db, bool $force): int
     {
-        if ($db->value('SELECT COUNT(*) FROM warehouses') > 0 && !$force) {
+        if ($db->value('SELECT COUNT(*) FROM kho') > 0 && !$force) {
             echo "Đã có dữ liệu — bỏ qua seed (dùng --force để nạp thêm).\n";
             return 0;
         }
@@ -42,7 +42,7 @@ final class DemoSeed
         $query = $c->get(StockQuery::class);
 
         // ── người dùng + kho + quyền ──
-        $adminId = $db->insert('INSERT INTO users (username, full_name, password_hash, is_admin) VALUES (?,?,?,1)',
+        $adminId = $db->insert('INSERT INTO nguoi_dung (username, full_name, password_hash, is_admin) VALUES (?,?,?,1)',
             ['admin', 'Quản trị hệ thống', password_hash(self::PASSWORD, PASSWORD_DEFAULT)]);
         $admin = new User($adminId, 'admin', 'Quản trị hệ thống', true);
         $wh = [];
@@ -109,7 +109,7 @@ final class DemoSeed
                     $batches[] = $catalog->addBatch($admin, $id, $no, gmdate('Y-m-d', strtotime($rel)));
                 }
             } else {
-                $batches[] = (int)$db->value('SELECT id FROM batches WHERE item_id = ?', [$id]);
+                $batches[] = (int)$db->value('SELECT id FROM lo_hang WHERE item_id = ?', [$id]);
             }
             $item[$sku] = ['id' => $id, 'batches' => $batches, 'hub' => end($defs[array_search($sku, array_column($defs, 0))])];
         }
@@ -122,7 +122,7 @@ final class DemoSeed
         };
         $line = fn(string $sku, int $bi, int $qty) => ['item_id' => $item[$sku]['id'], 'batch_id' => $item[$sku]['batches'][$bi], 'qty' => $qty];
         $stock = function (string $code, string $sku, int $bi) use ($db, $item, $wh): int {
-            return (int)$db->value('SELECT COALESCE(SUM(qty_change),0) FROM stock_movements WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+            return (int)$db->value('SELECT COALESCE(SUM(qty_change),0) FROM so_phat_sinh WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
                 [$wh[$code], $item[$sku]['id'], $item[$sku]['batches'][$bi]]);
         };
 
@@ -221,8 +221,8 @@ final class DemoSeed
         $vouchers->createDraft($keeper['HCM01'], VoucherType::Receipt, $wh['HCM01'], [$line('PHN-A15', 0, 40), $line('EARBUD', 0, 60)], 'NPP Điện tử Phong Vũ', 'Hàng về sáng nay', null);
         $transfers->createDraft($keeper['DN01'], $wh['DN01'], $wh['HCM01'], [$line('BOX-S', 0, 25)], 'Chuyển bao bì dư', null);
 
-        $m = (int)$db->value('SELECT COUNT(*) FROM stock_movements');
-        $v = (int)$db->value('SELECT COUNT(*) FROM vouchers');
+        $m = (int)$db->value('SELECT COUNT(*) FROM so_phat_sinh');
+        $v = (int)$db->value('SELECT COUNT(*) FROM chung_tu');
         $rec = $query->reconcile(array_values($wh));
         printf("✔ Đã nạp dữ liệu mẫu: 3 kho · 30 mặt hàng · %d chứng từ · %d dòng sổ phát sinh · đối chiếu: %s\n", $v, $m, $rec['mismatches'] === 0 ? 'KHỚP' : 'LỆCH!');
         printf("  Đăng nhập demo (mật khẩu chung: %s): admin · hn.keeper · hn.approver · dn.keeper · dn.approver · hcm.keeper · hcm.approver · giamsat\n", self::PASSWORD);
