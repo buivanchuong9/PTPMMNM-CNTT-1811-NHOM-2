@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace StockFlow\Http\Controller;
 
 use StockFlow\Core\Db;
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -37,8 +38,9 @@ final class VoucherController extends Controller
         $q = $r->str('q');
         $wh = $r->int('warehouse');
         $scope = $wh && in_array($wh, $ids, true) ? [$wh] : $ids;
+        $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q), $r->int('page'));
         return $this->render('vouchers/index', $user, 'vouchers', [
-            'rows' => $this->repo->search($scope, $type, $status, $q),
+            'rows' => $this->repo->search($scope, $type, $status, $q, $pg->per, $pg->offset), 'pg' => $pg,
             'counts' => $this->repo->statusCounts($scope),
             'type' => $type, 'status' => $status, 'q' => $q, 'wh' => $wh,
             'warehouses' => $this->warehouseRows($ids),

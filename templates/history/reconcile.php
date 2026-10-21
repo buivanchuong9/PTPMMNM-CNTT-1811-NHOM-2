@@ -19,4 +19,4 @@
     <tr class="<?= $diff ? 'row-bad' : '' ?>"><td><span class="wh-code"><?= e($r['wh_code']) ?></span></td><td><b><?= e($r['sku']) ?></b></td><td><?= $r['batch_no'] === 'NOLOT' ? '<span class="muted">—</span>' : e($r['batch_no']) ?></td>
       <td class="num"><?= n($r['balance']) ?></td><td class="num"><?= n($r['ledger']) ?></td><td class="num"><?= $diff ? '<b class="neg">' . signed($diff) . '</b>' : '<span class="pos">✓</span>' ?></td></tr>
   <?php endforeach; ?>
-  </tbody></table></div></section>
+  </tbody></table></div><?= pager($pg) ?></section>

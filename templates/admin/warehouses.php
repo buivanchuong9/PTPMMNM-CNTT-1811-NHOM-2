@@ -8,7 +8,7 @@
       <tr><td><span class="wh-code"><?= e($w['code']) ?></span></td><td><?= e($w['name']) ?></td><td class="muted"><?= e($w['address']) ?></td><td class="num"><?= $s ? n($s['units']) : '<span class="muted" title="Ngoài phạm vi của bạn">—</span>' ?></td><td class="num"><?= $s ? n($s['skus']) : '<span class="muted">—</span>' ?></td>
         <td><?= $w['active'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-muted">Ngừng</span>' ?></td></tr>
     <?php endforeach; ?>
-    </tbody></table></div></section>
+    </tbody></table></div><?= pager($pg) ?></section>
   <aside><?php if ($user->isAdmin): ?><section class="card"><h2>Thêm kho</h2>
     <form method="post" class="form" action="/warehouses"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <label>Mã kho<input name="code" required maxlength="20" placeholder="VD: HP01" autocomplete="off"></label>

@@ -17,6 +17,21 @@ $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: 
 </section>
 
 <div class="grid-2">
+  <section class="card chart-card">
+    <div class="card-head"><h2>Cơ cấu tồn theo kho</h2><span class="muted small">đơn vị đang tồn</span></div>
+    <?php if (!$d['warehouses']): ?><p class="chart-empty">Chưa có dữ liệu để vẽ biểu đồ.</p><?php else: ?>
+    <div class="chart-box donut"><canvas data-chart="doughnut" data-labels="<?= e(json_encode(array_column($d['warehouses'], 'code'))) ?>" data-values="<?= e(json_encode(array_map(fn($w) => (int)$w['units'], $d['warehouses']))) ?>" role="img" aria-label="Biểu đồ tròn cơ cấu tồn theo kho"></canvas></div>
+    <?php endif; ?>
+  </section>
+  <section class="card chart-card">
+    <div class="card-head"><h2>Số mã hàng &amp; phiếu chờ theo kho</h2><span class="muted small">so sánh giữa các kho</span></div>
+    <?php if (!$d['warehouses']): ?><p class="chart-empty">Chưa có dữ liệu để vẽ biểu đồ.</p><?php else: ?>
+    <div class="chart-box"><canvas data-chart="bar" data-labels="<?= e(json_encode(array_column($d['warehouses'], 'code'))) ?>" data-skus="<?= e(json_encode(array_map(fn($w) => (int)$w['skus'], $d['warehouses']))) ?>" data-drafts="<?= e(json_encode(array_map(fn($w) => (int)$w['drafts'], $d['warehouses']))) ?>" role="img" aria-label="Biểu đồ cột số mã hàng và phiếu chờ theo kho"></canvas></div>
+    <?php endif; ?>
+  </section>
+</div>
+
+<div class="grid-2">
   <section class="card">
     <div class="card-head"><h2>Tồn theo kho</h2><a href="/warehouses">Tất cả kho →</a></div>
     <?php if (!$d['warehouses']): ?><p class="empty">Bạn chưa được cấp quyền ở kho nào. Liên hệ quản trị viên.</p><?php endif; ?>

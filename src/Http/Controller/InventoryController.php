@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace StockFlow\Http\Controller;
 
 use StockFlow\Core\Db;
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -27,10 +28,11 @@ final class InventoryController extends Controller
         $byBatch = $r->str('view') === 'batch';
         $q = $r->str('q');
         $warehouses = $visible ? $this->db->all('SELECT id, code, name FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY code') : [];
+        [$rows, $pg] = Paginator::of($byBatch ? $this->query->onHand($scope, $q, true) : $this->query->matrix($scope, $q), $r);
         return $this->render('inventory/index', $user, 'inventory', [
             'warehouses' => $warehouses,
             'shown' => array_values(array_filter($warehouses, fn($w) => in_array((int)$w['id'], $scope, true))),
-            'rows' => $byBatch ? $this->query->onHand($scope, $q, true) : $this->query->matrix($scope, $q),
+            'rows' => $rows, 'pg' => $pg,
             'byBatch' => $byBatch, 'q' => $q, 'wh' => $wh,
         ], 'Tồn kho');
     }

@@ -99,22 +99,39 @@ final class VoucherRepository
         return array_map(fn($o) => [$o['warehouse_id'], $o['item_id'], $o['batch_id']], $ops);
     }
 
-    /** Tìm danh sách chứng từ theo bộ lọc, chỉ trong phạm vi kho cho phép. */
-    public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200): array
+    /** @return array{0:string,1:list<mixed>} */
+    private function searchFilter(array $warehouseIds, ?string $type, ?string $status, string $q): array
     {
-        if ($warehouseIds === []) {
-            return [];
-        }
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
         $where = ["v.warehouse_id IN ($in)"];
         $params = $warehouseIds;
         if ($type) { $where[] = 'v.type = ?'; $params[] = $type; }
         if ($status) { $where[] = 'v.status = ?'; $params[] = $status; }
         if ($q !== '') { $where[] = '(v.code LIKE ? OR v.partner LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
+        return [implode(' AND ', $where), $params];
+    }
+
+    /** Tổng số chứng từ khớp bộ lọc (để phân trang). */
+    public function searchCount(array $warehouseIds, ?string $type, ?string $status, string $q): int
+    {
+        if ($warehouseIds === []) {
+            return 0;
+        }
+        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q);
+        return (int)$this->db->value('SELECT COUNT(*) ' . self::FROM . ' WHERE ' . $where, $params);
+    }
+
+    /** Tìm danh sách chứng từ theo bộ lọc, chỉ trong phạm vi kho cho phép. */
+    public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200, int $offset = 0): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q);
         return $this->db->all(
             'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS line_count,
                 (SELECT COALESCE(SUM(ABS(l.qty)),0) FROM chi_tiet_chung_tu l WHERE l.voucher_id = v.id) AS total_qty ' . self::FROM . '
-             WHERE ' . implode(' AND ', $where) . ' ORDER BY v.id DESC LIMIT ' . max(1, min(500, $limit)),
+             WHERE ' . $where . ' ORDER BY v.id DESC LIMIT ' . max(1, min(500, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
     }

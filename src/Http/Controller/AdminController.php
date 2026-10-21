@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace StockFlow\Http\Controller;
 
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -24,7 +25,8 @@ final class AdminController extends Controller
 
     public function warehouses(Request $r, array $p, ?User $user): Response
     {
-        return $this->render('admin/warehouses', $user, 'warehouses', ['rows' => $this->catalog->warehouses(), 'stats' => array_column($this->query->dashboard($user)['warehouses'], null, 'id')], 'Kho');
+        [$rows, $pg] = Paginator::of($this->catalog->warehouses(), $r);
+        return $this->render('admin/warehouses', $user, 'warehouses', ['rows' => $rows, 'pg' => $pg, 'stats' => array_column($this->query->dashboard($user)['warehouses'], null, 'id')], 'Kho');
     }
 
     public function addWarehouse(Request $r, array $p, ?User $user): Response
@@ -36,8 +38,11 @@ final class AdminController extends Controller
 
     public function items(Request $r, array $p, ?User $user): Response
     {
+        $items = $this->catalog->items();
+        [$pageItems, $pg] = Paginator::of($items, $r);
+        [$pageBatches, $bpg] = Paginator::of($this->catalog->batches(), $r, 'bpage');
         return $this->render('admin/items', $user, 'items', [
-            'items' => $this->catalog->items(), 'units' => $this->catalog->units(), 'batches' => $this->catalog->batches(),
+            'items' => $items, 'pageItems' => $pageItems, 'pg' => $pg, 'units' => $this->catalog->units(), 'batches' => $pageBatches, 'bpg' => $bpg,
             'canAddBatch' => $this->auth->canAnywhere($user, Role::Keeper),
         ], 'Mặt hàng');
     }
@@ -66,7 +71,8 @@ final class AdminController extends Controller
     public function users(Request $r, array $p, ?User $user): Response
     {
         $this->auth->requireAdmin($user);
-        return $this->render('admin/users', $user, 'users', ['users' => $this->catalog->users(), 'warehouses' => $this->catalog->warehouses(), 'roles' => Role::cases()], 'Tài khoản & quyền');
+        [$pageUsers, $pg] = Paginator::of($this->catalog->users(), $r);
+        return $this->render('admin/users', $user, 'users', ['users' => $pageUsers, 'pg' => $pg, 'warehouses' => $this->catalog->warehouses(), 'roles' => Role::cases()], 'Tài khoản & quyền');
     }
 
     public function addUser(Request $r, array $p, ?User $user): Response
