@@ -77,7 +77,7 @@ final class VoucherController extends Controller
         $this->auth->requireVisible($user, (int)$v['warehouse_id']);
         $lines = $this->repo->lines((int)$v['id']);
         $check = $v['status'] === 'DRAFT' ? $this->vouchers->check($user, (int)$v['id']) : [];
-        $movements = $v['status'] === 'CONFIRMED' ? $this->db->all('SELECT m.*, w.code AS wh_code FROM stock_movements m JOIN warehouses w ON w.id = m.warehouse_id WHERE m.voucher_id = ? ORDER BY m.id', [$v['id']]) : [];
+        $movements = $v['status'] === 'CONFIRMED' ? $this->db->all('SELECT m.*, w.code AS wh_code FROM so_phat_sinh m JOIN kho w ON w.id = m.warehouse_id WHERE m.voucher_id = ? ORDER BY m.id', [$v['id']]) : [];
         $isTransfer = in_array($v['type'], ['TRANSFER_OUT', 'TRANSFER_IN'], true);
         $canApprove = $this->auth->can($user, (int)$v['warehouse_id'], Role::Approver);
         return $this->render('vouchers/show', $user, 'vouchers', [
@@ -142,7 +142,7 @@ final class VoucherController extends Controller
 
     private function allActiveIds(): array
     {
-        return array_map('intval', array_column($this->db->all('SELECT id FROM warehouses WHERE active'), 'id'));
+        return array_map('intval', array_column($this->db->all('SELECT id FROM kho WHERE active'), 'id'));
     }
 
     private function warehouseRows(array $ids): array
@@ -150,6 +150,6 @@ final class VoucherController extends Controller
         if ($ids === []) {
             return [];
         }
-        return $this->db->all('SELECT id, code, name FROM warehouses WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') ORDER BY code');
+        return $this->db->all('SELECT id, code, name FROM kho WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') ORDER BY code');
     }
 }

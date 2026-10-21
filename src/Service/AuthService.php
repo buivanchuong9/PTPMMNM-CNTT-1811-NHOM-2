@@ -12,7 +12,7 @@ final class AuthService
 
     public function attempt(string $username, string $password): ?User
     {
-        $row = $this->db->one('SELECT * FROM users WHERE username = ? AND active', [trim($username)]);
+        $row = $this->db->one('SELECT * FROM nguoi_dung WHERE username = ? AND active', [trim($username)]);
         // Luôn tốn một lần băm để thời gian phản hồi không lộ tài khoản có tồn tại hay không.
         $ok = password_verify($password, $row['password_hash'] ?? password_hash('timing-equaliser', PASSWORD_DEFAULT));
         return $row && $ok ? $this->hydrate($row) : null;
@@ -20,7 +20,7 @@ final class AuthService
 
     public function find(int $id): ?User
     {
-        $row = $this->db->one('SELECT * FROM users WHERE id = ? AND active', [$id]);
+        $row = $this->db->one('SELECT * FROM nguoi_dung WHERE id = ? AND active', [$id]);
         return $row ? $this->hydrate($row) : null;
     }
 

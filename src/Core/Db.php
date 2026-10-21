@@ -42,7 +42,8 @@ final class Db
             $c->set_charset('utf8mb4');
             $c->query("SET time_zone = '+00:00'");
             $c->query("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY'");
-            $c->query('SET SESSION transaction_isolation = "READ-COMMITTED"');
+            // MySQL 8 dùng transaction_isolation; MariaDB (XAMPP) < 11.1 chỉ có tx_isolation.
+            $c->query('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
             return new self($c, null);
         } catch (mysqli_sql_exception $e) {
             throw new RuntimeException('DATABASE_UNAVAILABLE', (int)$e->getCode(), $e);
@@ -225,12 +226,12 @@ final class Db
     public function nextSequence(string $name): int
     {
         if ($this->pdo) {
-            $this->exec('INSERT OR IGNORE INTO sequences (name, value) VALUES (?, 0)', [$name]);
-            $this->exec('UPDATE sequences SET value = value + 1 WHERE name = ?', [$name]);
-            return (int)$this->value('SELECT value FROM sequences WHERE name = ?', [$name]);
+            $this->exec('INSERT OR IGNORE INTO bo_dem (name, value) VALUES (?, 0)', [$name]);
+            $this->exec('UPDATE bo_dem SET value = value + 1 WHERE name = ?', [$name]);
+            return (int)$this->value('SELECT value FROM bo_dem WHERE name = ?', [$name]);
         }
-        $this->exec('INSERT INTO sequences (name, value) VALUES (?, 0) ON DUPLICATE KEY UPDATE value = value', [$name]);
-        $this->exec('UPDATE sequences SET value = LAST_INSERT_ID(value + 1) WHERE name = ?', [$name]);
+        $this->exec('INSERT INTO bo_dem (name, value) VALUES (?, 0) ON DUPLICATE KEY UPDATE value = value', [$name]);
+        $this->exec('UPDATE bo_dem SET value = LAST_INSERT_ID(value + 1) WHERE name = ?', [$name]);
         return (int)$this->value('SELECT LAST_INSERT_ID()');
     }
 }

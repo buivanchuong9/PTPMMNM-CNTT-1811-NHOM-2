@@ -31,12 +31,12 @@ $a = $vs->createDraft($f->keeperA, VoucherType::Issue, $f->wa, [$f->line('x', 2)
 $b = $vs->createDraft($f->keeperA, VoucherType::Issue, $f->wa, [$f->line('x', 2)], '', '', $key);
 same([$a['created'], $b['created']], [true, false], 'lần hai không tạo phiếu mới');
 same($a['voucher']['id'], $b['voucher']['id'], 'trả về đúng phiếu đã có');
-same((int)$f->db->value('SELECT COUNT(*) FROM vouchers WHERE idempotency_key = ?', [$key]), 1, 'chỉ một chứng từ trong CSDL');
+same((int)$f->db->value('SELECT COUNT(*) FROM chung_tu WHERE idempotency_key = ?', [$key]), 1, 'chỉ một chứng từ trong CSDL');
 $tkey = bin2hex(random_bytes(16));
 $t1 = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 1)], '', $tkey);
 $t2 = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 1)], '', $tkey);
 same([$t1['created'], $t2['created'], $t1['voucher']['id'] === $t2['voucher']['id']], [true, false, true], 'phiếu điều chuyển cũng idempotent');
-same((int)$f->db->value('SELECT COUNT(*) FROM voucher_lines WHERE voucher_id = ?', [$a['voucher']['id']]), 1, 'không nhân đôi dòng hàng');
+same((int)$f->db->value('SELECT COUNT(*) FROM chi_tiet_chung_tu WHERE voucher_id = ?', [$a['voucher']['id']]), 1, 'không nhân đôi dòng hàng');
 
 section('Xác nhận điều chuyển hai lần');
 $ts->confirm($f->both, (int)$t1['voucher']['id']);
@@ -44,7 +44,7 @@ $sa = [$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f
 $again = $ts->confirm($f->both, (int)$t1['voucher']['id']);
 same($again['already'], true, 'lần hai: đã xác nhận');
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f->movements($f->wb)], $sa, 'tồn và sổ cả hai kho không đổi');
-same((int)$f->db->value("SELECT COUNT(*) FROM vouchers WHERE type = 'TRANSFER_IN' AND ref_voucher_id = ?", [$t1['voucher']['id']]), 1, 'chỉ một chứng từ nơi đến');
+same((int)$f->db->value("SELECT COUNT(*) FROM chung_tu WHERE type = 'TRANSFER_IN' AND ref_voucher_id = ?", [$t1['voucher']['id']]), 1, 'chỉ một chứng từ nơi đến');
 
 section('Chốt kiểm kê hai lần');
 $cid = $cs->open($f->keeperA, $f->wa, '');
@@ -64,11 +64,11 @@ $mv = $f->movements($f->wa);
 $rb = $cs->approve($f->approverA, $cid);
 same([$ra['already'], $rb['already']], [false, true], 'lần hai báo đã xác nhận');
 same($f->movements($f->wa), $mv, 'không lập thêm chứng từ điều chỉnh / dòng sổ');
-same((int)$f->db->value("SELECT COUNT(*) FROM vouchers WHERE type = 'ADJUSTMENT' AND warehouse_id = ?", [$f->wa]), 1, 'chỉ một chứng từ điều chỉnh');
+same((int)$f->db->value("SELECT COUNT(*) FROM chung_tu WHERE type = 'ADJUSTMENT' AND warehouse_id = ?", [$f->wa]), 1, 'chỉ một chứng từ điều chỉnh');
 
 section('Ràng buộc CSDL là lớp bảo vệ cuối cùng');
-$lineId = (int)$f->db->value('SELECT id FROM voucher_lines WHERE voucher_id = ? LIMIT 1', [$v['id']]);
-throws(fn() => $f->db->exec('INSERT INTO stock_movements (voucher_id, voucher_line_id, warehouse_id, item_id, batch_id, qty_change, balance_after) VALUES (?,?,?,?,?,?,?)',
+$lineId = (int)$f->db->value('SELECT id FROM chi_tiet_chung_tu WHERE voucher_id = ? LIMIT 1', [$v['id']]);
+throws(fn() => $f->db->exec('INSERT INTO so_phat_sinh (voucher_id, voucher_line_id, warehouse_id, item_id, batch_id, qty_change, balance_after) VALUES (?,?,?,?,?,?,?)',
     [$v['id'], $lineId, $f->wa, $f->it['x']['item'], $f->it['x']['batch'], 12, 24]), mysqli_sql_exception::class, 'UNIQUE(voucher_line_id): một dòng chứng từ không thể ghi sổ hai lần');
-throws(fn() => $f->db->exec('UPDATE stock_balances SET quantity = -1 WHERE warehouse_id = ? AND item_id = ?', [$f->wa, $f->it['x']['item']]), mysqli_sql_exception::class, 'CHECK(quantity >= 0): tồn âm bị CSDL chặn');
+throws(fn() => $f->db->exec('UPDATE ton_kho SET quantity = -1 WHERE warehouse_id = ? AND item_id = ?', [$f->wa, $f->it['x']['item']]), mysqli_sql_exception::class, 'CHECK(quantity >= 0): tồn âm bị CSDL chặn');
 finish();

@@ -28,7 +28,7 @@ final class Authorizer
     private function load(int $userId): array
     {
         $out = [];
-        foreach ($this->db->all('SELECT warehouse_id, role FROM warehouse_roles WHERE user_id = ?', [$userId]) as $r) {
+        foreach ($this->db->all('SELECT warehouse_id, role FROM quyen_kho WHERE user_id = ?', [$userId]) as $r) {
             $out[(int)$r['warehouse_id']][] = $r['role'];
         }
         return $out;
@@ -47,7 +47,7 @@ final class Authorizer
     public function require(User $user, int $warehouseId, Role $role): void
     {
         if (!$this->can($user, $warehouseId, $role)) {
-            $code = $this->db->value('SELECT code FROM warehouses WHERE id = ?', [$warehouseId]) ?? "#$warehouseId";
+            $code = $this->db->value('SELECT code FROM kho WHERE id = ?', [$warehouseId]) ?? "#$warehouseId";
             throw new Forbidden("Bạn không có quyền «{$role->label()}» tại kho $code");
         }
     }
@@ -76,7 +76,7 @@ final class Authorizer
     public function visibleWarehouseIds(User $user): array
     {
         if ($user->isAdmin) {
-            return array_map('intval', array_column($this->db->all('SELECT id FROM warehouses WHERE active'), 'id'));
+            return array_map('intval', array_column($this->db->all('SELECT id FROM kho WHERE active'), 'id'));
         }
         return array_map('intval', array_keys($this->rolesOf($user)));
     }

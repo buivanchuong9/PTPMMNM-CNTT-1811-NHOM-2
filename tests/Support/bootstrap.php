@@ -88,7 +88,7 @@ final class Fx
         $cat = $f->c->get(CatalogService::class);
         $hash = password_hash(self::PASSWORD, PASSWORD_DEFAULT);
         $mk = fn(string $name, bool $admin = false) => new User(
-            $f->db->insert('INSERT INTO users (username, full_name, password_hash, is_admin) VALUES (?,?,?,?)', ["{$name}_{$f->tag}", "Test $name", $hash, (int)$admin]),
+            $f->db->insert('INSERT INTO nguoi_dung (username, full_name, password_hash, is_admin) VALUES (?,?,?,?)', ["{$name}_{$f->tag}", "Test $name", $hash, (int)$admin]),
             "{$name}_{$f->tag}", "Test $name", $admin);
         $f->admin = $mk('admin', true);
         $f->wa = $cat->addWarehouse($f->admin, "A{$f->tag}", 'Kho test A', '');
@@ -113,7 +113,7 @@ final class Fx
         foreach (['x' => false, 'y' => false, 'lot' => true] as $k => $tracked) {
             $sku = strtoupper($k) . "-{$f->tag}";
             $id = $cat->addItem($f->admin, $sku, "Hàng test $k", $unit, $tracked, 0);
-            $batch = $tracked ? $cat->addBatch($f->admin, $id, 'L1', '2030-01-01') : (int)$f->db->value('SELECT id FROM batches WHERE item_id = ?', [$id]);
+            $batch = $tracked ? $cat->addBatch($f->admin, $id, 'L1', '2030-01-01') : (int)$f->db->value('SELECT id FROM lo_hang WHERE item_id = ?', [$id]);
             $f->it[$k] = ['item' => $id, 'batch' => $batch, 'sku' => $sku];
         }
         return $f;
@@ -127,19 +127,19 @@ final class Fx
     /** Tồn tính từ sổ phát sinh. */
     public function stock(int $wh, string $k): int
     {
-        return (int)$this->db->value('SELECT COALESCE(SUM(qty_change),0) FROM stock_movements WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+        return (int)$this->db->value('SELECT COALESCE(SUM(qty_change),0) FROM so_phat_sinh WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
             [$wh, $this->it[$k]['item'], $this->it[$k]['batch']]);
     }
 
     public function balance(int $wh, string $k): int
     {
-        return (int)$this->db->value('SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+        return (int)$this->db->value('SELECT COALESCE(SUM(quantity),0) FROM ton_kho WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
             [$wh, $this->it[$k]['item'], $this->it[$k]['batch']]);
     }
 
     public function movements(int $wh): int
     {
-        return (int)$this->db->value('SELECT COUNT(*) FROM stock_movements WHERE warehouse_id = ?', [$wh]);
+        return (int)$this->db->value('SELECT COUNT(*) FROM so_phat_sinh WHERE warehouse_id = ?', [$wh]);
     }
 
     /** Nhập hàng nhanh: lập + duyệt phiếu nhập tại kho. */
