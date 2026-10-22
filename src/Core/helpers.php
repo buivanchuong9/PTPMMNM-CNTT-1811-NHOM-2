@@ -45,6 +45,20 @@ function status_tag(string $status): string
     return '<span class="tag tag-' . $tone . '">' . e($label) . '</span>';
 }
 
+/** Trạng thái phiếu có tính đến hành trình điều chuyển: đang vận chuyển / đã nhận. */
+function voucher_status_tag(array $v): string
+{
+    $s = $v['trang_thai'];
+    if ($v['loai'] === 'TRANSFER_OUT' && $s === 'CONFIRMED') {
+        return ($v['pair_status'] ?? '') === 'DRAFT'
+            ? '<span class="tag tag-info">Đang vận chuyển</span>' : '<span class="tag tag-ok">Đã đến kho</span>';
+    }
+    if ($v['loai'] === 'TRANSFER_IN') {
+        return $s === 'DRAFT' ? '<span class="tag tag-info">Hàng đang tới — chờ nhận</span>' : ($s === 'CONFIRMED' ? '<span class="tag tag-ok">Đã nhận hàng</span>' : status_tag($s));
+    }
+    return status_tag($s);
+}
+
 function type_chip(string $type): string
 {
     [$label, $tone] = TYPE_LABELS[$type] ?? [$type, 'adj'];

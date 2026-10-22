@@ -1,11 +1,24 @@
 <?php /** @var array $v @var array $lines @var array $check @var array $movements @var ?array $pair @var ?array $correction @var ?array $original @var array $trail */
-$steps = [['Lập phiếu', $v['ngay_tao'], $v['creator_name']], ['Kiểm tra', null, null], ['Xác nhận & ghi sổ', $v['ngay_xac_nhan'], $v['approver_name']]];
-$stage = match ($v['trang_thai']) { 'DRAFT' => 1, 'CONFIRMED' => 3, default => -1 };
+$isXfer = in_array($v['loai'], ['TRANSFER_OUT', 'TRANSFER_IN'], true);
+if ($isXfer) {   // hành trình hàng điều chuyển: lập → xuất kho đi (trừ kho đi) → kho đến nhận (cộng kho đến)
+    $recvAt = $v['loai'] === 'TRANSFER_IN' ? ($v['trang_thai'] === 'CONFIRMED' ? [$v['ngay_xac_nhan'], $v['approver_name']] : [null, null]) : [null, null];
+    $steps = $v['loai'] === 'TRANSFER_OUT'
+        ? [['Lập phiếu', $v['ngay_tao'], $v['creator_name']], ['Xuất kho đi', $v['ngay_xac_nhan'], $v['approver_name']], ['Kho đến nhận hàng', null, null]]
+        : [['Xuất kho đi', $v['ngay_tao'], $v['creator_name']], ['Đang vận chuyển', null, null], ['Kho đến nhận hàng', $recvAt[0], $recvAt[1]]];
+    $stage = match (true) {
+        $v['trang_thai'] === 'CANCELLED' => -1,
+        $v['loai'] === 'TRANSFER_OUT' => $v['trang_thai'] === 'DRAFT' ? 1 : (($v['pair_status'] ?? '') === 'CONFIRMED' ? 3 : 2),
+        default => $v['trang_thai'] === 'DRAFT' ? 2 : 3,
+    };
+} else {
+    $steps = [['Lập phiếu', $v['ngay_tao'], $v['creator_name']], ['Kiểm tra', null, null], ['Xác nhận & ghi sổ', $v['ngay_xac_nhan'], $v['approver_name']]];
+    $stage = match ($v['trang_thai']) { 'DRAFT' => 1, 'CONFIRMED' => 3, default => -1 };
+}
 $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
 ?>
 <header class="page-head">
   <div><p class="crumb"><a href="/vouchers">← Phiếu nhập xuất</a></p>
-    <h1><?= e($v['ma']) ?> <?= status_tag($v['trang_thai']) ?> <?= type_chip($v['loai']) ?></h1>
+    <h1><?= e($v['ma']) ?> <?= voucher_status_tag($v) ?> <?= type_chip($v['loai']) ?></h1>
     <p class="muted"><span class="wh-code"><?= e($v['wh_code']) ?></span> <?= e($v['wh_name']) ?>
       <?php if ($v['cp_code']): ?> <span class="arrow"><?= $v['loai'] === 'TRANSFER_IN' ? '←' : '→' ?></span> <span class="wh-code"><?= e($v['cp_code']) ?></span> <?= e($v['cp_name']) ?><?php endif; ?></p></div>
 </header>
@@ -13,7 +26,7 @@ $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
 <?php if ($stage >= 0): ?>
 <ol class="track" style="--stage:<?= $stage ?>" aria-label="Tiến trình phiếu nhập xuất">
   <?php foreach ($steps as $i => [$label, $at, $by]): $cls = $i < $stage ? 'done' : ($i === $stage ? 'current' : ''); ?>
-  <li class="<?= $cls ?>"><span class="dot"><?= $i < $stage ? icon('check') : $i + 1 ?></span><b><?= e($label) ?></b><small><?= $at && $i !== 1 ? e(dt($at)) . ' · ' . e($by) : ($i === 1 ? ($stage === 1 ? 'Xem tồn hiện có bên dưới' : 'Đạt — kiểm tra khi ghi sổ') : 'Chưa thực hiện') ?></small></li>
+  <li class="<?= $cls ?>"><span class="dot"><?= $i < $stage ? icon('check') : $i + 1 ?></span><b><?= e($label) ?></b><small><?= $at ? e(dt($at)) . ' · ' . e($by) : ($isXfer ? ($i < $stage ? 'Hoàn tất' : ($i === $stage ? 'Đang chờ' : 'Chưa thực hiện')) : ($i === 1 ? ($stage === 1 ? 'Xem tồn hiện có bên dưới' : 'Đạt — kiểm tra khi ghi sổ') : 'Chưa thực hiện')) ?></small></li>
   <?php endforeach; ?>
 </ol>
 <?php else: ?>
@@ -67,9 +80,9 @@ $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
       <h2>Thao tác</h2>
       <?php if (!$allOk): ?><p class="flash flash-err small"><?= icon('alert') ?><span>Một số dòng không đủ tồn — không thể xác nhận cho đến khi tồn đủ.</span></p><?php endif; ?>
       <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/confirm" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-        <?php if ($canApprove): ?><button class="btn-block"<?= $allOk ? '' : ' disabled' ?>><?= icon('check') ?>Xác nhận & ghi sổ</button>
-        <?php else: ?><p class="muted small">Chỉ người có quyền «Người duyệt» tại kho <?= e($v['wh_code']) ?> mới xác nhận được.</p><?php endif; ?></form>
-      <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/cancel" class="mt"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="btn-danger btn-block" data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button></form>
+        <?php if ($canApprove): ?><button class="btn-block"<?= $allOk ? '' : ' disabled' ?>><?= icon('check') ?><?= $v['loai'] === 'TRANSFER_OUT' ? 'Xuất kho đi (trừ tồn kho đi)' : ($v['loai'] === 'TRANSFER_IN' ? 'Đã nhận hàng (cộng tồn kho đến)' : 'Xác nhận & ghi sổ') ?></button>
+        <?php else: ?><p class="muted small">Chỉ tài khoản có quyền «<?= $v['loai'] === 'TRANSFER_IN' ? 'Nhận hàng' : 'Người duyệt' ?>» tại kho <?= e($v['wh_code']) ?> mới xác nhận được.</p><?php endif; ?></form>
+      <?php if ($v['loai'] !== 'TRANSFER_IN'): ?><form method="post" action="/vouchers/<?= (int)$v['id'] ?>/cancel" class="mt"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="btn-danger btn-block" data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button></form><?php endif; ?>
     </section>
     <?php endif; ?>
 

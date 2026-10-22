@@ -101,7 +101,7 @@ $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: 
     <ul class="rows">
     <?php foreach ($d['pending'] as $v): ?>
       <li><span><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= e($v['ma']) ?></b></a> <?= type_chip($v['loai']) ?><br><small class="muted">Kho <?= e($v['wh_code']) ?> · <?= n($v['line_count']) ?> dòng · <?= e($v['creator_name']) ?> · <?= e(dt($v['ngay_tao'])) ?></small></span>
-        <?= status_tag('DRAFT') ?></li>
+        <?= $v['loai'] === 'TRANSFER_IN' ? '<span class="tag tag-info">Chờ nhận hàng</span>' : status_tag('DRAFT') ?></li>
     <?php endforeach; ?>
     </ul>
   </section>

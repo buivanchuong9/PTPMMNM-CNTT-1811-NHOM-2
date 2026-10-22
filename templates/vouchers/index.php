@@ -25,7 +25,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
   <tbody>
   <?php foreach ($rows as $v): ?>
     <tr><td><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= e($v['ma']) ?></b></a></td><td><?= type_chip($v['loai']) ?></td><td class="nw"><span class="wh-code"><?= e($v['wh_code']) ?></span><?= $v['cp_code'] ? ' <span class="arrow">' . ($v['loai'] === 'TRANSFER_IN' ? '←' : '→') . '</span> <span class="wh-code">' . e($v['cp_code']) . '</span>' : '' ?></td>
-      <td class="muted wrap"><?= e($v['doi_tac'] ?: ($v['ly_do'] ?: '—')) ?></td><td class="num"><b><?= n($v['total_qty']) ?></b> <small class="muted"><?= n($v['line_count']) ?> dòng</small></td><td><?= status_tag($v['trang_thai']) ?></td>
+      <td class="muted wrap"><?= e($v['doi_tac'] ?: ($v['ly_do'] ?: '—')) ?></td><td class="num"><b><?= n($v['total_qty']) ?></b> <small class="muted"><?= n($v['line_count']) ?> dòng</small></td><td><?= voucher_status_tag($v) ?></td>
       <td class="nw"><?= e($v['creator_name']) ?></td><td class="muted"><?= e(dt_short($v['ngay_tao'])) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="8" class="empty">Không có phiếu nhập xuất phù hợp.</td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>

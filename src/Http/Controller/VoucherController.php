@@ -89,7 +89,7 @@ final class VoucherController extends Controller
         $check = $v['trang_thai'] === 'DRAFT' ? $this->vouchers->check($user, (int)$v['id']) : [];
         $movements = $v['trang_thai'] === 'CONFIRMED' ? $this->db->all('SELECT m.*, w.ma AS wh_code FROM so_phat_sinh m JOIN kho w ON w.id = m.kho_id WHERE m.phieu_nhap_xuat_id = ? ORDER BY m.id', [$v['id']]) : [];
         $isTransfer = in_array($v['loai'], ['TRANSFER_OUT', 'TRANSFER_IN'], true);
-        $canApprove = $this->auth->can($user, (int)$v['kho_id'], Permission::XacNhanPhieu);
+        $canApprove = $this->auth->can($user, (int)$v['kho_id'], $v['loai'] === 'TRANSFER_IN' ? Permission::NhanHangDieuChuyen : Permission::XacNhanPhieu);
         $createPerm = match ($v['loai']) {
             'RECEIPT' => Permission::LapPhieuNhap, 'ISSUE' => Permission::LapPhieuXuat, 'TRANSFER_OUT' => Permission::LapPhieuDieuChuyen, default => null,
         };

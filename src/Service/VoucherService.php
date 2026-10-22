@@ -82,7 +82,7 @@ final class VoucherService
             return $this->transfers->confirm($user, $id);
         }
         if ($peek['loai'] === VoucherType::TransferIn->value) {
-            throw new DomainError('Phiếu nhập xuất điều chuyển đến được tạo tự động cùng phiếu điều chuyển đi');
+            return $this->transfers->receive($user, $id);
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
         $already = $this->db->transaction(function () use ($user, $id) {
@@ -111,6 +111,9 @@ final class VoucherService
     public function cancel(User $user, int $id): void
     {
         $peek = $this->repo->find($id);
+        if ($peek['loai'] === VoucherType::TransferIn->value) {
+            throw new DomainError('Hàng điều chuyển đã rời kho đi — không huỷ được phiếu nhận. Hãy nhận hàng, rồi điều chỉnh nếu có sai lệch');
+        }
         // Người có chức năng xác nhận, hoặc người được lập loại phiếu đó ở kho, đều được huỷ nháp.
         if (!$this->auth->can($user, (int)$peek['kho_id'], Permission::XacNhanPhieu)) {
             $this->auth->require($user, (int)$peek['kho_id'], $peek['loai'] === VoucherType::Receipt->value ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);

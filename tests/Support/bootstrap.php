@@ -147,6 +147,16 @@ final class Fx
         return $v;
     }
 
+    /** Kho đến nhận hàng của một phiếu điều chuyển đã xuất kho đi (bước 2): trả về phiếu «điều chuyển đến». */
+    public function arrive(int $outId): array
+    {
+        $repo = $this->c->get(\StockFlow\Service\VoucherRepository::class);
+        $in = $repo->pairOf($repo->find($outId));
+        $to = (int)$repo->find((int)$in['id'])['kho_id'];
+        $this->c->get(\StockFlow\Service\TransferService::class)->receive($to === $this->wa ? $this->approverA : $this->approverB, (int)$in['id']);
+        return $repo->find((int)$in['id']);
+    }
+
     public function draftIssue(int $wh, string $k, int $qty): array
     {
         $keeper = $wh === $this->wa ? $this->keeperA : $this->keeperB;

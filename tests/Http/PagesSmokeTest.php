@@ -11,6 +11,7 @@ $issue = $f->draftIssue($f->wa, 'x', 3);
 $cid = $f->c->get(\StockFlow\Service\StockCountService::class)->open($f->keeperA, $f->wa, '');
 $transfer = $f->c->get(\StockFlow\Service\TransferService::class)->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 2)], '', null)['voucher'];
 $f->c->get(\StockFlow\Service\TransferService::class)->confirm($f->approverA, (int)$transfer['id']);
+$f->arrive((int)$transfer['id']);
 $pair = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($transfer);
 
 $port = random_int(19000, 19999);

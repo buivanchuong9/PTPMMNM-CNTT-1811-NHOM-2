@@ -23,6 +23,7 @@ enum Permission: string
     case LapPhieuXuat = 'lap_phieu_xuat';
     case LapPhieuDieuChuyen = 'lap_phieu_dieu_chuyen';
     case XacNhanPhieu = 'xac_nhan_phieu';
+    case NhanHangDieuChuyen = 'nhan_hang_dieu_chuyen';
     case DieuChinhPhieu = 'dieu_chinh_phieu';
     case KiemKeThucHien = 'kiem_ke_thuc_hien';
     case KiemKeDuyet = 'kiem_ke_duyet';
@@ -50,6 +51,7 @@ enum Permission: string
             self::LapPhieuXuat => 'Lập phiếu xuất',
             self::LapPhieuDieuChuyen => 'Lập phiếu điều chuyển',
             self::XacNhanPhieu => 'Xác nhận / huỷ phiếu nhập xuất',
+            self::NhanHangDieuChuyen => 'Nhận hàng điều chuyển đến kho',
             self::DieuChinhPhieu => 'Điều chỉnh (đảo) phiếu nhập xuất',
             self::KiemKeThucHien => 'Kiểm kê: mở đợt, nhập số đếm',
             self::KiemKeDuyet => 'Kiểm kê: duyệt chênh lệch',
@@ -77,6 +79,7 @@ enum Permission: string
             self::LapPhieuXuat => 'Tạo phiếu xuất nháp tại kho của mình',
             self::LapPhieuDieuChuyen => 'Tạo phiếu điều chuyển từ kho của mình',
             self::XacNhanPhieu => 'Ghi sổ phiếu nháp hoặc huỷ phiếu',
+            self::NhanHangDieuChuyen => 'Xác nhận đã nhận hàng từ kho khác chuyển tới kho của mình (cộng vào tồn)',
             self::DieuChinhPhieu => 'Lập phiếu nhập xuất đảo để sửa sai phiếu nhập xuất đã ghi sổ',
             self::KiemKeThucHien => 'Mở đợt kiểm kê, nhập số đếm thực tế, nộp duyệt',
             self::KiemKeDuyet => 'Duyệt chênh lệch và lập phiếu nhập xuất điều chỉnh',
@@ -93,7 +96,7 @@ enum Permission: string
     {
         return match ($this) {
             self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe => 'Xem & tra cứu',
-            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::DieuChinhPhieu,
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
             self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
             self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen => 'Quản trị hệ thống',
@@ -107,7 +110,7 @@ enum Permission: string
     public function operational(): bool
     {
         return in_array($this, [
-            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::KiemKeThucHien, self::KiemKeDuyet,
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet,
         ], true);
     }
 
@@ -125,7 +128,7 @@ enum Permission: string
             AccountRole::Manager => !$this->adminOnly(),
             AccountRole::Staff => in_array($this, [
                 self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDanhMuc, self::XemKiemKe,
-                self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::KiemKeThucHien,
+                self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::NhanHangDieuChuyen, self::KiemKeThucHien,
             ], true),
         };
     }

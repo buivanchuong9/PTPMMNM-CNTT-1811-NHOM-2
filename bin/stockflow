@@ -10,15 +10,18 @@ require __DIR__ . '/../src/bootstrap.php';
 use StockFlow\Core\Config;
 use StockFlow\Core\Db;
 use StockFlow\Core\Migrator;
+use StockFlow\Core\SchemaSync;
 
 const USAGE = <<<TXT
 Cách dùng: bin/stockflow <lệnh>
   demo        chạy NGAY bằng dữ liệu mẫu (SQLite, không cần MySQL): tự dựng + nạp dữ liệu + mở web
   db-config   nhập thông tin MySQL → .local/db.json (chmod 600)
   check       kiểm tra kết nối + phiên bản MySQL
+  db-sync     KIỂM TRA database trên máy có đúng chuẩn dự án không, sai thì TỰ SỬA (sao lưu → dựng lại → nạp lại dữ liệu)
+              --check chỉ báo cáo, không sửa · tự tạo database nếu chưa có
   migrate     tạo/cập nhật bảng (chạy lại an toàn)
   seed        nạp dữ liệu mẫu (3 kho, 30 mặt hàng, ≥200 dòng phát sinh); bỏ qua nếu đã có dữ liệu
-  setup       migrate + seed
+  setup       db-sync + seed
   serve       chạy web tại http://127.0.0.1:8080  (PORT=9000 để đổi cổng)
   test        chạy toàn bộ kiểm thử (cần CSDL cho integration/http)
 
@@ -38,8 +41,9 @@ function cmdCheck(): int
             return 0;
         }
         $v = $db->one('SELECT DATABASE() AS db, CURRENT_USER() AS u, VERSION() AS v');
-        if (stripos($v['v'], 'mariadb') !== false || version_compare($v['v'], '8.0.16', '<')) {
-            throw new RuntimeException('Cần MySQL >= 8.0.16 (MariaDB chưa được hỗ trợ), hiện là ' . $v['v']);
+        $maria = stripos($v['v'], 'mariadb') !== false;
+        if ($maria ? version_compare((string)preg_replace('/-.*/', '', $v['v']), '10.4', '<') : version_compare($v['v'], '8.0.16', '<')) {
+            throw new RuntimeException('Cần MySQL >= 8.0.16 hoặc MariaDB >= 10.4 (XAMPP), hiện là ' . $v['v']);
         }
         echo "✔ CSDL={$v['db']} · USER={$v['u']} · MySQL {$v['v']}\n";
         return 0;
@@ -55,6 +59,26 @@ function cmdMigrate(): int
         echo $line, "\n";
     }
     return 0;
+}
+
+function cmdDbSync(array $argv): int
+{
+    $config = Config::database();
+    if (($config['driver'] ?? 'mysql') === 'sqlite') {
+        echo "Chế độ demo (SQLite) luôn được dựng đúng chuẩn khi chạy `bin/stockflow demo` — không cần db-sync.
+";
+        return 0;
+    }
+    if (SchemaSync::ensureDatabase($config)) {
+        echo "✔ Đã tạo database `{$config['database']}` (chưa có trên máy này).
+";
+    }
+    $apply = !in_array('--check', $argv, true);
+    $log = (new SchemaSync(connect(), $config))->run($apply);
+    echo implode("
+", $log), "
+";
+    return str_starts_with(end($log), '✔') ? 0 : 1;
 }
 
 function cmdSeed(array $argv): int
@@ -143,7 +167,8 @@ try {
         'check' => cmdCheck(),
         'migrate' => cmdMigrate(),
         'seed' => cmdSeed($argv),
-        'setup' => cmdMigrate() ?: cmdSeed($argv),
+        'db-sync' => cmdDbSync($argv),
+        'setup' => cmdDbSync($argv) ?: cmdSeed($argv),
         'demo' => cmdDemo($argv),
         'serve' => cmdServe(),
         'test' => (function () { passthru('php ' . escapeshellarg(Config::root() . '/tests/run.php'), $rc); return $rc; })(),

@@ -74,6 +74,22 @@ bin/stockflow demo
 Lần đầu tự dựng bảng + nạp dữ liệu mẫu (**3 kho · 30 mặt hàng · 235 dòng sổ phát sinh**, đối chiếu **KHỚP**), rồi mở web tại **http://127.0.0.1:8080**.
 Đổi cổng: `PORT=9000 bin/stockflow demo` · Làm lại từ đầu: `bin/stockflow demo --reset`
 
+### 🔄 Máy khác `git pull` về — kiểm tra & tự sửa database (XAMPP / MySQL)
+
+Mã nguồn đổi thì cấu trúc database có thể đổi theo (tên bảng, cột, ràng buộc…). Sau mỗi lần `git pull`, chạy **một lệnh**:
+
+```bash
+php bin/stockflow db-sync
+```
+
+Lệnh này (bật **MySQL** trong XAMPP trước):
+1. **Tự tạo database** `stockflow` nếu máy chưa có.
+2. **So database trên máy với chuẩn của dự án** (bảng · cột · kiểu dữ liệu · khoá ngoại/CHECK · trigger) — chuẩn lấy thẳng từ `database/migrations`.
+3. Nếu **đúng** → báo `✔ đã đúng chuẩn`, không đụng gì.
+4. Nếu **sai/cũ** → liệt kê chỗ khác biệt, rồi **tự sửa**: *sao lưu* toàn bộ dữ liệu vào `.local/backup-…/` → dựng lại đúng chuẩn → *nạp lại* dữ liệu cũ (kể cả đổi tên `chung_tu` → `phieu_nhap_xuat`). Xong báo `✔ Đã sửa xong`.
+
+`php bin/stockflow db-sync --check` chỉ **báo cáo**, không sửa. Máy mới hoàn toàn: `php bin/stockflow db-config` rồi `php bin/stockflow setup` (= `db-sync` + nạp dữ liệu mẫu).
+
 ### 4️⃣ Đăng nhập (mật khẩu chung `demo1234`)
 
 | Tài khoản | Vai trò | Làm được gì |
@@ -98,7 +114,7 @@ Trang **Phân quyền chức năng** cho phép quản trị bật/tắt từng c
 
 <details><summary><b>🗄 Dùng MySQL thật (tuỳ chọn, cho môi trường chạy lâu dài)</b></summary>
 
-Cần **MySQL ≥ 8.0.16** (MariaDB chưa hỗ trợ). Trong `mysql`:
+Cần **MySQL ≥ 8.0.16** hoặc **MariaDB ≥ 10.4 (XAMPP)**. Trong `mysql`:
 
 ```sql
 CREATE DATABASE stockflow      CHARACTER SET utf8mb4;
@@ -111,7 +127,8 @@ SET GLOBAL log_bin_trust_function_creators = 1;         -- tuỳ chọn: khoá b
 
 ```bash
 bin/stockflow db-config    # nhập kết nối → .local/db.json
-bin/stockflow setup        # tạo bảng + nạp dữ liệu mẫu
+bin/stockflow setup        # db-sync (tạo/sửa database cho đúng chuẩn) + nạp dữ liệu mẫu
+bin/stockflow db-sync      # sau mỗi lần git pull: kiểm tra database, sai thì tự sửa (--check: chỉ báo cáo)
 bin/stockflow serve        # → http://127.0.0.1:8080
 bin/stockflow test         # 263 test trên CSDL stockflow_test
 ```
@@ -158,7 +175,7 @@ src/Http/          controller mỏng
 templates/         giao diện
 database/          migrations · seed
 tests/             Unit · Integration · Http
-bin/stockflow      demo · db-config · migrate · seed · setup · serve · test
+bin/stockflow      demo · db-config · db-sync · migrate · seed · setup · serve · test
 ```
 
 Điểm cốt lõi: tồn **tính từ sổ phát sinh bất biến** · khoá dòng theo thứ tự cố định (không deadlock) · `CHECK quantity ≥ 0` · khoá `idempotency_key` + `UNIQUE voucher_line_id` · sửa bằng phiếu nhập xuất đảo (`UNIQUE correction_of`).
