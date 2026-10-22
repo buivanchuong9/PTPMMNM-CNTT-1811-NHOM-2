@@ -4,7 +4,7 @@
 (() => {
   const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/\s+/g, ' ').trim();
   const core = (s) => fold(s).replace(/^(thanh pho|tinh|phuong|xa|dac khu|thi tran) /, '');
-  const MAX = 40;
+  const MAX = 1000; // đủ cho mọi tỉnh/thành; danh sách tự cuộn
 
   let data = null, readyP = null;
   const loadData = () => readyP || (readyP = fetch('/assets/data/vn-address.json').then((r) => r.json()).then((d) => {
@@ -74,14 +74,14 @@
           const li = document.createElement('li'); li.className = 'none'; li.textContent = 'Không có kết quả phù hợp'; list.appendChild(li);
         } else {
           shown = items.slice(0, MAX);
-          shown.forEach((it) => { const li = document.createElement('li'); li.setAttribute('role', 'option'); li.textContent = it.n; li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(it); }); list.appendChild(li); });
+          shown.forEach((it) => { const li = document.createElement('li'); li.setAttribute('role', 'option'); li.textContent = it.n; li.addEventListener('mousedown', (e) => e.preventDefault()); li.addEventListener('click', (e) => { e.preventDefault(); pick(it); }); list.appendChild(li); });
           if (items.length > MAX) { const li = document.createElement('li'); li.className = 'more'; li.textContent = 'Còn ' + (items.length - MAX) + ' kết quả — gõ thêm để thu hẹp'; list.appendChild(li); }
         }
         on = shown.length && input.value.trim() ? 0 : -1;
         list.hidden = false; input.setAttribute('aria-expanded', 'true'); mark();
       };
       const open = () => ready.then(render);
-      input.addEventListener('focus', open);
+      input.addEventListener('focus', () => { if (input.dataset.quiet) { delete input.dataset.quiet; return; } open(); });
       input.addEventListener('click', open);
       input.addEventListener('input', () => { refresh(); open(); });
       input.addEventListener('keydown', (e) => {

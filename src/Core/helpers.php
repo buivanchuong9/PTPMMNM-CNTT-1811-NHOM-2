@@ -97,6 +97,7 @@ function icon(string $name): string
         'box' => '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
         'layers' => '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
         'truck' => '<path d="M2 6h11v10H2z"/><path d="M13 9h5l3 3v4h-8"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>',
+        'pin' => '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
         'in' => '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',
         'out' => '<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 20h16"/>',
         'clipboard' => '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 13l2 2 4-4"/>',
@@ -147,7 +148,7 @@ function wh_fixed(array $wh, string $label, string $field): string
 {
     return '<div class="wh-fixed"><span class="wh-fixed-label">' . e($label) . '</span>'
         . '<b><span class="wh-code">' . e($wh['ma']) . '</span> ' . e($wh['ten']) . '</b>'
-        . '<small class="muted">' . icon('warehouse') . e($wh['dia_chi'] ?: 'Chưa có địa chỉ') . '</small>'
+        . '<small class="muted">' . icon('pin') . e($wh['dia_chi'] ?: 'Chưa có địa chỉ') . '</small>'
         . '<input type="hidden" name="' . e($field) . '" value="' . (int)$wh['id'] . '"></div>';
 }
 

@@ -44,7 +44,7 @@
 </table></div><?= pager($pg) ?></section>
 
 <?php if ($canAddBatch): ?>
-<dialog id="batch-dlg" class="dlg" aria-labelledby="batch-dlg-t">
+<dialog id="batch-dlg" class="dlg dlg-wide" aria-labelledby="batch-dlg-t">
   <form method="post" action="/batches" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="batch-dlg-t">Thêm lô</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Mặt hàng<select name="item_id" required data-combo aria-label="Mặt hàng theo lô"><option value="">Chọn mặt hàng theo lô…</option><?php foreach ($items as $i): if ($i['quan_ly_lo']): ?><option value="<?= (int)$i['id'] ?>"><?= e($i['ma_hang'] . ' — ' . $i['ten']) ?></option><?php endif; endforeach; ?></select></label>

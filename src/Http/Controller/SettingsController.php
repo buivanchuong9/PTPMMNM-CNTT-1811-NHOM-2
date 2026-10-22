@@ -66,7 +66,7 @@ final class SettingsController extends Controller
 
     public function preferences(Request $r, array $p, ?User $user): Response
     {
-        return $this->act(fn() => $this->settings->savePreferences($user, (int)$r->int('rows'), $r->str('compact') === '1'), 'Đã lưu tuỳ chọn hiển thị.', $this->back('ca-nhan'));
+        return $this->act(fn() => $this->settings->savePreferences($user, $r->int('rows') ?? ($r->str('rows') === '' ? 0 : -1), $r->str('compact') === '1'), 'Đã lưu tuỳ chọn hiển thị.', $this->back('ca-nhan'));
     }
 
     public function avatarUpload(Request $r, array $p, ?User $user): Response
