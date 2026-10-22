@@ -52,6 +52,11 @@ truthy(!$auth->allows($f->approverA, Permission::QuanLyTaiKhoan) && !$auth->allo
 section('Đường điều chỉnh không phải cửa hậu');
 $t = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 4)], '', null)['voucher'];
 $ts->confirm($f->approverA, (int)$t['id']);
+$in = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($t);
+throws(fn() => $ts->receive($f->approverA, (int)$in['id']), Forbidden::class, 'quản lý kho A không nhận hàng thay kho B');
+truthy($auth->allows($f->keeperB, Permission::NhanHangDieuChuyen), 'nhân viên kho đến có quyền nhận hàng');
+throws(fn() => $ts->receive($f->keeperA, (int)$in['id']), Forbidden::class, 'nhân viên kho đi không nhận hàng thay kho đến');
+$f->arrive((int)$t['id']);
 throws(fn() => $vs->correct($f->approverA, (int)$t['id'], 'thử đảo điều chuyển'), Forbidden::class, 'người duyệt chỉ ở A không đảo được điều chuyển chạm kho B');
 same($f->stock($f->wb, 'x'), 24, 'kho B không bị rút hàng qua đường đảo');
 $vb2 = $f->receive($f->wb, 'y', 5);

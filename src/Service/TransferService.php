@@ -14,9 +14,10 @@ use StockFlow\Domain\VoucherType;
 
 /**
  * Điều chuyển giữa hai kho trong cùng CSDL.
- * Phiếu "điều chuyển đi" (DCX) tại kho nguồn được lập nháp; khi xác nhận, hệ thống TRONG MỘT GIAO DỊCH:
- *   khoá tồn cả hai kho → trừ kho đi → (điểm chèn lỗi) → tạo phiếu nhập xuất "điều chuyển đến" (DCN) + cộng kho đến → chốt.
- * Lỗi giữa chừng ⇒ rollback: không mất hàng, không nhân đôi hàng, không có phiếu nhập xuất mồ côi.
+ * Hai bước, hàng có trạng thái rõ ràng:
+ *   1) Kho đi xác nhận phiếu «điều chuyển đi» (DCX): trừ tồn kho đi ⇒ hàng ĐANG VẬN CHUYỂN, mở phiếu «điều chuyển đến» (DCN) chờ nhận.
+ *   2) Kho đến xác nhận nhận hàng trên phiếu DCN: cộng tồn kho đến ⇒ ĐÃ NHẬN.
+ * Mỗi bước là một giao dịch: lỗi giữa chừng ⇒ rollback, không mất hàng, không nhân đôi hàng.
  */
 final class TransferService
 {
@@ -57,7 +58,11 @@ final class TransferService
         return ['voucher' => $this->repo->find($id), 'created' => true];
     }
 
-    /** @return array{voucher:array,already:bool} */
+    /**
+     * Bước 1 — XUẤT KHO ĐI: trừ tồn kho đi, phiếu đi thành «đã xác nhận», đồng thời mở phiếu nhập «điều chuyển đến» ở trạng thái chờ nhận.
+     * Hàng lúc này ĐANG VẬN CHUYỂN: đã rời kho đi, chưa vào tồn kho đến. Trong một giao dịch: lỗi giữa chừng ⇒ rollback.
+     * @return array{voucher:array,already:bool}
+     */
     public function confirm(User $user, int $outId): array
     {
         $peek = $this->repo->find($outId);
@@ -83,34 +88,53 @@ final class TransferService
                 throw new DomainError('Phiếu không có dòng hàng');
             }
             $outOps = $this->repo->ops($out, $outLines);
+            $this->ledger->lock($this->repo->lockKeys($outOps));
 
-            // 1) Khoá tồn của CẢ HAI kho theo thứ tự toàn cục (tránh deadlock với phiếu chiều ngược lại).
-            $keys = $this->repo->lockKeys($outOps);
-            foreach ($outLines as $l) {
-                $keys[] = [$to, (int)$l['mat_hang_id'], (int)$l['lo_hang_id']];
-            }
-            $this->ledger->lock($keys);
-
-            // 2) Tạo phiếu nhập xuất nơi đến (đã xác nhận) + dòng của nó.
+            // Trừ kho đi → (điểm chèn lỗi cho test) → mở phiếu nhận ở kho đến (chưa cộng tồn).
+            $this->ledger->post($outOps);
+            Hooks::fire('transfer.between', ['out' => $outId]);
             $inLines = array_map(fn($l) => ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => (int)$l['so_luong']], $outLines);
             $inId = $this->repo->insert([
-                'loai' => VoucherType::TransferIn->value, 'trang_thai' => 'CONFIRMED', 'kho_id' => $to, 'kho_doi_ung_id' => $from,
+                'loai' => VoucherType::TransferIn->value, 'kho_id' => $to, 'kho_doi_ung_id' => $from,
                 'phieu_nhap_xuat_lien_quan_id' => $outId, 'doi_tac' => $out['ma'], 'nguoi_lap_id' => $user->id,
             ], $inLines);
-            $in = $this->repo->lock($inId);
-            $inOps = $this->repo->ops($in, $this->repo->lines($inId));
-
-            // 3) Trừ kho đi → (điểm chèn lỗi cho test) → cộng kho đến.
-            $this->ledger->post($outOps);
-            Hooks::fire('transfer.between', ['out' => $outId, 'in' => $inId]);
-            $this->ledger->post($inOps);
 
             $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CONFIRMED', nguoi_xac_nhan_id = ?, ngay_xac_nhan = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $outId]);
             Hooks::fire('transfer.before_commit', ['out' => $outId, 'in' => $inId]);
-            $this->audit->record($user->id, 'transfer.confirm', 'voucher', $outId, $out['ma'] . ' ⇄ ' . $in['ma']);
+            $this->audit->record($user->id, 'transfer.dispatch', 'voucher', $outId, $out['ma'] . ' → đang vận chuyển');
             return false;
         });
         return ['voucher' => $this->repo->find($outId), 'already' => $already];
+    }
+
+    /**
+     * Bước 2 — NHẬN HÀNG TẠI KHO ĐẾN: người có quyền xác nhận của kho đến cộng hàng vào tồn.
+     * @return array{voucher:array,already:bool}
+     */
+    public function receive(User $user, int $inId): array
+    {
+        $peek = $this->repo->find($inId);
+        if ($peek['loai'] !== VoucherType::TransferIn->value) {
+            throw new DomainError('Đây không phải phiếu điều chuyển đến');
+        }
+        // Người nhận phải là tài khoản (quản lý hoặc nhân viên) của CHÍNH kho đến.
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::NhanHangDieuChuyen);
+        $already = $this->db->transaction(function () use ($user, $inId) {
+            $in = $this->repo->lock($inId);
+            if ($in['trang_thai'] === 'CONFIRMED') {
+                return true;
+            }
+            if ($in['trang_thai'] !== 'DRAFT') {
+                throw new DomainError('Phiếu này không còn ở trạng thái chờ nhận hàng');
+            }
+            $ops = $this->repo->ops($in, $this->repo->lines($inId));
+            $this->ledger->lock($this->repo->lockKeys($ops));
+            $this->ledger->post($ops);
+            $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CONFIRMED', nguoi_xac_nhan_id = ?, ngay_xac_nhan = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $inId]);
+            $this->audit->record($user->id, 'transfer.receive', 'voucher', $inId, $in['ma'] . ' đã nhận hàng');
+            return false;
+        });
+        return ['voucher' => $this->repo->find($inId), 'already' => $already];
     }
 
     /**
@@ -126,6 +150,9 @@ final class TransferService
             $in = $this->db->one('SELECT * FROM phieu_nhap_xuat WHERE phieu_nhap_xuat_lien_quan_id = ? AND loai = ? FOR UPDATE', [$outId, VoucherType::TransferIn->value]);
             if ($out['trang_thai'] !== 'CONFIRMED' || !$in) {
                 throw new DomainError('Chỉ điều chuyển đã xác nhận mới cần điều chỉnh');
+            }
+            if ($in['trang_thai'] !== 'CONFIRMED') {
+                throw new DomainError('Hàng đang trên đường vận chuyển — kho đến nhận hàng xong mới điều chỉnh được');
             }
             // Người điều chỉnh phải có quyền ở CẢ HAI kho, nếu không có thể dùng đường này để rút hàng khỏi kho khác.
             // Tài khoản quản lý/nhân viên chỉ thuộc một kho nên việc đảo điều chuyển đã xác nhận thuộc về quản trị hệ thống.

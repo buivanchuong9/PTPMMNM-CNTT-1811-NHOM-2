@@ -40,9 +40,15 @@ same($total('x'), 60, 'tổng tồn hai kho bảo toàn (50 + 10)');
 section('Thử lại không lỗi ⇒ trừ đúng một lần, cộng đúng một lần');
 $res = $svc->confirm($f->approverA, (int)$t['id']);
 same($res['already'], false, 'xác nhận thành công');
+section('Đang vận chuyển: đã rời kho đi, chưa vào kho đến');
+same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [30, 10], 'x: A 50→30 ngay, B vẫn 10 (hàng đang đi)');
+same($total('x'), 40, 'tổng tồn hai kho giảm đúng phần đang vận chuyển (20)');
+same($repo->find((int)$repo->pairOf($repo->find((int)$t['id']))['id'])['trang_thai'], 'DRAFT', 'phiếu nhận ở kho B đang chờ nhận hàng');
+$f->arrive((int)$t['id']);
+section('Kho B nhận hàng ⇒ cộng đúng một lần');
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [30, 30], 'x: A 50→30, B 10→30');
 same([$f->stock($f->wa, 'lot'), $f->stock($f->wb, 'lot')], [25, 5], 'lô: A 30→25, B 0→5');
-same($total('x'), 60, 'tổng tồn bảo toàn');
+same($total('x'), 60, 'tổng tồn bảo toàn sau khi nhận');
 same([$f->balance($f->wa, 'x'), $f->balance($f->wb, 'x')], [30, 30], 'số dư khớp sổ phát sinh');
 
 section('Phiếu nhập xuất đầy đủ tại nơi đi và nơi đến');
@@ -68,6 +74,8 @@ $ab = $svc->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 3), $f->line
 $ba = $svc->createDraft($f->keeperB, $f->wb, $f->wa, [$f->line('y', 5), $f->line('x', 2)], '', null)['voucher'];
 $res = runParallel([['voucher' => $ab['id'], 'user' => $f->approverA->id, 'sleepMs' => 300], ['voucher' => $ba['id'], 'user' => $f->approverB->id, 'sleepMs' => 300]]);
 same(array_column($res, 'status'), ['ok', 'ok'], 'cả hai chiều thành công (khoá theo thứ tự toàn cục)');
+$f->arrive((int)$ab['id']);
+$f->arrive((int)$ba['id']);
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [29, 31], 'x: A 30−3+2, B 30+3−2');
 same($f->stock($f->wa, 'y') + $f->stock($f->wb, 'y'), 80, 'y: tổng bảo toàn');
 finish();

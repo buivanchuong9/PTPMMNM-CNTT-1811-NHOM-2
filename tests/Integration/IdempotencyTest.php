@@ -45,6 +45,11 @@ $again = $ts->confirm($f->approverA, (int)$t1['voucher']['id']);
 same($again['already'], true, 'lần hai: đã xác nhận');
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f->movements($f->wb)], $sa, 'tồn và sổ cả hai kho không đổi');
 same((int)$f->db->value("SELECT COUNT(*) FROM phieu_nhap_xuat WHERE loai = 'TRANSFER_IN' AND phieu_nhap_xuat_lien_quan_id = ?", [$t1['voucher']['id']]), 1, 'chỉ một phiếu nhập xuất nơi đến');
+$f->arrive((int)$t1['voucher']['id']);
+$sb = [$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f->movements($f->wb)];
+$inId = (int)$f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($t1['voucher'])['id'];
+same($ts->receive($f->approverB, $inId)['already'], true, 'nhận hàng lần hai: đã nhận');
+same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f->movements($f->wb)], $sb, 'nhận hai lần không cộng thêm');
 
 section('Chốt kiểm kê hai lần');
 $cid = $cs->open($f->keeperA, $f->wa, '');

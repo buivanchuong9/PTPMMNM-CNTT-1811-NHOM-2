@@ -39,7 +39,9 @@ same([$lotRows[0]['so_lo'], $lotRows[0]['so_luong']], ['L1', 25], 'tồn theo l�
 section('Tình huống 2: điều chuyển → kiểm kê → xác nhận chênh lệch → phiếu nhập xuất điều chỉnh');
 $t = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 20)], 'Bổ sung cho kho B', null)['voucher'];
 $ts->confirm($f->approverA, (int)$t['id']);
-same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [50, 20], 'sau điều chuyển: A=50, B=20');
+same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [50, 0], 'đang vận chuyển: A đã trừ (50), B chưa có hàng');
+$f->arrive((int)$t['id']);
+same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [50, 20], 'sau khi kho B nhận: A=50, B=20');
 $cid = $cs->open($f->keeperB, $f->wb, 'Kiểm kê sau nhận hàng');
 $counted = [];
 $why = [];

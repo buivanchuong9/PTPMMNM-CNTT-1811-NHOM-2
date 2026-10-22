@@ -11,7 +11,8 @@ use StockFlow\Domain\VoucherType;
 final class VoucherRepository
 {
     private const FIELDS = 'v.*, w.ma AS wh_code, w.ten AS wh_name, cw.ma AS cp_code, cw.ten AS cp_name,
-                            cu.ho_ten AS creator_name, au.ho_ten AS approver_name';
+                            cu.ho_ten AS creator_name, au.ho_ten AS approver_name,
+                            (SELECT p.trang_thai FROM phieu_nhap_xuat p WHERE p.phieu_nhap_xuat_lien_quan_id = v.id AND p.loai = \'TRANSFER_IN\') AS pair_status';
     private const FROM = 'FROM phieu_nhap_xuat v JOIN kho w ON w.id = v.kho_id
                             LEFT JOIN kho cw ON cw.id = v.kho_doi_ung_id
                             JOIN nguoi_dung cu ON cu.id = v.nguoi_lap_id LEFT JOIN nguoi_dung au ON au.id = v.nguoi_xac_nhan_id';

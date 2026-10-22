@@ -55,6 +55,8 @@ section('Đảo cả điều chuyển (hai kho, một giao dịch)');
 $f->receive($f->wa, 'lot', 20);
 $t = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('lot', 12)], '', null)['voucher'];
 $ts->confirm($f->approverA, (int)$t['id']);
+throws(fn() => $vs->correct($f->both, (int)$t['id'], 'đảo khi hàng đang đi'), DomainError::class, 'hàng đang vận chuyển chưa đảo được');
+$f->arrive((int)$t['id']);
 same([$f->stock($f->wa, 'lot'), $f->stock($f->wb, 'lot')], [8, 12], 'sau điều chuyển: A=8, B=12');
 $in = $repo->pairOf($repo->find((int)$t['id']));
 $res = $vs->correct($f->both, (int)$in['id'], 'Điều chuyển nhầm tuyến');   // gọi từ phía phiếu nhập xuất NƠI ĐẾN vẫn đảo cả cặp
@@ -64,6 +66,7 @@ throws(fn() => $vs->correct($f->both, (int)$t['id'], 'lần 2'), DomainError::cl
 $f->receive($f->wb, 'lot', 3);
 $t2 = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('lot', 6)], '', null)['voucher'];
 $ts->confirm($f->approverA, (int)$t2['id']);
+$f->arrive((int)$t2['id']);
 $f->draftIssue($f->wb, 'x', 1); // không liên quan
 $iss3 = $vs->createDraft($f->keeperB, VoucherType::Issue, $f->wb, [$f->line('lot', 8)], '', '', null)['voucher'];
 $vs->confirm($f->approverB, (int)$iss3['id']);          // B còn 9 − 8 = 1 < 6
