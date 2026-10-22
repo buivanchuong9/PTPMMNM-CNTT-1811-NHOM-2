@@ -8,21 +8,27 @@ final class Paginator
 {
     public const PER_PAGE = 20;
 
+    /** Số dòng mỗi trang áp dụng cho yêu cầu hiện tại (App nạp theo cài đặt của tài khoản). */
+    public static int $default = self::PER_PAGE;
+
+    public readonly int $per;
+
     public readonly int $pages;
     public readonly int $page;
     public readonly int $offset;
 
-    public function __construct(public readonly int $total, ?int $page, public readonly int $per = self::PER_PAGE, public readonly string $param = 'page')
+    public function __construct(public readonly int $total, ?int $page, ?int $per = null, public readonly string $param = 'page')
     {
-        $this->pages = max(1, (int)ceil($total / $per));
+        $this->per = $per ?? self::$default;
+        $this->pages = max(1, (int)ceil($total / $this->per));
         $this->page = min(max(1, $page ?? 1), $this->pages);
-        $this->offset = ($this->page - 1) * $per;
+        $this->offset = ($this->page - 1) * $this->per;
     }
 
     /** Phân trang trên mảng đã có sẵn trong bộ nhớ (danh mục nhỏ). */
     public static function of(array $rows, Request $r, string $param = 'page'): array
     {
-        $pg = new self(count($rows), $r->int($param), self::PER_PAGE, $param);
+        $pg = new self(count($rows), $r->int($param), null, $param);
         return [$pg->slice($rows), $pg];
     }
 

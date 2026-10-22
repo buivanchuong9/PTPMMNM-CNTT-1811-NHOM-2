@@ -12,13 +12,12 @@
   <input type="search" name="q" value="<?= e($q) ?>" placeholder="Tìm SKU hoặc tên hàng…" aria-label="Tìm kiếm">
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Tất cả kho') ?></select>
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>
-  <select name="view" aria-label="Kiểu xem"><option value="">Theo mặt hàng</option><option value="batch"<?= $byBatch ? ' selected' : '' ?>>Theo lô (hạn dùng)</option></select>
+  <select name="view" aria-label="Kiểu xem" data-live-reload><option value="">Theo mặt hàng</option><option value="batch"<?= $byBatch ? ' selected' : '' ?>>Theo lô (hạn dùng)</option></select>
   <?php if (!$byBatch): ?><select name="stock" aria-label="Tình trạng tồn">
     <?php foreach (['' => 'Mọi tình trạng', 'in' => 'Còn hàng', 'low' => 'Sắp hết', 'out' => 'Hết hàng'] as $k => $label): ?><option value="<?= e($k) ?>"<?= $stock === $k ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
   </select><?php endif; ?>
-  <button type="submit">Lọc</button>
 </form>
-<section class="card flush"><div class="table-wrap"><table class="dense">
+<section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
 <?php if ($byBatch): ?>
   <thead><tr><th>Kho</th><th>SKU</th><th>Tên hàng</th><th>Lô</th><th>Hạn dùng</th><th class="num">Tồn</th><th>Quy đổi</th><th>Cập nhật cuối</th></tr></thead>
   <tbody>

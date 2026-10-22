@@ -15,6 +15,16 @@ final class User
         $this->isAdmin = $role === AccountRole::Admin;
     }
 
+    /** Chuẩn hoá + kiểm tra tên đăng nhập: chữ thường, 3–40 ký tự a-z 0-9 . _ - */
+    public static function normalizeUsername(string $username): string
+    {
+        $username = strtolower(trim($username));
+        if (!preg_match('/^[a-z0-9._-]{3,40}$/', $username)) {
+            throw new DomainError('Tên đăng nhập gồm 3–40 ký tự a-z, 0-9, ., _ hoặc -');
+        }
+        return $username;
+    }
+
     public function initials(): string
     {
         $parts = preg_split('/\s+/u', trim(preg_replace('/\(.*?\)/u', '', $this->fullName))) ?: [];

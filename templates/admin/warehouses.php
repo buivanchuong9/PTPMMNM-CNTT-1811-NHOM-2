@@ -3,6 +3,9 @@ use StockFlow\Domain\Permission as P;
 // Thêm nhân viên: tài khoản cấp cao thêm cho kho bất kỳ; quản lý kho chỉ cho kho của mình (nếu được giao chức năng này).
 $canAddStaff = fn(array $w) => $w['hoat_dong'] && $auth->allows($user, P::QuanLyNhanVien) && ($user->isAdmin || (int)$user->warehouseId === (int)$w['id']);
 $anyAdd = (bool)array_filter($rows, $canAddStaff);
+// Sửa địa chỉ: tài khoản cấp cao mọi kho; quản lý kho của mình
+$canEditAddr = fn(array $w) => $user->isAdmin || ($user->role === \StockFlow\Domain\AccountRole::Manager && (int)$user->warehouseId === (int)$w['id']);
+$anyAddr = (bool)array_filter($rows, $canEditAddr);
 ?>
 <header class="page-head">
   <div><h1>Kho &amp; nhân sự</h1><p class="muted">Mỗi kho có <b>một quản lý</b> và <b>nhiều nhân viên</b>. Tài khoản quản lý / nhân viên chỉ thao tác trong kho được gắn; tài khoản cấp cao thấy mọi kho.</p></div>
@@ -15,9 +18,14 @@ $anyAdd = (bool)array_filter($rows, $canAddStaff);
           <h2><span class="wh-code"><?= e($w['ma']) ?></span> <?= e($w['ten']) ?> <?= $w['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-muted">Ngừng</span>' ?></h2>
           <p class="muted"><?= icon('warehouse') ?> <?= e($w['dia_chi'] ?: 'Chưa có địa chỉ') ?><?= $s ? ' · <b>' . n($s['units']) . '</b> đơn vị đang tồn' : '' ?></p>
         </div>
+        <div class="actions">
+        <?php if ($canEditAddr($w)): ?>
+          <button type="button" class="btn-ghost" data-dialog-open="addr-dlg" data-wh="<?= (int)$w['id'] ?>" data-wh-label="<?= e($w['ma'] . ' — ' . $w['ten']) ?>" data-fill="<?= e(json_encode(\StockFlow\Domain\VnAddress::parse($w['dia_chi']), JSON_UNESCAPED_UNICODE)) ?>"><?= icon('warehouse') ?>Sửa địa chỉ</button>
+        <?php endif; ?>
         <?php if ($canAddStaff($w)): ?>
           <button type="button" data-dialog-open="staff-dlg" data-wh="<?= (int)$w['id'] ?>" data-wh-label="<?= e($w['ma'] . ' — ' . $w['ten']) ?>"><?= icon('plus') ?>Thêm nhân viên</button>
         <?php endif; ?>
+        </div>
       </div>
 
       <div class="wh-manager">
@@ -53,9 +61,21 @@ $anyAdd = (bool)array_filter($rows, $canAddStaff);
     <div class="dlg-head"><h2 id="wh-dlg-t">Thêm kho</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Mã kho<input name="code" required maxlength="20" placeholder="VD: HP01" autocomplete="off"></label>
     <label>Tên kho<input name="name" required maxlength="120"></label>
-    <label>Địa chỉ<input name="address" maxlength="255"></label>
+    <?php $addr = []; $addrRequired = false; include __DIR__ . '/../partials/address_fields.php'; ?>
     <p class="muted small">Sau khi tạo kho, gắn quản lý ở trang <a href="/users">Tài khoản</a>; quản lý kho sẽ tự thêm nhân viên cho kho của mình tại đây.</p>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm kho</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+<?php endif; ?>
+<?php if ($anyAddr): ?>
+<dialog id="addr-dlg" class="dlg dlg-wide" aria-labelledby="addr-dlg-t">
+  <form method="post" action="/warehouses/address" class="form">
+    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+    <input type="hidden" name="warehouse_id" value="">
+    <div class="dlg-head"><h2 id="addr-dlg-t">Sửa địa chỉ kho</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <p class="muted dlg-sub">Kho: <b data-dlg-wh></b></p>
+    <?php $addr = []; $addrRequired = true; include __DIR__ . '/../partials/address_fields.php'; ?>
+    <div class="actions"><button type="submit">Lưu địa chỉ</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
 <?php endif; ?>
@@ -67,7 +87,7 @@ $anyAdd = (bool)array_filter($rows, $canAddStaff);
     <div class="dlg-head"><h2 id="staff-dlg-title">Thêm nhân viên</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Kho: <b data-dlg-wh></b></p>
     <label>Họ và tên<input name="full_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
-    <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" placeholder="chữ thường, số, dấu . _ -" pattern="[A-Za-z0-9._-]{3,40}"></label>
+    <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" placeholder="chữ thường, số, dấu . _ -" pattern="[A-Za-z0-9._\-]{3,40}"></label>
     <label>Mật khẩu (≥ 8 ký tự)<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm nhân viên</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>

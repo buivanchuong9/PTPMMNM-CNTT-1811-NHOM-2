@@ -13,7 +13,6 @@ $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: 
   <a class="kpi" href="/inventory"><span class="kpi-ic"><?= icon('layers') ?></span><b data-count="<?= (int)$d['units'] ?>"><?= n($d['units']) ?></b><span>Đơn vị đang tồn</span></a>
   <a class="kpi kpi-warn" href="/vouchers?status=DRAFT"><span class="kpi-ic"><?= icon('file') ?></span><b data-count="<?= (int)$d['drafts'] ?>"><?= n($d['drafts']) ?></b><span>Phiếu nhập xuất chờ xác nhận</span></a>
   <a class="kpi kpi-ok" href="/vouchers?status=CONFIRMED"><span class="kpi-ic"><?= icon('check') ?></span><b data-count="<?= (int)$d['confirmed_today'] ?>"><?= n($d['confirmed_today']) ?></b><span>Đã xác nhận hôm nay</span></a>
-  <a class="kpi kpi-info" href="/counts"><span class="kpi-ic"><?= icon('clipboard') ?></span><b data-count="<?= (int)$d['open_counts'] ?>"><?= n($d['open_counts']) ?></b><span>Đợt kiểm kê đang mở</span></a>
 </section>
 
 <div class="grid-2">

@@ -12,14 +12,13 @@ use StockFlow\Domain\User;
 use StockFlow\Domain\VoucherType;
 use StockFlow\Service\AuthService;
 use StockFlow\Service\CatalogService;
-use StockFlow\Service\StockCountService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\TransferService;
 use StockFlow\Service\VoucherService;
 
 /**
  * Dữ liệu demo: 3 kho, 30 mặt hàng (10 mặt hàng có lô/hạn dùng), ≥200 dòng sổ phát sinh,
- * có điều chuyển, chênh lệch kiểm kê, phiếu nhập xuất điều chỉnh. Mọi thao tác đi qua chính các service
+ * có điều chuyển, phiếu nhập xuất điều chỉnh. Mọi thao tác đi qua chính các service
  * (không INSERT tắt) nên dữ liệu mẫu luôn nhất quán với quy tắc nghiệp vụ. Xác định (seed cố định).
  */
 final class DemoSeed
@@ -38,7 +37,6 @@ final class DemoSeed
         $catalog = $c->get(CatalogService::class);
         $vouchers = $c->get(VoucherService::class);
         $transfers = $c->get(TransferService::class);
-        $counts = $c->get(StockCountService::class);
         $query = $c->get(StockQuery::class);
 
         // ── kho + tài khoản: 1 tài khoản cấp cao; mỗi kho có 1 quản lý và nhiều nhân viên ──
@@ -57,8 +55,8 @@ final class DemoSeed
             'DN01' => [['dn.quanly', 'Phạm Quốc Dũng'], [['dn.nv1', 'Lê Minh Châu'], ['dn.nv2', 'Ngô Thị Lan']]],
             'HCM01' => [['hcm.quanly', 'Đặng Thu Hương'], [['hcm.nv1', 'Võ Thanh Hà'], ['hcm.nv2', 'Bùi Quang Huy']]],
         ];
-        $keeper = [];    // nhân viên đầu tiên của mỗi kho: lập phiếu, kiểm kê
-        $approver = [];  // quản lý kho: xác nhận phiếu, duyệt kiểm kê
+        $keeper = [];    // nhân viên đầu tiên của mỗi kho: lập phiếu
+        $approver = [];  // quản lý kho: xác nhận phiếu
         foreach ($team as $code => [[$mgrName, $mgrFull], $staff]) {
             $mid = $catalog->createAccount($admin, $mgrName, $mgrFull, self::PASSWORD, AccountRole::Manager, $wh[$code]);
             $approver[$code] = new User($mid, $mgrName, $mgrFull, AccountRole::Manager, $wh[$code]);
@@ -184,37 +182,7 @@ final class DemoSeed
         $vouchers->correct($approver['DN01'], (int)$wrong['id'], 'Nhập nhầm: thực nhận 90, nhân viên gõ thừa một số 0');
         $post('DN01', VoucherType::Receipt, [$line('CAB-USBC', 0, 90)], 'NPP Điện tử Phong Vũ', 'Nhập lại đúng số lượng');
 
-        // ── 5) kiểm kê: DN (đã chốt, có chênh lệch), HCM (chờ duyệt), HN (đang đếm) ──
-        $closeCount = function (string $code, array $variances, bool $approve) use ($counts, $keeper, $approver, $wh) {
-            $id = $counts->open($keeper[$code], $wh[$code], 'Kiểm kê định kỳ cuối tháng');
-            $c = $counts->find($id);
-            $counted = [];
-            $reasons = [];
-            foreach ($c['lines'] as $i => $l) {
-                $key = $l['mat_hang_id'] . ':' . $l['lo_hang_id'];
-                $delta = $variances[$i] ?? 0;
-                $counted[$key] = max(0, (int)$l['so_luong_so_sach'] + $delta);
-                if ($delta !== 0 && (int)$l['so_luong_so_sach'] + $delta >= 0) {
-                    $reasons[$key] = $delta < 0 ? ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng'][$i % 3] : 'Chưa ghi phiếu nhập xuất';
-                }
-            }
-            $counts->submit($keeper[$code], $id, $counted, $reasons);
-            if ($approve) {
-                $counts->approve($approver[$code], $id);
-            }
-            return $id;
-        };
-        $closeCount('DN01', [2 => -3, 7 => -1, 12 => 4, 19 => -2], true);
-        $closeCount('HCM01', [1 => -2, 8 => 3, 15 => -5], false);
-        $hn = $counts->open($keeper['HN01'], $wh['HN01'], 'Kiểm kê đột xuất khu hàng điện tử');
-        $lines = $counts->find($hn)['lines'];
-        $partial = [];
-        foreach (array_slice($lines, 0, 8) as $l) {
-            $partial[$l['mat_hang_id'] . ':' . $l['lo_hang_id']] = (int)$l['so_luong_so_sach'];
-        }
-        $counts->save($keeper['HN01'], $hn, $partial);
-
-        // ── 6) vài phiếu nháp chờ duyệt ──
+        // ── 5) vài phiếu nháp chờ duyệt ──
         $vouchers->createDraft($keeper['HN01'], VoucherType::Issue, $wh['HN01'], [$line('BOX-M', 0, 120), $line('TAPE-48', 0, 60)], 'Đơn xuất SO-1999', 'Chờ duyệt', null);
         $vouchers->createDraft($keeper['HCM01'], VoucherType::Receipt, $wh['HCM01'], [$line('PHN-A15', 0, 40), $line('EARBUD', 0, 60)], 'NPP Điện tử Phong Vũ', 'Hàng về sáng nay', null);
         $transfers->createDraft($keeper['DN01'], $wh['DN01'], $wh['HCM01'], [$line('BOX-S', 0, 25)], 'Chuyển bao bì dư', null);

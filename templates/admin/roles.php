@@ -2,7 +2,7 @@
 use StockFlow\Domain\AccountRole;
 $cols = AccountRole::configurable();
 ?>
-<header class="page-head"><div><h1>Phân quyền chức năng</h1><p class="muted">Chọn chức năng nào mỗi vai trò được dùng. Chức năng bị thu hồi sẽ <b>ẩn khỏi menu và bị chặn</b> với vai trò đó nhưng <b>không bị xoá</b> khỏi hệ thống — bật lại là dùng được ngay. Tài khoản quản trị (chủ hệ thống) luôn xem được thống kê mọi kho và quản lý hệ thống, nhưng <b>không thao tác nhập / xuất / kiểm kê</b> — đó là việc của quản lý và nhân viên kho.</p></div></header>
+<header class="page-head"><div><h1>Phân quyền chức năng</h1><p class="muted">Chọn chức năng nào mỗi vai trò được dùng. Chức năng bị thu hồi sẽ <b>ẩn khỏi menu và bị chặn</b> với vai trò đó nhưng <b>không bị xoá</b> khỏi hệ thống — bật lại là dùng được ngay. Tài khoản quản trị (chủ hệ thống) luôn xem được thống kê mọi kho và quản lý hệ thống, nhưng <b>không thao tác nhập / xuất</b> — đó là việc của quản lý và nhân viên kho.</p></div></header>
 <form method="post" action="/roles" class="card flush">
   <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
   <div class="table-wrap"><table class="matrix">
@@ -14,7 +14,7 @@ $cols = AccountRole::configurable();
       <?php foreach ($perms as $p): ?>
       <tr>
         <td><b><?= e($p->label()) ?></b><br><small class="muted"><?= e($p->description()) ?></small></td>
-        <td class="mx"><?php if ($p->operational()): ?><span class="muted" title="Chủ hệ thống chỉ xem và quản lý, không thao tác nhập / xuất / kiểm kê">chỉ xem</span><?php else: ?><span class="lock" title="Quản trị hệ thống luôn có quyền này"><?= icon('check') ?></span><?php endif; ?></td>
+        <td class="mx"><?php if ($p->operational()): ?><span class="muted" title="Chủ hệ thống chỉ xem và quản lý, không thao tác nhập / xuất">chỉ xem</span><?php else: ?><span class="lock" title="Quản trị hệ thống luôn có quyền này"><?= icon('check') ?></span><?php endif; ?></td>
         <?php foreach ($cols as $c): ?>
           <td class="mx">
             <?php if ($p->adminOnly()): ?><span class="muted" title="Chức năng hệ thống — chỉ quản trị viên">—</span>

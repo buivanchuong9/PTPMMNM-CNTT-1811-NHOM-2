@@ -13,21 +13,30 @@ $whOptions = fn(?int $sel = null) => '<option value="">Chọn kho…</option>' .
         <td class="wrap"><?= $u['kho_id'] ? '<span class="wh-code">' . e($u['kho_ma']) . '</span> ' . e($u['kho_ten']) . '<br><small class="muted">' . e($u['kho_dia_chi'] ?: '—') . '</small>' : '<span class="muted">Tất cả các kho</span>' ?></td>
         <td><?= $u['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?></td>
         <td>
-          <details class="row-edit"><summary>Sửa</summary>
-            <form method="post" action="/users/update" class="inline-form edit-form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-              <select name="role" aria-label="Vai trò" data-role-select<?= $self ? ' disabled' : '' ?>><?php foreach ($accountRoles as $ar): ?><option value="<?= e($ar->value) ?>"<?= $ar === $role ? ' selected' : '' ?>><?= e($ar->label()) ?></option><?php endforeach; ?></select>
-              <select name="warehouse_id" aria-label="Kho" data-kho-select><?= $whOptions($u['kho_id'] ? (int)$u['kho_id'] : null) ?></select>
-              <?php if ($self): ?><input type="hidden" name="role" value="<?= e($role->value) ?>"><?php endif; ?>
-              <button class="btn-ghost">Lưu</button></form>
-            <form method="post" action="/users/password" class="inline-form edit-form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-              <input type="password" name="password" minlength="8" placeholder="Mật khẩu mới (≥ 8 ký tự)" autocomplete="new-password" required><button class="btn-ghost">Đặt lại</button></form>
-            <?php if (!$self): ?><form method="post" action="/users/active" class="edit-form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-              <input type="hidden" name="active" value="<?= $u['hoat_dong'] ? '0' : '1' ?>"><button class="<?= $u['hoat_dong'] ? 'btn-danger' : 'btn-ghost' ?>" data-confirm="<?= $u['hoat_dong'] ? 'Khoá tài khoản này? Lịch sử thao tác vẫn được giữ.' : 'Mở khoá tài khoản này?' ?>"><?= $u['hoat_dong'] ? 'Khoá tài khoản' : 'Mở khoá' ?></button></form><?php endif; ?>
-          </details>
+          <?php if ($role === \StockFlow\Domain\AccountRole::Admin): ?><span class="muted">—</span>
+          <?php else: ?><button type="button" class="btn-ghost btn-sm" data-dialog-open="user-edit-dlg"
+            data-fill-label="<?= e($u['ho_ten']) ?>"
+            data-fill="<?= e(json_encode(['user_id' => (int)$u['id'], 'username' => $u['ten_dang_nhap'], 'role' => $u['vai_tro'], 'warehouse_id' => (string)($u['kho_id'] ?? ''), 'active' => $u['hoat_dong'] ? '0' : '1', 'lock_label' => $u['hoat_dong'] ? 'Khoá tài khoản' : 'Mở khoá'], JSON_UNESCAPED_UNICODE)) ?>"><?= icon('settings') ?>Sửa</button><?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>
     </tbody></table></div><?= pager($pg) ?></section>
+
+<dialog id="user-edit-dlg" class="dlg" aria-labelledby="user-edit-t">
+  <form method="post" action="/users/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value=""><input type="hidden" name="active" value="">
+    <div class="dlg-head"><h2 id="user-edit-t">Sửa tài khoản</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <p class="muted dlg-sub">Tài khoản: <b data-dlg-label></b></p>
+    <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" pattern="[A-Za-z0-9._\-]{3,40}" placeholder="chữ thường, số, dấu . _ -"></label>
+    <label>Vai trò<select name="role" required data-role-select><?php foreach (array_reverse($accountRoles) as $ar): if ($ar === \StockFlow\Domain\AccountRole::Admin) { continue; } ?><option value="<?= e($ar->value) ?>"><?= e($ar->label()) ?></option><?php endforeach; ?></select></label>
+    <label>Kho được gắn<select name="warehouse_id" data-kho-select required><?= $whOptions() ?></select></label>
+    <label>Mật khẩu mới<input type="password" name="password" minlength="8" autocomplete="new-password" placeholder="Để trống nếu không đổi"></label>
+    <div class="actions">
+      <button type="submit">Lưu thay đổi</button>
+      <button type="submit" class="btn-danger" formaction="/users/active" formnovalidate data-confirm="Đổi trạng thái khoá của tài khoản này? Lịch sử thao tác vẫn được giữ."><span data-fill-text="lock_label">Khoá tài khoản</span></button>
+      <button type="button" class="btn-ghost" data-dialog-close>Huỷ</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="user-dlg" class="dlg" aria-labelledby="user-dlg-t">
   <form method="post" action="/users" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">

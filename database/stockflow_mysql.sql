@@ -177,41 +177,6 @@ CREATE TABLE IF NOT EXISTS so_phat_sinh (
     INDEX sm_by_time (ngay_ghi_so, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Đợt kiểm kê: OPEN (đang đếm) → REVIEW (đã nhập đủ, chờ duyệt chênh lệch) → CLOSED (đã lập phiếu nhập xuất điều chỉnh).
-CREATE TABLE IF NOT EXISTS dot_kiem_ke (
-    id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    ma                        varchar(30)  NOT NULL,
-    kho_id                    integer      NOT NULL,
-    trang_thai                enum('OPEN','REVIEW','CLOSED','CANCELLED') NOT NULL DEFAULT 'OPEN',
-    ghi_chu                   varchar(255) NOT NULL DEFAULT '',
-    nguoi_lap_id              integer      NOT NULL,
-    nguoi_duyet_id            integer      NULL,
-    phieu_nhap_xuat_dieu_chinh_id    bigint       NULL,
-    ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ngay_nop                  timestamp    NULL,
-    ngay_dong                 timestamp    NULL,
-    CONSTRAINT sc_wh_fk      FOREIGN KEY (kho_id)          REFERENCES kho(id),
-    CONSTRAINT sc_creator_fk FOREIGN KEY (nguoi_lap_id)            REFERENCES nguoi_dung(id),
-    CONSTRAINT sc_approver_fk FOREIGN KEY (nguoi_duyet_id)          REFERENCES nguoi_dung(id),
-    CONSTRAINT sc_adj_fk     FOREIGN KEY (phieu_nhap_xuat_dieu_chinh_id) REFERENCES phieu_nhap_xuat(id),
-    UNIQUE (ma)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS chi_tiet_kiem_ke (
-    dot_kiem_ke_id            bigint       NOT NULL,
-    mat_hang_id               integer      NOT NULL,
-    lo_hang_id                integer      NOT NULL,
-    so_luong_so_sach          integer      NOT NULL,
-    so_luong_thuc_dem         integer      NULL,
-    ly_do                     varchar(255) NOT NULL DEFAULT '',
-    PRIMARY KEY (dot_kiem_ke_id, mat_hang_id, lo_hang_id),
-    CONSTRAINT scl_sys_nonneg CHECK (so_luong_so_sach >= 0),
-    CONSTRAINT scl_cnt_nonneg CHECK (so_luong_thuc_dem IS NULL OR so_luong_thuc_dem >= 0),
-    CONSTRAINT scl_count_fk FOREIGN KEY (dot_kiem_ke_id) REFERENCES dot_kiem_ke(id),
-    CONSTRAINT scl_item_fk  FOREIGN KEY (mat_hang_id)  REFERENCES mat_hang(id),
-    CONSTRAINT scl_batch_fk FOREIGN KEY (lo_hang_id) REFERENCES lo_hang(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE IF NOT EXISTS nhat_ky (
     id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nguoi_dung_id             integer      NULL,

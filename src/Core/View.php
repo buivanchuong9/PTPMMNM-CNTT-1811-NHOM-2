@@ -11,7 +11,7 @@ final class View
     /** @param array<string,mixed> $data */
     public function render(string $template, array $data = [], string $layout = 'layout/app', int $status = 200): Response
     {
-        $data += ['flash' => $this->session->takeFlash(), 'csrf' => $this->session->csrf()];
+        $data += ['flash' => $this->session->takeFlash(), 'csrf' => $this->session->csrf(), 'compact' => (bool)$this->session->pref('compact')];
         $content = $this->capture($template, $data);
         return new Response($layout === '' ? $content : $this->capture($layout, $data + ['content' => $content]), $status);
     }

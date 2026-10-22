@@ -9,7 +9,6 @@ $groups = [
         'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', [P::LapPhieuXuat]],
         'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
         'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
-        'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
     ],
     'Tra cứu & báo cáo' => [
         'inventory' => ['/inventory', 'box', 'Hàng hoá', [P::XemTonKho]],
@@ -25,8 +24,9 @@ $groups = [
         'roles' => ['/roles', 'shield', 'Phân quyền chức năng', [P::PhanQuyen]],
     ],
 ];
+$groups['Tài khoản'] = ['settings' => ['/settings', 'settings', 'Cài đặt', []]];
 foreach ($groups as $label => $entries) {
-    $groups[$label] = array_filter($entries, fn($e) => array_filter($e[3], fn($perm) => $auth->allows($user, $perm)));
+    $groups[$label] = array_filter($entries, fn($e) => $e[3] === [] || array_filter($e[3], fn($perm) => $auth->allows($user, $perm)));
     if (!$groups[$label]) {
         unset($groups[$label]);
     }
@@ -40,12 +40,16 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title ? $title . ' • ' : '') ?>StockFlow WMS</title>
+<script src="/assets/js/theme.js"></script>
 <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/vendor/fonts/bvp-vietnamese-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/theme.css">
+<link rel="stylesheet" href="/assets/css/ui.css">
+<link rel="stylesheet" href="/assets/css/dark.css">
+<link rel="stylesheet" href="/assets/css/dialog.css">
 </head>
-<body>
+<body<?= !empty($compact) ? ' class="compact"' : '' ?>>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <header class="topbar">
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
@@ -54,7 +58,8 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
     <?= icon('search') ?><input type="search" name="q" placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>
   <div class="topuser">
-    <span class="avatar" aria-hidden="true"><?= e($user->initials()) ?></span>
+    <button class="icon-btn theme-toggle" type="button" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= str_replace('class="icon"', 'class="icon ic-sun"', icon('sun')) ?><?= str_replace('class="icon"', 'class="icon ic-moon"', icon('moon')) ?></button>
+    <a class="avatar" href="/settings" title="Cài đặt tài khoản" aria-label="Cài đặt tài khoản"><?= e($user->initials()) ?></a>
     <span class="who" title="<?= e($myWarehouse ? 'Địa chỉ kho: ' . ($myWarehouse['dia_chi'] ?: '—') : 'Tài khoản cấp cao: thấy và thao tác ở mọi kho') ?>"><b><?= e($user->fullName) ?> <em class="role-badge role-<?= e(strtolower($user->role->value)) ?>"><?= e($user->role->label()) ?></em></b><small><?= e($myWarehouse ? $whLabel : 'Tất cả các kho') ?></small></span>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="icon-btn" title="Đăng xuất" aria-label="Đăng xuất"><?= icon('logout') ?></button></form>
   </div>
@@ -79,6 +84,8 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
   </main>
 </div>
 <script src="/assets/vendor/chart.umd.min.js" defer></script>
+<script src="/assets/js/dialog-fx.js" defer></script>
 <script src="/assets/js/app.js" defer></script>
+<script src="/assets/js/address.js" defer></script>
 </body>
 </html>

@@ -58,7 +58,7 @@ final class Authorizer
     public function allows(User $user, Permission $permission): bool
     {
         if ($user->isAdmin) {
-            return !$permission->operational(); // chủ hệ thống: xem + quản lý, không thao tác nhập/xuất/kiểm kê
+            return !$permission->operational(); // chủ hệ thống: xem + quản lý, không thao tác nhập/xuất
         }
         return $this->matrix()[$user->role->value][$permission->value] ?? false;
     }

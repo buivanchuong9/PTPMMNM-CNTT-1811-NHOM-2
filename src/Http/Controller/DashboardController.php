@@ -24,7 +24,7 @@ final class DashboardController extends Controller
         if (!$this->auth->allows($user, Permission::XemTongQuan)) {
             foreach (['/inventory' => Permission::XemTonKho, '/vouchers' => Permission::XemPhieu, '/vouchers/new?type=RECEIPT' => Permission::LapPhieuNhap,
                       '/vouchers/new?type=ISSUE' => Permission::LapPhieuXuat, '/transfers/new' => Permission::LapPhieuDieuChuyen,
-                      '/counts' => Permission::KiemKeThucHien, '/warehouses' => Permission::XemDanhMuc] as $to => $perm) {
+                      '/warehouses' => Permission::XemDanhMuc] as $to => $perm) {
                 if ($this->auth->allows($user, $perm)) {
                     return Response::redirect($to);
                 }
