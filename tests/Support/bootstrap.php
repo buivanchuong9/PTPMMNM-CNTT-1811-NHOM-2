@@ -79,9 +79,27 @@ final class Fx
     /** @var array<string,array{item:int,batch:int,sku:string}> */
     public array $it = [];
 
+    /**
+     * Bài kiểm thử tạo kho / tài khoản / mặt hàng mẫu nên CHỈ được chạy trên CSDL kiểm thử (tên kết thúc bằng «_test»).
+     * `bin/stockflow test` tự dùng «<tên CSDL>_test». Chạy trực tiếp từng file thì phải đặt DB_NAME=<tên>_test — nếu không sẽ làm bẩn CSDL thật.
+     */
+    private static function requireTestDatabase(): void
+    {
+        $cfg = Config::database();
+        $name = (string)($cfg['database'] ?? $cfg['path'] ?? '');
+        if (!str_contains(strtolower($name), 'test') && getenv('STOCKFLOW_ALLOW_TEST_ON_REAL_DB') !== '1') {
+            fwrite(STDERR, "TỪ CHỐI chạy kiểm thử trên CSDL «{$name}»: không phải CSDL kiểm thử (tên phải chứa «test»).
+"
+                . "  Dùng `bin/stockflow test`, hoặc đặt DB_HOST, DB_PORT, DB_NAME=<tên>_test, DB_USER, DB_PASS rồi chạy lại.
+");
+            exit(2);
+        }
+    }
+
     public static function make(): self
     {
         $f = new self();
+        self::requireTestDatabase();
         $f->db = Db::connect(Config::database());
         $f->c = new Container();
         $f->c->set(Db::class, $f->db);

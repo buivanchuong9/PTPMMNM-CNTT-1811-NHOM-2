@@ -2,18 +2,15 @@
 // Dữ liệu hành chính nạp từ /assets/data/vn-address.json (cùng nguồn với máy chủ, CSP chỉ cho 'self'). Gõ không dấu cũng tìm được.
 // Máy chủ vẫn kiểm tra lại toàn bộ (VnAddress::compose), nên đây chỉ là phần tiện lợi + báo lỗi sớm.
 (() => {
-  const roots = document.querySelectorAll('[data-vn-addr]');
-  if (!roots.length) return;
-
   const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/\s+/g, ' ').trim();
   const core = (s) => fold(s).replace(/^(thanh pho|tinh|phuong|xa|dac khu|thi tran) /, '');
   const MAX = 40;
 
-  let data = null;
-  const ready = fetch('/assets/data/vn-address.json').then((r) => r.json()).then((d) => {
+  let data = null, readyP = null;
+  const loadData = () => readyP || (readyP = fetch('/assets/data/vn-address.json').then((r) => r.json()).then((d) => {
     data = d.map((p) => ({ n: p.n, f: fold(p.n), c: core(p.n), w: p.w.map((n) => ({ n, f: fold(n), c: core(n) })) }));
     document.dispatchEvent(new CustomEvent('vnaddr:ready'));
-  }).catch(() => { data = []; });
+  }).catch(() => { data = []; }));
 
   const findProvince = (v) => { const f = fold(v); return f && data ? data.find((p) => p.f === f || p.c === f) || null : null; };
   const findWard = (p, v) => {
@@ -32,7 +29,10 @@
     return hit.sort((a, b) => (b.c.startsWith(f) - a.c.startsWith(f)) || (b.f.startsWith(f) - a.f.startsWith(f)) || a.n.localeCompare(b.n, 'vi'));
   };
 
-  roots.forEach((root) => {
+  window.initVnAddr = () => document.querySelectorAll('[data-vn-addr]').forEach((root) => {
+    if (root.dataset.vnInit) return;
+    root.dataset.vnInit = '1';
+    const ready = loadData();
     const street = root.querySelector('[name=street]');
     const prov = root.querySelector('[name=province]');
     const ward = root.querySelector('[name=ward]');
@@ -111,4 +111,5 @@
     document.addEventListener('click', (e) => { if (e.target.closest('[data-dialog-open]')) setTimeout(refresh, 0); });
     ready.then(refresh);
   });
+  window.initVnAddr();
 })();

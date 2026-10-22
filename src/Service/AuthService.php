@@ -27,6 +27,6 @@ final class AuthService
 
     private function hydrate(array $row): User
     {
-        return new User((int)$row['id'], $row['ten_dang_nhap'], $row['ho_ten'], AccountRole::from($row['vai_tro']), $row['kho_id'] === null ? null : (int)$row['kho_id']);
+        return new User((int)$row['id'], $row['ten_dang_nhap'], $row['ho_ten'], AccountRole::from($row['vai_tro']), $row['kho_id'] === null ? null : (int)$row['kho_id'], $row['anh_dai_dien'] ?? null);
     }
 }

@@ -40,9 +40,9 @@ final class App
         $r->post('/settings/profile', [C\SettingsController::class, 'profile']);
         $r->post('/settings/password', [C\SettingsController::class, 'password']);
         $r->post('/settings/preferences', [C\SettingsController::class, 'preferences']);
-        $r->post('/settings/warehouse', [C\SettingsController::class, 'warehouse']);
-        $r->post('/settings/staff/active', [C\SettingsController::class, 'staffActive']);
-        $r->post('/settings/staff/update', [C\SettingsController::class, 'staffUpdate']);
+        $r->post('/settings/avatar', [C\SettingsController::class, 'avatarUpload']);
+        $r->post('/settings/avatar/remove', [C\SettingsController::class, 'avatarRemove']);
+        $r->get('/avatar/{id}', [C\SettingsController::class, 'avatarFile']);
         $r->post('/settings/system', [C\SettingsController::class, 'system']);
         $r->get('/finova/orders', [C\FinovaController::class, 'orders']);
 
@@ -56,6 +56,15 @@ final class App
         $r->get('/transfers/new', [C\VoucherController::class, 'createTransfer']);
         $r->post('/transfers', [C\VoucherController::class, 'storeTransfer']);
 
+        $r->get('/counts', [C\CountController::class, 'index']);
+        $r->post('/counts', [C\CountController::class, 'store']);
+        $r->get('/counts/{id}', [C\CountController::class, 'show']);
+        $r->post('/counts/{id}/save', [C\CountController::class, 'save']);
+        $r->post('/counts/{id}/submit', [C\CountController::class, 'submit']);
+        $r->post('/counts/{id}/approve', [C\CountController::class, 'approve']);
+        $r->post('/counts/{id}/reject', [C\CountController::class, 'reject']);
+        $r->post('/counts/{id}/cancel', [C\CountController::class, 'cancel']);
+
         $r->get('/history', [C\HistoryController::class, 'index']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);
@@ -67,6 +76,8 @@ final class App
         $r->post('/warehouses', [C\AdminController::class, 'addWarehouse']);
         $r->post('/warehouses/address', [C\AdminController::class, 'updateWarehouseAddress']);
         $r->post('/warehouses/staff', [C\AdminController::class, 'addStaff']);
+        $r->post('/warehouses/staff/update', [C\SettingsController::class, 'staffUpdate']);
+        $r->post('/warehouses/staff/active', [C\SettingsController::class, 'staffActive']);
         $r->get('/items', [C\AdminController::class, 'items']);
         $r->post('/items', [C\AdminController::class, 'addItem']);
         $r->post('/items/update', [C\AdminController::class, 'updateItem']);

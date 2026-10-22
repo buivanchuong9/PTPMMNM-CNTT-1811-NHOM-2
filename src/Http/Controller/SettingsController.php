@@ -8,6 +8,8 @@ use StockFlow\Core\Response;
 use StockFlow\Core\Session;
 use StockFlow\Core\View;
 use StockFlow\Domain\AccountRole;
+use StockFlow\Domain\DomainError;
+use StockFlow\Domain\NotFound;
 use StockFlow\Domain\Forbidden;
 use StockFlow\Domain\User;
 use StockFlow\Domain\VnAddress;
@@ -27,7 +29,7 @@ final class SettingsController extends Controller
     {
         return match ($user->role) {
             AccountRole::Admin => ['ca-nhan', 'he-thong', 'nhat-ky'],
-            AccountRole::Manager => ['ca-nhan', 'kho'],
+            AccountRole::Manager => ['ca-nhan'],
             AccountRole::Staff => ['ca-nhan'],
         };
     }
@@ -38,9 +40,7 @@ final class SettingsController extends Controller
         $tab = in_array($r->str('tab'), $tabs, true) ? $r->str('tab') : 'ca-nhan';
         $data = ['tabs' => $tabs, 'tab' => $tab, 'prefs' => $this->settings->preferences($user), 'system' => $this->settings->system(),
                  'rowOptions' => SettingsService::ROWS, 'idleOptions' => SettingsService::IDLE];
-        if ($tab === 'kho') {
-            $data['staff'] = $this->settings->staffOf($user);
-        } elseif ($tab === 'he-thong') {
+        if ($tab === 'he-thong') {
             $data['overview'] = $this->settings->overview();
         } elseif ($tab === 'nhat-ky') {
             $data['log'] = $this->settings->recentAudit($user);
@@ -69,22 +69,50 @@ final class SettingsController extends Controller
         return $this->act(fn() => $this->settings->savePreferences($user, (int)$r->int('rows'), $r->str('compact') === '1'), 'Đã lưu tuỳ chọn hiển thị.', $this->back('ca-nhan'));
     }
 
-    public function warehouse(Request $r, array $p, ?User $user): Response
+    public function avatarUpload(Request $r, array $p, ?User $user): Response
     {
-        return $this->act(fn() => $this->settings->updateWarehouse($user, $r->str('name'), VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province'))), 'Đã cập nhật thông tin kho.', $this->back('kho'));
+        return $this->act(function () use ($r, $user) {
+            $f = $r->files['avatar'] ?? null;
+            $err = is_array($f) ? (int)($f['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+            if ($err === UPLOAD_ERR_NO_FILE) {
+                throw new DomainError('Hãy chọn một ảnh');
+            }
+            if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+                throw new DomainError('Ảnh quá lớn — tối đa 2 MB');
+            }
+            if ($err !== UPLOAD_ERR_OK || !is_uploaded_file((string)$f['tmp_name'])) {
+                throw new DomainError('Tải ảnh lên không thành công. Hãy thử lại.');
+            }
+            $this->settings->saveAvatar($user, (string)$f['tmp_name'], (int)$f['size']);
+        }, 'Đã cập nhật ảnh đại diện.', $this->back('ca-nhan'));
+    }
+
+    public function avatarRemove(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(fn() => $this->settings->removeAvatar($user), 'Đã xoá ảnh đại diện.', $this->back('ca-nhan'));
+    }
+
+    /** Phục vụ file ảnh (chỉ tài khoản đã đăng nhập). Đường dẫn file không bao giờ lấy từ yêu cầu — chỉ từ tên do hệ thống sinh trong CSDL. */
+    public function avatarFile(Request $r, array $p, ?User $user): Response
+    {
+        $f = $this->settings->avatarFile((int)$p['id']) ?? throw new NotFound('Không có ảnh đại diện');
+        return new Response((string)file_get_contents($f['path']), 200, [
+            'Content-Type' => $f['mime'], 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=604800', 'Content-Disposition' => 'inline',
+        ]);
     }
 
     public function staffActive(Request $r, array $p, ?User $user): Response
     {
         $on = $r->str('active') === '1';
         return $this->act(fn() => $this->settings->setStaffActive($user, (int)$r->int('user_id'), $on),
-            $on ? 'Đã mở khoá nhân viên.' : 'Đã khoá nhân viên — không đăng nhập được nữa, lịch sử thao tác vẫn được giữ.', $this->back('kho'));
+            $on ? 'Đã mở khoá nhân viên.' : 'Đã khoá nhân viên — không đăng nhập được nữa, lịch sử thao tác vẫn được giữ.', '/warehouses');
     }
 
     public function staffUpdate(Request $r, array $p, ?User $user): Response
     {
         return $this->act(fn() => $this->settings->editStaff($user, (int)$r->int('user_id'), $r->str('username'), (string)($r->post['password'] ?? '')),
-            'Đã lưu thay đổi nhân viên. Tên đăng nhập / mật khẩu mới dùng được ngay.', $this->back('kho'));
+            'Đã lưu thay đổi nhân viên. Tên đăng nhập / mật khẩu mới dùng được ngay.', '/warehouses');
     }
 
     public function system(Request $r, array $p, ?User $user): Response

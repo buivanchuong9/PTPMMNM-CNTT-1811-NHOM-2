@@ -17,6 +17,7 @@ enum Permission: string
     case XemDoiChieu = 'xem_doi_chieu';
     case XemBaoCao = 'xem_bao_cao';
     case XemDanhMuc = 'xem_danh_muc';
+    case XemKiemKe = 'xem_kiem_ke';
     // ── Tác nghiệp kho ──
     case LapPhieuNhap = 'lap_phieu_nhap';
     case LapPhieuXuat = 'lap_phieu_xuat';
@@ -24,6 +25,8 @@ enum Permission: string
     case XacNhanPhieu = 'xac_nhan_phieu';
     case NhanHangDieuChuyen = 'nhan_hang_dieu_chuyen';
     case DieuChinhPhieu = 'dieu_chinh_phieu';
+    case KiemKeThucHien = 'kiem_ke_thuc_hien';
+    case KiemKeDuyet = 'kiem_ke_duyet';
     case ThemLo = 'them_lo';
     // ── Nhân sự kho ──
     case QuanLyNhanVien = 'quan_ly_nhan_vien';
@@ -43,12 +46,15 @@ enum Permission: string
             self::XemDoiChieu => 'Đối chiếu tồn',
             self::XemBaoCao => 'Báo cáo & xuất CSV',
             self::XemDanhMuc => 'Xem danh mục kho, mặt hàng',
+            self::XemKiemKe => 'Xem kiểm kê',
             self::LapPhieuNhap => 'Lập phiếu nhập',
             self::LapPhieuXuat => 'Lập phiếu xuất',
             self::LapPhieuDieuChuyen => 'Lập phiếu điều chuyển',
             self::XacNhanPhieu => 'Xác nhận / huỷ phiếu nhập xuất',
             self::NhanHangDieuChuyen => 'Nhận hàng điều chuyển đến kho',
-            self::DieuChinhPhieu => 'Điều chỉnh (đảo) phiếu nhập xuất',
+            self::DieuChinhPhieu => 'Sửa sai phiếu đã ghi sổ (lập phiếu điều chỉnh)',
+            self::KiemKeThucHien => 'Kiểm kê: mở đợt, nhập số đếm',
+            self::KiemKeDuyet => 'Kiểm kê: duyệt chênh lệch',
             self::ThemLo => 'Thêm lô hàng',
             self::QuanLyNhanVien => 'Thêm nhân viên kho',
             self::QuanLyKho => 'Quản lý kho',
@@ -68,12 +74,15 @@ enum Permission: string
             self::XemDoiChieu => 'So khớp số dư với sổ phát sinh',
             self::XemBaoCao => 'Tải báo cáo tồn, phát sinh, đối chiếu',
             self::XemDanhMuc => 'Xem danh sách kho và mặt hàng',
+            self::XemKiemKe => 'Xem các đợt kiểm kê và kết quả (chỉ đọc)',
             self::LapPhieuNhap => 'Tạo phiếu nhập nháp tại kho của mình',
             self::LapPhieuXuat => 'Tạo phiếu xuất nháp tại kho của mình',
             self::LapPhieuDieuChuyen => 'Tạo phiếu điều chuyển từ kho của mình',
             self::XacNhanPhieu => 'Ghi sổ phiếu nháp hoặc huỷ phiếu',
             self::NhanHangDieuChuyen => 'Xác nhận đã nhận hàng từ kho khác chuyển tới kho của mình (cộng vào tồn)',
-            self::DieuChinhPhieu => 'Lập phiếu nhập xuất đảo để sửa sai phiếu nhập xuất đã ghi sổ',
+            self::DieuChinhPhieu => 'Lập phiếu điều chỉnh để hoàn lại số lượng khi một phiếu đã ghi sổ bị sai (lịch sử cũ được giữ nguyên)',
+            self::KiemKeThucHien => 'Mở đợt kiểm kê, nhập số đếm thực tế, nộp duyệt',
+            self::KiemKeDuyet => 'Duyệt chênh lệch và lập phiếu điều chỉnh',
             self::ThemLo => 'Thêm số lô, hạn dùng cho mặt hàng quản lý theo lô',
             self::QuanLyNhanVien => 'Tạo tài khoản nhân viên trong kho của mình (trang Kho & nhân sự)',
             self::QuanLyKho => 'Thêm kho mới, gắn quản lý và nhân viên cho kho',
@@ -86,23 +95,38 @@ enum Permission: string
     public function group(): string
     {
         return match ($this) {
-            self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc => 'Xem & tra cứu',
+            self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe => 'Xem & tra cứu',
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
-            self::ThemLo => 'Tác nghiệp kho',
+            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
             self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen => 'Quản trị hệ thống',
         };
     }
 
     /**
-     * Thao tác nhập / xuất / điều chuyển hằng ngày — việc của quản lý và nhân viên kho.
+     * Thao tác nhập / xuất / điều chuyển / kiểm kê hằng ngày — việc của quản lý và nhân viên kho.
      * Tài khoản quản trị hệ thống (chủ hệ thống) chỉ xem thống kê và quản lý, không thao tác các chức năng này.
      */
     public function operational(): bool
     {
         return in_array($this, [
-            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen,
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet,
         ], true);
+    }
+
+    /**
+     * Quyền xem bắt buộc phải có để dùng được chức năng này: lập / xác nhận phiếu thì phải xem được phiếu, kiểm kê thì phải xem được kiểm kê…
+     * Thiếu quyền xem thì chức năng đi kèm vô nghĩa (thao tác xong không xem được kết quả), nên bị coi là không có.
+     */
+    public function requires(): ?self
+    {
+        return match ($this) {
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu => self::XemPhieu,
+            self::KiemKeThucHien, self::KiemKeDuyet => self::XemKiemKe,
+            self::ThemLo => self::XemTonKho,
+            self::QuanLyNhanVien => self::XemDanhMuc,
+            default => null,
+        };
     }
 
     /** Chức năng hệ thống: chỉ ADMIN dùng, không giao cho quản lý / nhân viên. */
@@ -118,8 +142,8 @@ enum Permission: string
             AccountRole::Admin => !$this->operational(),
             AccountRole::Manager => !$this->adminOnly(),
             AccountRole::Staff => in_array($this, [
-                self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDanhMuc,
-                self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::NhanHangDieuChuyen,
+                self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDanhMuc, self::XemKiemKe,
+                self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::NhanHangDieuChuyen, self::KiemKeThucHien,
             ], true),
         };
     }

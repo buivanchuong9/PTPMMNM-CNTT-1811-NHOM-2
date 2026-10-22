@@ -8,6 +8,7 @@ $f->receive($f->wa, 'x', 20);
 $f->receive($f->wa, 'lot', 9);
 $f->receive($f->wb, 'y', 5);
 $issue = $f->draftIssue($f->wa, 'x', 3);
+$cid = $f->c->get(\StockFlow\Service\StockCountService::class)->open($f->keeperA, $f->wa, '');
 $transfer = $f->c->get(\StockFlow\Service\TransferService::class)->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 2)], '', null)['voucher'];
 $f->c->get(\StockFlow\Service\TransferService::class)->confirm($f->approverA, (int)$transfer['id']);
 $f->arrive((int)$transfer['id']);
@@ -53,7 +54,7 @@ section('Chủ hệ thống (tài khoản cấp cao): xem thống kê mọi kho,
 $login($f->both->username);
 $pages = ['/', '/inventory', '/inventory?view=batch', '/inventory?q=' . $f->it['x']['ma_hang'], '/vouchers', '/vouchers?status=DRAFT', '/vouchers?type=TRANSFER_OUT&q=DC',
     "/vouchers/{$issue['id']}", "/vouchers/{$transfer['id']}", "/vouchers/{$pair['id']}",
-    '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles'];
+    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles'];
 foreach ($pages as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "admin GET $p ⇒ 200");
@@ -75,7 +76,7 @@ same($get('/vouchers/99999999')[0], 404, 'phiếu nhập xuất không tồn t�
 section('Quản lý kho A: tác nghiệp trong kho mình, không vào trang quản trị, không xem kho B');
 $login($f->approverA->username);
 foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouchers/new?type=ISSUE', '/transfers/new', "/vouchers/{$issue['id']}",
-          '/history', '/reconcile', '/reports', '/warehouses', '/inventory?stock=in'] as $p) {
+          '/counts', "/counts/$cid", '/history', '/reconcile', '/reports', '/warehouses', '/inventory?stock=in'] as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "quản lý GET $p ⇒ 200");
     truthy($noPhpError($body), "quản lý GET $p: không lộ lỗi PHP");

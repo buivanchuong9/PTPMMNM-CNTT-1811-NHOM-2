@@ -1,6 +1,20 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Tên hệ thống hiển thị cho người dùng — đổi ở đây là đổi toàn bộ giao diện (thanh đầu, đăng nhập, tiêu đề tab, chân menu).
+ * Từ đầu tiên viết thường, phần sau được tô màu nhấn trong logo chữ. Tên mã nguồn / lệnh `bin/stockflow` / CSDL `stockflow` giữ nguyên.
+ */
+const APP_NAME = 'Chương Đại Dương';
+const APP_TAGLINE = 'Quản lý kho';
+
+/** Tên hệ thống dạng logo chữ: «Chương <b>Đại Dương</b>». */
+function app_brand(): string
+{
+    $parts = explode(' ', APP_NAME, 2);
+    return e($parts[0]) . (isset($parts[1]) ? ' <b>' . e($parts[1]) . '</b>' : '');
+}
+
 /** Escape HTML đầu ra. */
 function e(mixed $v): string
 {
@@ -135,6 +149,16 @@ function wh_fixed(array $wh, string $label, string $field): string
         . '<b><span class="wh-code">' . e($wh['ma']) . '</span> ' . e($wh['ten']) . '</b>'
         . '<small class="muted">' . icon('warehouse') . e($wh['dia_chi'] ?: 'Chưa có địa chỉ') . '</small>'
         . '<input type="hidden" name="' . e($field) . '" value="' . (int)$wh['id'] . '"></div>';
+}
+
+/** Ảnh đại diện tròn (hoặc chữ cái đầu của tên khi chưa có ảnh). $cls: sm | xl. */
+function avatar_html(int $id, ?string $file, string $name, string $cls = ''): string
+{
+    if ($file) {
+        return '<span class="avatar ' . e($cls) . '"><img src="/avatar/' . $id . '?v=' . substr(md5($file), 0, 8) . '" alt="" loading="lazy"></span>';
+    }
+    $parts = preg_split('/\s+/u', trim((string)preg_replace('/\(.*?\)/u', '', $name))) ?: [];
+    return '<span class="avatar ' . e($cls) . '" aria-hidden="true">' . e(mb_strtoupper(mb_substr((string)(end($parts) ?: '?'), 0, 1))) . '</span>';
 }
 
 /** Giờ ngắn gọn cho bảng dày: 21/10 15:00. */

@@ -131,7 +131,7 @@ final class VoucherController extends Controller
         return $this->act(function () use ($r, $user, $id) {
             $res = $this->vouchers->correct($user, $id, $r->str('reason'));
             return '/vouchers/' . $res['voucher']['id'];
-        }, 'Đã lập phiếu nhập xuất điều chỉnh đảo; lịch sử cũ được giữ nguyên.', "/vouchers/$id");
+        }, 'Đã lập phiếu điều chỉnh để sửa sai; lịch sử cũ được giữ nguyên.', "/vouchers/$id");
     }
 
     public function createTransfer(Request $r, array $p, ?User $user): Response

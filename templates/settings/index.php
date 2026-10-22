@@ -1,9 +1,9 @@
 <?php
 /** @var \StockFlow\Domain\User $user @var list<string> $tabs @var string $tab @var array $prefs @var array $system @var list<int> $rowOptions @var list<int> $idleOptions */
-$tabLabels = ['ca-nhan' => 'Cá nhân', 'kho' => 'Kho của tôi', 'he-thong' => 'Hệ thống', 'nhat-ky' => 'Nhật ký thao tác'];
+$tabLabels = ['ca-nhan' => 'Cá nhân', 'he-thong' => 'Hệ thống', 'nhat-ky' => 'Nhật ký thao tác'];
 $scopeNote = match ($user->role) {
     \StockFlow\Domain\AccountRole::Admin => 'Bạn là quản trị hệ thống: ngoài cài đặt cá nhân, bạn chỉnh được tham số chung của cả hệ thống và xem nhật ký thao tác.',
-    \StockFlow\Domain\AccountRole::Manager => 'Bạn là quản lý kho: ngoài cài đặt cá nhân, bạn chỉnh được thông tin kho và tài khoản nhân viên của kho mình.',
+    \StockFlow\Domain\AccountRole::Manager => 'Bạn là quản lý kho: cài đặt ở đây chỉ gồm hồ sơ, mật khẩu và cách hiển thị của riêng bạn; thông tin kho và nhân viên quản lý ở trang Kho & nhân sự.',
     default => 'Cài đặt dành cho tài khoản nhân viên: hồ sơ, mật khẩu và cách hiển thị của riêng bạn.',
 };
 $rowsLabel = fn(int $n) => $n . ' dòng / trang';
@@ -17,6 +17,25 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
 <?php endif; ?>
 
 <?php if ($tab === 'ca-nhan'): ?>
+<section class="card">
+  <div class="card-head"><h2>Ảnh đại diện</h2><span class="muted small">JPG, PNG hoặc WebP · tối đa 2 MB · tối thiểu 64×64 điểm ảnh</span></div>
+  <form class="form avatar-form" method="post" action="/settings/avatar" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+    <div class="avatar-edit">
+      <span data-avatar-preview><?= avatar_html($user->id, $user->avatar, $user->fullName, 'xl') ?></span>
+      <div class="avatar-ctrl">
+        <label class="btn btn-ghost file-pick"><?= icon('plus') ?>Chọn ảnh…<input class="sr-only" type="file" name="avatar" accept="image/jpeg,image/png,image/webp" data-avatar-input></label>
+        <small class="muted" data-avatar-name>Chưa chọn ảnh. Ảnh được cắt vuông và hiển thị hình tròn.</small>
+        <small class="count-warn err" data-avatar-error role="alert" hidden></small>
+        <div class="actions">
+          <button type="submit" disabled data-avatar-submit>Tải lên</button>
+          <?php if ($user->avatar): ?><button type="submit" class="btn-danger" formaction="/settings/avatar/remove" formnovalidate data-confirm="Xoá ảnh đại diện? Hệ thống sẽ hiển thị chữ cái đầu của tên bạn." data-confirm-ok="Xoá ảnh">Xoá ảnh</button><?php endif; ?>
+        </div>
+      </div>
+    </div>
+  </form>
+</section>
+
 <div class="grid-2">
   <section class="card">
     <div class="card-head"><h2>Hồ sơ</h2></div>
@@ -37,8 +56,8 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
     <form class="form" method="post" action="/settings/password">
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <label>Mật khẩu hiện tại<input type="password" name="current" required autocomplete="current-password"></label>
-      <label>Mật khẩu mới<input type="password" name="password" required minlength="<?= (int)$system['min_password'] ?>" autocomplete="new-password"></label>
-      <label>Nhập lại mật khẩu mới<input type="password" name="confirm" required minlength="<?= (int)$system['min_password'] ?>" autocomplete="new-password"></label>
+      <label>Mật khẩu mới<input type="password" name="password" required minlength="<?= (int)$system['min_password'] ?>" maxlength="72" autocomplete="new-password"></label>
+      <label>Nhập lại mật khẩu mới<input type="password" name="confirm" required minlength="<?= (int)$system['min_password'] ?>" maxlength="72" autocomplete="new-password"></label>
       <div class="actions"><button type="submit">Đổi mật khẩu</button></div>
     </form>
   </section>
@@ -54,62 +73,19 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
         <?php foreach ($rowOptions as $n): ?><option value="<?= $n ?>"<?= $prefs['rows_choice'] === $n ? ' selected' : '' ?>><?= e($rowsLabel($n)) ?></option><?php endforeach; ?>
       </select>
     </label>
+    <label>Hiệu ứng khi chuyển chức năng <span class="muted small">(lưu trên trình duyệt này)</span>
+      <select data-vx-select aria-label="Hiệu ứng khi chuyển chức năng">
+        <option value="slide">Trượt ngang (trang cũ thu lại, trang mới chạy từ phải sang trái) — mặc định</option>
+        <option value="fade">Mượt, nhẹ nhàng (nội dung hiện lần lượt từng khối)</option>
+        <option value="suck">Hút vào – mở ra (nội dung co về chỗ bấm rồi bung ra)</option>
+        <option value="card">Thẻ trượt (trang thu thành thẻ nhỏ, thẻ mới trượt lên rồi mở ra)</option>
+        <option value="none">Tắt hiệu ứng</option>
+      </select>
+    </label>
     <label class="check"><input type="checkbox" name="compact" value="1"<?= $prefs['compact'] ? ' checked' : '' ?>> Bảng gọn hơn (giảm khoảng cách giữa các dòng)</label>
     <div class="actions"><button type="submit">Lưu tuỳ chọn</button></div>
   </form>
 </section>
-
-<?php elseif ($tab === 'kho' && $myWarehouse): ?>
-<div class="grid-2">
-  <section class="card">
-    <div class="card-head"><h2>Thông tin kho <span class="wh-code"><?= e($myWarehouse['ma']) ?></span></h2><span class="muted small">mã kho do quản trị hệ thống cấp</span></div>
-    <form class="form" method="post" action="/settings/warehouse">
-      <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-      <label>Tên kho<input name="name" value="<?= e($myWarehouse['ten']) ?>" required maxlength="120"></label>
-      <?php $addr = \StockFlow\Domain\VnAddress::parse($myWarehouse['dia_chi'] ?? ''); include __DIR__ . '/../partials/address_fields.php'; ?>
-      <div class="actions"><button type="submit">Lưu thông tin kho</button></div>
-    </form>
-  </section>
-  <section class="card">
-    <div class="card-head"><h2>Phạm vi quản lý</h2></div>
-    <p class="muted">Bạn chỉ thấy và thao tác trong kho <b><?= e($myWarehouse['ma']) ?></b>. Chức năng của quản lý và nhân viên do quản trị hệ thống phân quyền.</p>
-    <div class="actions"><a class="btn btn-ghost" href="/warehouses"><?= icon('warehouse') ?>Kho &amp; nhân sự</a></div>
-  </section>
-</div>
-
-<section class="card flush">
-  <div class="card-head pad"><h2>Nhân viên kho <span class="count"><?= count($staff) ?></span></h2><span class="muted small">sửa tên đăng nhập, đặt lại mật khẩu hoặc khoá tài khoản</span></div>
-  <div class="table-wrap"><table class="dense">
-    <thead><tr><th>Nhân viên</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-    <tbody>
-    <?php foreach ($staff as $s): ?>
-      <tr class="<?= $s['hoat_dong'] ? '' : 'row-off' ?>">
-        <td><b><?= e($s['ho_ten']) ?></b><br><small class="muted">@<?= e($s['ten_dang_nhap']) ?></small></td>
-        <td><?= $s['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-muted">Đã khoá</span>' ?></td>
-        <td>
-          <button type="button" class="btn-ghost btn-sm" data-dialog-open="staff-edit-dlg" data-fill-label="<?= e($s['ho_ten']) ?>"
-            data-fill="<?= e(json_encode(['user_id' => (int)$s['id'], 'username' => $s['ten_dang_nhap'], 'active' => $s['hoat_dong'] ? '0' : '1', 'lock_label' => $s['hoat_dong'] ? 'Khoá tài khoản' : 'Mở khoá'], JSON_UNESCAPED_UNICODE)) ?>"><?= icon('settings') ?>Sửa</button>
-        </td>
-      </tr>
-    <?php endforeach; if (!$staff): ?><tr><td colspan="3" class="empty">Kho chưa có nhân viên. Thêm ở trang «Kho &amp; nhân sự».</td></tr><?php endif; ?>
-    </tbody>
-  </table></div>
-</section>
-
-
-<dialog id="staff-edit-dlg" class="dlg" aria-labelledby="staff-edit-t">
-  <form method="post" action="/settings/staff/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value=""><input type="hidden" name="active" value="">
-    <div class="dlg-head"><h2 id="staff-edit-t">Sửa nhân viên</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
-    <p class="muted dlg-sub">Nhân viên: <b data-dlg-label></b></p>
-    <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" pattern="[A-Za-z0-9._\-]{3,40}" placeholder="chữ thường, số, dấu . _ -"></label>
-    <label>Mật khẩu mới<input type="password" name="password" minlength="<?= (int)$system['min_password'] ?>" autocomplete="new-password" placeholder="Để trống nếu không đổi (≥ <?= (int)$system['min_password'] ?> ký tự)"></label>
-    <div class="actions">
-      <button type="submit">Lưu thay đổi</button>
-      <button type="submit" class="btn-danger" formaction="/settings/staff/active" formnovalidate data-confirm="Đổi trạng thái khoá của nhân viên này? Lịch sử thao tác vẫn được giữ."><span data-fill-text="lock_label">Khoá tài khoản</span></button>
-      <button type="button" class="btn-ghost" data-dialog-close>Huỷ</button>
-    </div>
-  </form>
-</dialog>
 
 <?php elseif ($tab === 'he-thong'): ?>
 <div class="kpis">

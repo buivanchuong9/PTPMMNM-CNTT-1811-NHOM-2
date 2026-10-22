@@ -2,6 +2,74 @@
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Kiểu hiệu ứng chuyển chức năng: 'slide' (trượt ngang, mặc định) | 'fade' (mượt) | 'suck' (hút vào – mở ra) | 'card' (thẻ trượt) | 'none'. Lưu theo trình duyệt.
+  const VX_KEY = 'sf-transition';
+  const readVx = () => { try { const v = localStorage.getItem(VX_KEY); return v === 'card' || v === 'none' || v === 'suck' || v === 'fade' ? v : 'slide'; } catch (e) { return 'slide'; } };
+  document.documentElement.dataset.vx = readVx();
+
+  // Ảnh đại diện (Cài đặt): xem trước ngay, báo lỗi sớm (loại file, dung lượng). Máy chủ vẫn kiểm tra lại toàn bộ nội dung file.
+  const initAvatar = () => {
+    const form = document.querySelector('.avatar-form');
+    if (!form) return;
+    const input = form.querySelector('[data-avatar-input]'), submit = form.querySelector('[data-avatar-submit]');
+    const nameEl = form.querySelector('[data-avatar-name]'), errEl = form.querySelector('[data-avatar-error]');
+    const preview = form.querySelector('[data-avatar-preview]'), original = preview.innerHTML;
+    const MAX = 2 * 1024 * 1024;
+    const fail = (msg) => { errEl.textContent = msg; errEl.hidden = !msg; submit.disabled = true; };
+    input.addEventListener('change', () => {
+      const f = input.files[0];
+      errEl.hidden = true;
+      if (!f) { submit.disabled = true; preview.innerHTML = original; return; }
+      nameEl.textContent = f.name + ' · ' + (f.size / 1024).toFixed(0) + ' KB';
+      if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return fail('Chỉ nhận ảnh JPG, PNG hoặc WebP');
+      if (f.size > MAX) return fail('Ảnh quá lớn — tối đa 2 MB');
+      // Đọc file thành data: URL (CSP của trang chỉ cho ảnh từ 'self' và data:, không cho blob:)
+      const reader = new FileReader();
+      reader.onerror = () => fail('Không đọc được file ảnh này');
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          if (img.naturalWidth < 64 || img.naturalHeight < 64) return fail('Ảnh quá nhỏ — tối thiểu 64×64 điểm ảnh');
+          preview.innerHTML = '<span class="avatar xl"><img alt=""></span>';
+          preview.querySelector('img').src = reader.result;
+          submit.disabled = false;
+        };
+        img.onerror = () => fail('Không đọc được file ảnh này');
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(f);
+    });
+  };
+
+  // Trang Phân quyền: các quyền phụ thuộc nhau (data-requires = quyền xem cần có). Bật chức năng ⇒ tự bật quyền xem; tắt quyền xem ⇒ tự tắt chức năng đi kèm.
+  const initRoles = () => {
+    const table = document.querySelector('table.matrix');
+    if (!table) return;
+    const flash = (box) => { const row = box.closest('tr'); row.classList.remove('dep-flash'); void row.offsetWidth; row.classList.add('dep-flash'); };
+    table.addEventListener('change', (e) => {
+      const box = e.target;
+      if (!(box instanceof HTMLInputElement) || box.type !== 'checkbox') return;
+      const col = box.name;                                                        // cùng cột = cùng vai trò (quyen[ROLE][])
+      const sameCol = [...table.querySelectorAll('input[type=checkbox]')].filter((x) => x.name === col);
+      if (box.checked && box.dataset.requires) {
+        const need = sameCol.find((x) => x.dataset.perm === box.dataset.requires);
+        if (need && !need.checked) { need.checked = true; flash(need); }
+      } else if (!box.checked && box.dataset.perm) {
+        sameCol.filter((x) => x.dataset.requires === box.dataset.perm && x.checked).forEach((x) => { x.checked = false; flash(x); });
+      }
+    });
+  };
+  const initVxSelect = () => {
+    const sel = document.querySelector('[data-vx-select]');
+    if (!sel) return;
+    sel.value = readVx();
+    sel.addEventListener('change', () => {
+      try { localStorage.setItem(VX_KEY, sel.value); } catch (e) { /* trình duyệt chặn lưu: chỉ áp dụng lần này */ }
+      document.documentElement.dataset.vx = sel.value;
+    });
+  };
+
+  const initCounters = () => {
   // KPI đếm tăng dần
   document.querySelectorAll('[data-count]').forEach((el) => {
     const target = +el.dataset.count;
@@ -14,6 +82,7 @@
     };
     requestAnimationFrame(tick);
   });
+  };
 
   // Biểu đồ (Chart.js nạp cục bộ từ /assets/vendor)
   const initCharts = () => {
@@ -23,7 +92,7 @@
     const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
     const paintChartTheme = () => { Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line'); };
     paintChartTheme();
-    document.addEventListener('themechange', () => { paintChartTheme(); Object.values(Chart.instances).forEach((c) => c.update('none')); });
+    if (!initCharts.bound) { initCharts.bound = true; document.addEventListener('themechange', () => { paintChartTheme(); Object.values(Chart.instances).forEach((c) => c.update('none')); }); }
     document.querySelectorAll('canvas[data-chart]').forEach((cv) => {
       const labels = JSON.parse(cv.dataset.labels || '[]');
       if (cv.dataset.chart === 'doughnut') {
@@ -71,6 +140,7 @@
   const vn = new Intl.NumberFormat('vi-VN');
   const SUGGEST = 8; // số gợi ý hiển thị mỗi lần
 
+  const initPickers = () => {
   // Ô chọn hàng của phiếu: bấm vào là gợi ý vài mặt hàng đầu danh sách, gõ để tìm, chọn xong mới sinh dòng có +/−
   const picker = document.getElementById('picker');
   if (picker) {
@@ -183,7 +253,7 @@
       ev.preventDefault(); // giữ focus ở ô tìm kiếm
       add(shown[+li.dataset.n]);
     });
-    document.addEventListener('click', (ev) => { if (!picker.querySelector('.pick-box').contains(ev.target)) open(false); });
+    document.addEventListener('click', (ev) => { if (picker.isConnected && !picker.querySelector('.pick-box').contains(ev.target)) open(false); });
 
     body.addEventListener('click', (ev) => {
       const tr = ev.target.closest('tr');
@@ -275,13 +345,58 @@
     });
     input.addEventListener('blur', () => { ul.hidden = true; input.value = current()?.t ?? ''; });
   });
+  };
 
-  // Xác nhận thao tác nhạy cảm
+  const initNotice = () => {
+  // Thông báo sau thao tác (flash): hiện popup giữa trang; thành công tự đóng sau vài giây, lỗi chờ người dùng bấm «Đã hiểu».
+  const notice = document.getElementById('notice-dlg');
+  if (notice && notice.showModal) {
+    notice.showModal();
+    const ms = +notice.dataset.auto;
+    if (ms > 0) {
+      notice.style.setProperty('--nt-ms', ms + 'ms');
+      setTimeout(() => { if (notice.open) notice.close(); }, ms);
+    }
+  }
+  };
+
+  // Xác nhận thao tác nhạy cảm: hộp thoại giữa trang có hiệu ứng (thay cho confirm() của trình duyệt).
+  // Phần tử có data-confirm="câu hỏi" (tuỳ chọn data-confirm-title, data-confirm-ok); nút .btn-danger ⇒ giao diện cảnh báo đỏ.
+  let confirmDlg = null;
+  const askConfirm = (el) => new Promise((resolve) => {
+    if (!confirmDlg) {
+      confirmDlg = document.createElement('dialog');
+      confirmDlg.className = 'dlg dlg-confirm';
+      confirmDlg.setAttribute('aria-labelledby', 'cf-title');
+      confirmDlg.innerHTML = '<div class="cf-icon" aria-hidden="true">!</div><h2 id="cf-title"></h2><p class="cf-msg"></p>'
+        + '<div class="actions cf-actions"><button type="button" class="btn-ghost" data-cf="no">Huỷ bỏ</button><button type="button" data-cf="yes">Xác nhận</button></div>';
+      document.body.appendChild(confirmDlg);
+    }
+    const danger = el.classList.contains('btn-danger');
+    const dlg = confirmDlg;
+    dlg.classList.toggle('is-danger', danger);
+    dlg.querySelector('#cf-title').textContent = el.dataset.confirmTitle || (danger ? 'Bạn chắc chắn chứ?' : 'Xác nhận thao tác');
+    dlg.querySelector('.cf-msg').textContent = el.dataset.confirm;
+    const yes = dlg.querySelector('[data-cf=yes]'), no = dlg.querySelector('[data-cf=no]');
+    yes.textContent = el.dataset.confirmOk || 'Xác nhận';
+    yes.className = danger ? 'btn-danger-solid' : '';
+    let answer = false;
+    const onClick = (e) => { const b = e.target.closest('[data-cf]'); if (b) { answer = b.dataset.cf === 'yes'; dlg.close(); } else if (e.target === dlg) dlg.close(); };
+    const onClose = () => { dlg.removeEventListener('click', onClick); dlg.removeEventListener('close', onClose); resolve(answer); };
+    dlg.addEventListener('click', onClick);
+    dlg.addEventListener('close', onClose);
+    dlg.showModal();
+    no.focus();   // mặc định focus «Huỷ bỏ» để Enter không vô tình xác nhận thao tác nguy hiểm
+  });
   document.addEventListener('click', (ev) => {
     const el = ev.target.closest('[data-confirm]');
-    if (el && !confirm(el.dataset.confirm)) ev.preventDefault();
+    if (!el) return;
+    if (el.dataset.confirmed) { delete el.dataset.confirmed; return; }
+    ev.preventDefault();
+    askConfirm(el).then((ok) => { if (ok) { el.dataset.confirmed = '1'; el.click(); } });
   });
 
+  const initForms = () => {
   // Chống bấm đúp: khoá nút sau lần gửi đầu (máy chủ vẫn chặn gửi lặp bằng khoá idempotency)
   document.querySelectorAll('form[data-once]').forEach((form) => {
     form.addEventListener('submit', (ev) => {
@@ -308,6 +423,7 @@
     role.addEventListener('change', sync);
     sync();
   });
+  };
 
   // Hộp thoại (<dialog>): nút [data-dialog-open] mở form; điền sẵn kho từ data-wh / data-wh-label
   document.addEventListener('click', (ev) => {
@@ -316,7 +432,7 @@
       const dlg = document.getElementById(open.dataset.dialogOpen);
       if (dlg && dlg.showModal) {
         const wh = dlg.querySelector('[name=warehouse_id]');
-        if (wh) wh.value = open.dataset.wh || '';
+        if (wh && open.dataset.wh !== undefined) wh.value = open.dataset.wh;   // nút không khai báo data-wh (VD «Mở đợt kiểm kê») giữ nguyên kho cố định của tài khoản
         const label = dlg.querySelector('[data-dlg-wh]');
         if (label) label.textContent = open.dataset.whLabel || '';
         dlg.querySelector('form').reset();
@@ -340,6 +456,68 @@
     if (ev.target instanceof HTMLDialogElement) ev.target.close(); // bấm ra ngoài hộp thoại
   });
 
+  const initCounting = () => {
+  // Kiểm kê: tính chênh lệch ngay khi gõ, chỉ hiện ô lý do khi có lệch
+  const cf = document.querySelector('[data-count-form]');
+  if (cf) {
+    const rows = [...cf.querySelectorAll('tr[data-system]')];
+    const refresh = () => {
+      if (!cf.querySelector('.count-input')) return; // đợt đã nộp/đóng: giữ số liệu do máy chủ tính
+      let net = 0, n = 0;
+      rows.forEach((tr) => {
+        const input = tr.querySelector('.count-input');
+        if (!input) return;
+        const cell = tr.querySelector('.variance');
+        const sel = tr.querySelector('.reason-select'), note = tr.querySelector('.reason-note');
+        const warn = tr.querySelector('.count-warn');
+        const sys = +tr.dataset.system;
+        const fmt = (v) => v.toLocaleString('vi-VN');
+        // Cảnh báo số đếm bất thường (không chặn): gấp đôi sổ sách trở lên, chỉ còn dưới nửa, hoặc sổ sách = 0 mà đếm ra hàng
+        const suspicion = (v) => {
+          if (v > 1000000) return ['err', 'Tối đa 1.000.000'];
+          if (sys === 0) return v > 0 ? ['warn', `Sổ sách không có hàng mà đếm được ${fmt(v)} — kiểm tra lại?`] : null;
+          if (v >= sys * 2 && v - sys >= 5) return ['warn', `Gấp ${(v / sys).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} lần sổ sách (${fmt(sys)}) — gõ thừa số? Kiểm tra lại.`];
+          if (v === 0 && sys >= 5) return ['warn', `Đếm được 0 trong khi sổ sách có ${fmt(sys)} — hết sạch thật không?`];
+          if (v <= sys / 2 && sys - v >= 5) return ['warn', `Chỉ bằng ${Math.round(v / sys * 100)}% sổ sách (${fmt(sys)}) — gõ thiếu số? Kiểm tra lại.`];
+          return null;
+        };
+        const showWarn = (w) => {
+          warn.hidden = !w;
+          warn.textContent = w ? w[1] : '';
+          warn.className = 'count-warn' + (w ? ' ' + w[0] : '');
+          input.classList.toggle('is-warn', !!w && w[0] === 'warn');
+          input.setCustomValidity(w && w[0] === 'err' ? w[1] : '');
+        };
+        if (input.value === '') { showWarn(null); cell.textContent = 'khớp'; cell.className = 'num variance muted'; sel.required = false; sel.hidden = note.hidden = true; return; }
+        showWarn(suspicion(+input.value));
+        const d = +input.value - sys;
+        cell.textContent = d === 0 ? '✓' : (d > 0 ? '+' : '') + d;
+        cell.className = 'num variance ' + (d === 0 ? '' : d > 0 ? 'pos' : 'neg');
+        sel.hidden = note.hidden = d === 0;
+        sel.required = d !== 0;
+        if (d !== 0) { net += d; n++; }
+      });
+      const fmt = (v) => (v > 0 ? '+' : '') + v;
+      const netEl = cf.querySelector('[data-var-net]');
+      cf.querySelector('[data-var-lines]').textContent = n;
+      netEl.textContent = fmt(net);
+      netEl.className = net > 0 ? 'pos' : net < 0 ? 'neg' : '';
+    };
+    // Ô thực đếm chỉ nhận chữ số: chặn phím ký tự / dấu âm / dấu chấm, và lọc cả khi dán
+    cf.addEventListener('keydown', (e) => {
+      if (!e.target.classList.contains('count-input') || e.ctrlKey || e.metaKey || e.altKey || e.key.length > 1) return;
+      if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+    });
+    cf.addEventListener('input', (e) => {
+      if (e.target.classList.contains('count-input')) {
+        const clean = e.target.value.replace(/\D+/g, '').replace(/^0+(?=\d)/, '');
+        if (clean !== e.target.value) e.target.value = clean;
+      }
+      refresh();
+    });
+    refresh();
+  }
+
   // ── Lọc tự động: chọn mục là lọc ngay, gõ tìm kiếm thì lọc dần (không cần bấm nút «Lọc») ──
   // Chỉ thay các vùng [data-live] (bảng kết quả, thanh tab) bằng bản mới từ máy chủ — ô lọc giữ nguyên nên không mất con trỏ khi đang gõ.
   // Ô có [data-live-reload] (đổi cả bộ lọc đi kèm, VD «Kiểu xem») thì tải lại trang.
@@ -357,7 +535,7 @@
       const target = urlOf();
       if (target === last) return;
       last = target;
-      if (reload) { location.href = target; return; }
+      if (reload) { window.spaGo ? window.spaGo(target) : (location.href = target); return; }
       const mine = ++seq;
       document.body.classList.add('is-filtering');
       try {
@@ -384,4 +562,221 @@
     });
     form.addEventListener('submit', (e) => { e.preventDefault(); clearTimeout(timer); run(false); });   // Enter: lọc ngay
   });
+  };
+
+  // ── Điều hướng không tải lại trang ──
+  // Thanh đầu và thanh chức năng đứng yên; bấm liên kết / gửi form chỉ đổi vùng nội dung bên phải (<main>).
+  // Trang không thuộc khung này (đăng nhập, trang lỗi, tải CSV…) vẫn chuyển trang bình thường.
+  const initPage = (swapped) => { initRoles(); initAvatar(); initVxSelect(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
+  initPage();
+
+  const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
+  if (SPA_OK) {
+    const skipUrl = (u) => u.origin !== location.origin || /^\/(login|logout|assets)(\/|$)/.test(u.pathname) || /\.(csv|pdf|xlsx?)$/i.test(u.pathname);
+    const bar = document.createElement('div');
+    bar.className = 'spa-bar';
+    bar.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(bar);
+    let seq = 0, here = location.pathname + location.search;
+
+    const swapIn = (doc, url, push, fx) => {
+      if (window.Chart) Object.values(Chart.instances).forEach((c) => c.destroy());
+      const cur = document.getElementById('main');
+      cur.innerHTML = doc.getElementById('main').innerHTML;
+      document.title = doc.title;
+      // Thanh đầu / thanh menu: chỉ đụng tới phần tử khi nội dung thật sự đổi — thay lại y nguyên sẽ làm chúng nháy.
+      const nav = document.querySelector('.sidebar nav'), freshNav = doc.querySelector('.sidebar nav');
+      if (nav && freshNav) {
+        const mine = [...nav.querySelectorAll('a')], theirs = [...freshNav.querySelectorAll('a')];
+        if (mine.length === theirs.length && mine.every((a, i) => a.getAttribute('href') === theirs[i].getAttribute('href'))) {
+          mine.forEach((a, i) => {                                                    // cùng danh sách mục: chỉ chuyển dấu «đang mở»
+            const on = theirs[i].classList.contains('active');
+            if (a.classList.contains('active') !== on) a.classList.toggle('active', on);
+            if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+          });
+        } else nav.innerHTML = freshNav.innerHTML;                                   // quyền đổi nên menu đổi: thay cả khối
+      }
+      ['.topuser .who', '.topuser .avatar'].forEach((q) => { const a = document.querySelector(q), b = doc.querySelector(q); if (a && b && a.outerHTML !== b.outerHTML) a.replaceWith(document.importNode(b, true)); });
+      document.body.classList.toggle('compact', doc.body.classList.contains('compact'));
+      document.getElementById('notice-dlg')?.remove();                               // thông báo kết quả thao tác nằm ngoài <main>
+      const nd = doc.getElementById('notice-dlg');
+      if (nd) document.body.appendChild(document.importNode(nd, true));
+      if (push) history.pushState({ spa: 1 }, '', url);
+      here = location.pathname + location.search;
+      document.getElementById('sidebar')?.classList.remove('open');
+      cur.scrollTop = 0;
+      cur.classList.remove('vx-out');
+      cur.style.visibility = '';
+      if (fx && !reducedMotion.matches && readVx() !== 'none') {                     // chỉ khi bấm ở thanh menu: bung ra từ điểm vừa bấm
+        [...cur.children].forEach((el, i) => el.style.setProperty('--i', Math.min(i, 8)));   // kiểu «Mượt»: hiện lần lượt, tối đa 9 nhịp
+        void cur.offsetWidth;
+        cur.classList.add('vx-in');
+        const done = (e) => { if (!e || e.target === cur || (e.animationName === 'fx-up' && e.target === cur.lastElementChild)) { cur.classList.remove('vx-in'); cur.removeEventListener('animationend', done); } };
+        cur.addEventListener('animationend', done);
+        setTimeout(done, Math.max((parseFloat(getComputedStyle(cur).animationDuration) || 0) * 1000, 1000) + 600);
+      }
+      cur.focus({ preventScroll: true });
+      initPage(true);
+    };
+
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const originOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+
+    // Kiểu «thẻ trượt»: chụp một BẢN SAO của trang cũ (.main-ghost) để nó vẫn hiện thành thẻ nhỏ rồi trượt lên, trong khi trang mới (đang tải) trượt từ dưới lên đẩy nó đi.
+    const dropGhosts = () => document.querySelectorAll('.main-ghost').forEach((g) => g.remove());
+    const playCardExit = () => new Promise((resolve) => {
+      const m = document.getElementById('main'), wrap = m.parentElement;
+      dropGhosts();
+      const g = m.cloneNode(true);
+      g.removeAttribute('id'); g.removeAttribute('tabindex'); g.className = 'main-ghost';
+      g.setAttribute('inert', ''); g.setAttribute('aria-hidden', 'true');
+      g.querySelectorAll('[id]').forEach((e) => e.removeAttribute('id'));
+      g.querySelectorAll('dialog').forEach((e) => e.remove());
+      const src = m.querySelectorAll('canvas'), dst = g.querySelectorAll('canvas');
+      src.forEach((c, i) => { try { dst[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { /* biểu đồ không chép được: bỏ qua */ } });
+      wrap.appendChild(g);
+      g.scrollTop = m.scrollTop;                                                    // thẻ cũ giữ đúng đoạn trang đang xem
+      m.style.visibility = 'hidden';                                                // nội dung thật ẩn đi cho tới khi trang mới sẵn sàng
+      const dur = (parseFloat(getComputedStyle(g).animationDuration) || 0.64) * 1000;
+      g.addEventListener('animationend', (e) => { if (e.target === g && e.animationName === 'card-ghost') g.remove(); });   // chỉ khi chính thẻ chạy xong (không phải khối con bên trong)
+      setTimeout(() => g.remove(), dur + 500);
+      setTimeout(resolve, dur * 0.3);                                               // tới lúc thẻ cũ bắt đầu trượt lên thì thẻ mới cũng được phép trượt lên
+    });
+
+    // Hiệu ứng «hút vào»: nội dung cũ co lại về phía chỗ vừa bấm (mục menu / nút) rồi tan. Chạy song song với việc tải trang mới.
+    const playExit = (origin) => new Promise((resolve) => {
+      const m = document.getElementById('main');
+      if (reducedMotion.matches || readVx() === 'none') return resolve();
+      if (readVx() === 'card') return resolve(playCardExit());
+      const r = m.getBoundingClientRect(), o = origin || { x: r.left + r.width / 2, y: r.top + r.height / 3 };
+      m.style.setProperty('--vx-ox', ((o.x - r.left) / r.width * 100).toFixed(1) + '%');
+      m.style.setProperty('--vx-oy', ((o.y - r.top) / r.height * 100).toFixed(1) + '%');
+      m.classList.remove('vx-in');
+      void m.offsetWidth;
+      m.classList.add('vx-out');
+      let finished = false;
+      const end = () => { if (finished) return; finished = true; m.removeEventListener('animationend', onEnd); resolve(); };
+      const onEnd = (e) => { if (e.target === m && /^(vx|card|fx|sl)-out$/.test(e.animationName)) end(); };
+      m.addEventListener('animationend', onEnd);
+      setTimeout(end, (parseFloat(getComputedStyle(m).animationDuration) || 0.3) * 1000 + 400);   // dự phòng nếu animationend không bắn
+    });
+
+    const load = async (url, opts = {}) => {
+      const mine = ++seq, method = opts.method || 'GET';
+      document.body.classList.add('spa-busy');
+      const exit = opts.fx ? playExit(opts.origin) : Promise.resolve();                // chỉ menu bên trái mới có hiệu ứng chuyển
+      if (!opts.fx) {                                                                  // bấm trong nội dung: đổi ngay, đồng thời dọn hiệu ứng còn dở (nếu có)
+        const m0 = document.getElementById('main');
+        m0.classList.remove('vx-out', 'vx-in'); m0.style.visibility = ''; dropGhosts();
+      }
+      let leaving = false, swapped = false;
+      try {
+        const res = await fetch(url, { method, body: opts.body, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+        if (mine !== seq) return;                                                    // đã có lần bấm mới hơn
+        const html = (res.headers.get('content-type') || '').includes('text/html') ? await res.text() : null;
+        const doc = html === null ? null : new DOMParser().parseFromString(html, 'text/html');
+        if (doc && doc.querySelector('meta[name=spa-layout]')?.content === 'app' && doc.getElementById('main')) {
+          await exit;                                                                // đợi nội dung cũ «hút vào» xong rồi mới bung nội dung mới
+          if (mine !== seq) return;
+          swapIn(doc, res.url, opts.push !== false, !!opts.fx);
+          swapped = true;
+          return;
+        }
+        leaving = true;
+        if (method === 'GET') { location.href = res.url || url; return; }            // khung khác (đăng nhập, trang lỗi…): tải trang thường
+        document.open(); document.write(html ?? ''); document.close(); history.pushState(null, '', res.url);   // POST đã xử lý xong, không gửi lại lần hai
+      } catch (e) {
+        if (method === 'GET') { leaving = true; location.href = url; } else alert('Mất kết nối tới máy chủ. Hãy thử lại.');
+      } finally {
+        if (mine === seq) {
+          document.body.classList.remove('spa-busy');
+          if (!leaving && !swapped) { const mm = document.getElementById('main'); mm?.classList.remove('vx-out'); if (mm) mm.style.visibility = ''; dropGhosts(); }   // không đổi được trang (lỗi mạng…): trả nội dung về
+        }
+      }
+    };
+    window.spaGo = (url) => load(url);
+
+    document.addEventListener('click', (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest('a[href]');
+      if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download') || a.hasAttribute('data-no-spa')) return;
+      const u = new URL(a.href, location.href);
+      if (skipUrl(u) || (u.pathname + u.search === here && u.hash)) return;
+      e.preventDefault();
+      load(u.pathname + u.search, { origin: originOf(a), fx: !!a.closest('.sidebar') });
+    });
+
+    document.addEventListener('submit', (e) => {
+      const f = e.target;
+      if (e.defaultPrevented || !(f instanceof HTMLFormElement) || f.target || f.hasAttribute('data-no-spa')) return;
+      const sub = e.submitter;
+      const u = new URL(sub?.getAttribute('formaction') || f.getAttribute('action') || location.href, location.href);
+      if (skipUrl(u)) return;
+      e.preventDefault();
+      const fd = new FormData(f, sub);
+      if ((sub?.getAttribute('formmethod') || f.method || 'get').toUpperCase() === 'GET') {
+        const q = new URLSearchParams();
+        fd.forEach((v, k) => { if (typeof v === 'string' && v.trim() !== '') q.append(k, v); });
+        load(u.pathname + (q.toString() ? '?' + q : ''));
+      } else {
+        load(u.pathname + u.search, { method: 'POST', body: f.enctype === 'multipart/form-data' ? fd : new URLSearchParams(fd) });   // form tải file gửi nguyên FormData
+      }
+    });
+
+    addEventListener('popstate', () => { if (location.pathname + location.search !== here) load(location.pathname + location.search, { push: false }); });
+  }
+
+  // ── Thanh cuộn xe tải: thay thanh cuộn mặc định của vùng nội dung (<main>) ──
+  const wrap = document.querySelector('.main-wrap'), scroller = document.getElementById('main');
+  if (wrap && scroller) {
+    const bar = document.createElement('div');
+    bar.className = 'truck-bar';
+    bar.setAttribute('aria-hidden', 'true');
+    bar.innerHTML = '<span class="truck-road"></span><div class="truck-thumb"><svg viewBox="0 0 36 20" fill="none">'
+      + '<rect x="1" y="2.5" width="21" height="11.5" rx="2" fill="var(--brand)"/><rect x="4" y="5" width="15" height="1.6" rx=".8" fill="#fff" opacity=".4"/><rect x="4" y="8.4" width="15" height="1.6" rx=".8" fill="#fff" opacity=".4"/>'
+      + '<path d="M22.6 6h6.5l4.9 5v3H22.6z" fill="var(--brand-600, #b32433)"/><path d="M24.6 7.4h3.9l2.7 2.8h-6.6z" fill="#fff" opacity=".85"/>'
+      + '<g class="truck-wh"><circle cx="8" cy="15.6" r="3.1" fill="#2b2f3a"/><path d="M8 13.4v4.4M5.8 15.6h4.4" stroke="#cbd2de" stroke-width=".9"/></g>'
+      + '<g class="truck-wh"><circle cx="28.5" cy="15.6" r="3.1" fill="#2b2f3a"/><path d="M28.5 13.4v4.4M26.3 15.6h4.4" stroke="#cbd2de" stroke-width=".9"/></g></svg></div>';
+    wrap.appendChild(bar);
+    const thumb = bar.querySelector('.truck-thumb');
+    let last = 0, movingTimer = 0, raf = 0, drag = null;
+    const metrics = () => ({ max: scroller.scrollHeight - scroller.clientHeight, free: bar.clientHeight - thumb.offsetHeight });
+    const place = () => {
+      raf = 0;
+      const { max, free } = metrics();
+      const on = max > 2 && free > 0;
+      bar.classList.toggle('on', on);
+      if (on) thumb.style.transform = 'translateY(' + (scroller.scrollTop / max * free) + 'px)';
+    };
+    const queue = () => { if (!raf) raf = requestAnimationFrame(place); };
+    scroller.addEventListener('scroll', () => {
+      const d = scroller.scrollTop - last;
+      if (d) bar.classList.toggle('up', d < 0);
+      last = scroller.scrollTop;
+      bar.classList.add('moving');
+      clearTimeout(movingTimer);
+      movingTimer = setTimeout(() => bar.classList.remove('moving'), 160);
+      queue();
+    }, { passive: true });
+    addEventListener('resize', queue);
+    new ResizeObserver(queue).observe(scroller);
+    new MutationObserver(queue).observe(scroller, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style', 'open'] });
+    thumb.addEventListener('pointerdown', (e) => {
+      const m = metrics();
+      drag = { y: e.clientY, top: scroller.scrollTop, max: m.max, free: m.free };
+      thumb.setPointerCapture(e.pointerId);
+      bar.classList.add('drag', 'moving');
+      e.preventDefault();
+    });
+    thumb.addEventListener('pointermove', (e) => { if (drag && drag.free > 0) scroller.scrollTop = drag.top + (e.clientY - drag.y) / drag.free * drag.max; });
+    const stop = () => { drag = null; bar.classList.remove('drag'); };
+    thumb.addEventListener('pointerup', stop);
+    thumb.addEventListener('pointercancel', stop);
+    bar.addEventListener('pointerdown', (e) => {                                   // bấm lên đường chạy: xe chạy tới chỗ đó
+      if (e.target.closest('.truck-thumb')) return;
+      const { max, free } = metrics(), r = bar.getBoundingClientRect();
+      if (free > 0) scroller.scrollTo({ top: Math.min(1, Math.max(0, (e.clientY - r.top - thumb.offsetHeight / 2) / free)) * max, behavior: 'smooth' });
+    });
+    place();
+  }
 })();

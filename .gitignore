@@ -11,3 +11,7 @@ dist/
 lab*/
 
 .claude/
+
+# Ảnh đại diện do người dùng tải lên (giữ lại thư mục, không commit ảnh)
+storage/avatars/*
+!storage/avatars/.gitkeep

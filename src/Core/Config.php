@@ -16,6 +16,13 @@ final class Config
         return dirname(__DIR__, 2);
     }
 
+    /** Thư mục lưu dữ liệu do người dùng tải lên (ngoài thư mục web). Có thể đổi bằng biến môi trường STOCKFLOW_STORAGE (dùng khi kiểm thử). */
+    public static function storage(string $sub = ''): string
+    {
+        $base = getenv('STOCKFLOW_STORAGE') ?: self::root() . '/storage';
+        return $sub === '' ? $base : $base . '/' . $sub;
+    }
+
     /** @return array{driver?:string,path?:string,host?:string,port?:string,database?:string,user?:string,password?:string} */
     public static function database(): array
     {

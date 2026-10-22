@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/hero.svg" alt="StockFlow WMS" width="100%">
+<img src="docs/images/hero.svg" alt="Chương Đại Dương — quản lý kho" width="100%">
 
 <a href="https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-1"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=2600&pause=800&color=EE4D2D&center=true&vCenter=true&width=700&lines=Qu%E1%BA%A3n+l%C3%BD+kho+%C4%91a+%C4%91i%E1%BB%83m;%C4%90i%E1%BB%81u+chuy%E1%BB%83n+h%C3%A0ng+an+to%C3%A0n+nguy%C3%AAn;Ki%E1%BB%83m+k%C3%AA+%E2%86%92+%C4%91i%E1%BB%81u+ch%E1%BB%89nh+c%C3%B3+d%E1%BA%A5u+v%E1%BA%BFt;T%E1%BB%93n+lu%C3%B4n+kh%E1%BB%9Bp+s%E1%BB%95+ph%C3%A1t+sinh" alt="Typing SVG"></a>
 
@@ -19,7 +19,7 @@
 
 ## 🎬 Xem nhanh
 
-<div align="center"><img src="docs/images/tour.gif" alt="Tour giao diện StockFlow" width="94%"></div>
+<div align="center"><img src="docs/images/tour.gif" alt="Tour giao diện Chương Đại Dương" width="94%"></div>
 
 | 🏬 | 📥📤 | 🚚 | 📋 | 📖 | ↩️ |
 |:-:|:-:|:-:|:-:|:-:|:-:|
@@ -174,6 +174,7 @@ src/Service/       Ledger · Voucher · Transfer · StockQuery · Authorizer
 src/Http/          controller mỏng
 templates/         giao diện
 database/          migrations · seed
+storage/avatars/   ảnh đại diện do người dùng tải lên (tên file lưu ở cột nguoi_dung.anh_dai_dien; không commit ảnh)
 tests/             Unit · Integration · Http
 bin/stockflow      demo · db-config · db-sync · migrate · seed · setup · serve · test
 ```

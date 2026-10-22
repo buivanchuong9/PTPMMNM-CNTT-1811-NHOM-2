@@ -90,6 +90,7 @@ same($a->req('POST', "/vouchers/{$vb['id']}/cancel", ['csrf' => $csrf])['status'
 same($a->req('GET', "/vouchers/{$vb['id']}")['status'], 403, 'GET xem phiếu kho B ⇒ 403');
 same($a->req('POST', '/transfers', ['csrf' => $csrf, 'from_wh' => $f->wb, 'to_wh' => $f->wa, 'idem' => bin2hex(random_bytes(16)),
     'line' => ["{$f->it['x']['item']}:{$f->it['x']['batch']}"], 'qty' => ['5']])['status'], 403, 'POST điều chuyển ĐI từ kho B ⇒ 403');
+same($a->req('POST', '/counts', ['csrf' => $csrf, 'warehouse_id' => $f->wb])['status'], 403, 'POST mở kiểm kê kho B ⇒ 403');
 same($a->req('GET', '/users')['status'], 403, 'trang quản trị tài khoản ⇒ 403');
 same($a->req('POST', '/warehouses', ['csrf' => $csrf, 'code' => 'HACK', 'name' => 'x'])['status'], 403, 'tạo kho mới ⇒ 403');
 same([$count('SELECT COUNT(*) FROM phieu_nhap_xuat WHERE kho_id = ?', [$f->wb]), $f->movements($f->wb), $f->stock($f->wb, 'x')], $before, 'kho B: phiếu nhập xuất, sổ, tồn đều nguyên vẹn');

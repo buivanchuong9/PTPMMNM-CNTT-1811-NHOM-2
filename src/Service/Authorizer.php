@@ -50,6 +50,12 @@ final class Authorizer
             foreach (Permission::cases() as $p) {
                 $m[$role->value][$p->value] = !$p->adminOnly() && ($stored[$role->value][$p->value] ?? $p->defaultFor($role));
             }
+            // Chức năng đi kèm chỉ có hiệu lực khi vai trò cũng có quyền xem tương ứng (kể cả khi dữ liệu trong CSDL được sửa tay)
+            foreach (Permission::cases() as $p) {
+                if ($m[$role->value][$p->value] && ($need = $p->requires()) !== null && !$m[$role->value][$need->value]) {
+                    $m[$role->value][$p->value] = false;
+                }
+            }
         }
         return $this->matrix = $m;
     }
@@ -146,11 +152,20 @@ final class Authorizer
         $this->requireAdmin($actor);
         $this->db->transaction(function () use ($granted) {
             foreach (AccountRole::configurable() as $role) {
+                $want = [];
+                foreach (Permission::cases() as $p) {
+                    $want[$p->value] = !$p->adminOnly() && in_array($p->value, $granted[$role->value] ?? [], true);
+                }
+                foreach (Permission::cases() as $p) {                      // thiếu quyền xem đi kèm ⇒ tắt chức năng phụ thuộc (ít quyền hơn là an toàn hơn)
+                    if ($want[$p->value] && ($need = $p->requires()) !== null && !$want[$need->value]) {
+                        $want[$p->value] = false;
+                    }
+                }
                 foreach (Permission::cases() as $p) {
                     if ($p->adminOnly()) {
                         continue;
                     }
-                    $on = in_array($p->value, $granted[$role->value] ?? [], true) ? 1 : 0;
+                    $on = $want[$p->value] ? 1 : 0;
                     $this->db->exec('DELETE FROM phan_quyen_vai_tro WHERE vai_tro = ? AND quyen = ?', [$role->value, $p->value]);
                     $this->db->exec('INSERT INTO phan_quyen_vai_tro (vai_tro, quyen, duoc_phep) VALUES (?,?,?)', [$role->value, $p->value, $on]);
                 }

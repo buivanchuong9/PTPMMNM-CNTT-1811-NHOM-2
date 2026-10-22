@@ -31,7 +31,7 @@ final class AdminController extends Controller
         $visible = $this->auth->visibleWarehouseIds($user);
         $directory = array_values(array_filter($this->catalog->warehouseDirectory(), fn($w) => $user->isAdmin || in_array((int)$w['id'], $visible, true)));
         [$rows, $pg] = Paginator::of($directory, $r);
-        return $this->render('admin/warehouses', $user, 'warehouses', ['rows' => $rows, 'pg' => $pg, 'stats' => array_column($this->query->dashboard($user)['warehouses'], null, 'id')], 'Kho');
+        return $this->render('admin/warehouses', $user, 'warehouses', ['rows' => $rows, 'pg' => $pg, 'stats' => array_column($this->query->dashboard($user)['warehouses'], null, 'id'), 'minPassword' => $this->catalog->minPassword()], 'Kho');
     }
 
     public function addWarehouse(Request $r, array $p, ?User $user): Response
@@ -99,7 +99,7 @@ final class AdminController extends Controller
         [$pageUsers, $pg] = Paginator::of(array_values(array_filter($this->catalog->users(), fn($u) => (int)$u['id'] !== $user->id)), $r);
         return $this->render('admin/users', $user, 'users', [
             'users' => $pageUsers, 'pg' => $pg, 'warehouses' => array_values(array_filter($this->catalog->warehouses(), fn($w) => $w['hoat_dong'])),
-            'accountRoles' => AccountRole::cases(),
+            'accountRoles' => AccountRole::cases(), 'minPassword' => $this->catalog->minPassword(),
         ], 'Tài khoản');
     }
 

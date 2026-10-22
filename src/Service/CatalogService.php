@@ -42,7 +42,7 @@ final class CatalogService
     public function users(): array
     {
         return $this->db->all(
-            "SELECT n.id, n.ten_dang_nhap, n.ho_ten, n.vai_tro, n.kho_id, n.hoat_dong, w.ma AS kho_ma, w.ten AS kho_ten, w.dia_chi AS kho_dia_chi
+            "SELECT n.id, n.ten_dang_nhap, n.ho_ten, n.vai_tro, n.kho_id, n.hoat_dong, n.anh_dai_dien, w.ma AS kho_ma, w.ten AS kho_ten, w.dia_chi AS kho_dia_chi
              FROM nguoi_dung n LEFT JOIN kho w ON w.id = n.kho_id
              ORDER BY CASE n.vai_tro WHEN 'ADMIN' THEN 0 WHEN 'MANAGER' THEN 1 ELSE 2 END, w.ma, n.ten_dang_nhap"
         );
@@ -55,7 +55,7 @@ final class CatalogService
     public function warehouseDirectory(): array
     {
         $byWh = [];
-        foreach ($this->db->all("SELECT id, ten_dang_nhap, ho_ten, vai_tro, kho_id, hoat_dong, ngay_tao FROM nguoi_dung WHERE vai_tro <> 'ADMIN' ORDER BY ten_dang_nhap") as $u) {
+        foreach ($this->db->all("SELECT id, ten_dang_nhap, ho_ten, vai_tro, kho_id, hoat_dong, anh_dai_dien, ngay_tao FROM nguoi_dung WHERE vai_tro <> 'ADMIN' ORDER BY ten_dang_nhap") as $u) {
             $byWh[(int)$u['kho_id']][] = $u;
         }
         $out = [];
@@ -73,6 +73,12 @@ final class CatalogService
             $out[] = $w;
         }
         return $out;
+    }
+
+    /** Độ dài mật khẩu tối thiểu do quản trị đặt (để form hiển thị đúng ràng buộc). */
+    public function minPassword(): int
+    {
+        return $this->settings->minPassword();
     }
 
     // ───── ghi (quản trị) ─────
@@ -131,11 +137,11 @@ final class CatalogService
         if ($name === '' || mb_strlen($name) > 160) {
             throw new DomainError('Tên mặt hàng không hợp lệ');
         }
-        if ($reorder < 0) {
-            throw new DomainError('Định mức tồn tối thiểu không được âm');
+        if ($reorder < 0 || $reorder > 1000000) {
+            throw new DomainError('Định mức tồn tối thiểu phải từ 0 đến 1.000.000');
         }
         if ($packSize < 1 || $packSize > 1000000) {
-            throw new DomainError('Quy cách lô phải từ 1 trở lên');
+            throw new DomainError('Quy cách lô phải từ 1 đến 1.000.000');
         }
         if (!$this->db->value('SELECT 1 FROM don_vi_tinh WHERE id = ?', [$unitId])) {
             throw new DomainError('Đơn vị tính không hợp lệ');
@@ -157,10 +163,10 @@ final class CatalogService
     {
         $this->auth->requireAdmin($actor);
         if ($packSize < 1 || $packSize > 1000000) {
-            throw new DomainError('Quy cách lô phải từ 1 trở lên');
+            throw new DomainError('Quy cách lô phải từ 1 đến 1.000.000');
         }
-        if ($reorder < 0) {
-            throw new DomainError('Định mức tồn tối thiểu không được âm');
+        if ($reorder < 0 || $reorder > 1000000) {
+            throw new DomainError('Định mức tồn tối thiểu phải từ 0 đến 1.000.000');
         }
         $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
         $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ? WHERE id = ?', [$packSize, $reorder, $itemId]);
