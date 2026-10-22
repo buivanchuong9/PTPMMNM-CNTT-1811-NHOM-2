@@ -76,7 +76,7 @@ Lần đầu tự dựng bảng + nạp dữ liệu mẫu (**3 kho · 30 mặt h
 
 ### 🔄 Máy khác `git pull` về — kiểm tra & tự sửa database (XAMPP / MySQL)
 
-Mã nguồn đổi thì cấu trúc database có thể đổi theo (tên bảng, cột, ràng buộc…). Sau mỗi lần `git pull`, chạy **một lệnh**:
+Mã nguồn đổi thì cấu trúc database có thể đổi theo (tên bảng, cột, ràng buộc…). **Không cần làm gì thêm:** `php bin/stockflow serve` tự chạy `db-sync` trước khi mở web — database cũ được sao lưu, sửa đúng chuẩn và nạp lại dữ liệu (chỉ in thông báo khi có thay đổi; lỗi đồng bộ chỉ cảnh báo, web vẫn chạy). Muốn chạy riêng/ kiểm tra bằng tay:
 
 ```bash
 php bin/stockflow db-sync
@@ -141,7 +141,7 @@ Lỗi kết nối được giải thích kèm cách xử lý (MySQL chưa chạy
 ## 🧭 Thử ngay: 2 tình huống
 
 **① Nhập → xác nhận → xuất → tra cứu**
-`hn.nv1` *Lập phiếu nhập* → đăng xuất → `hn.quanly` *Xác nhận* → `hn.nv1` *Lập phiếu xuất* → `hn.quanly` *Xác nhận* → **Tồn kho** · **Lịch sử phát sinh**
+`hn.nv1` *Lập phiếu nhập* → đăng xuất → `hn.quanly` *Xác nhận* → `hn.nv1` *Lập phiếu xuất* → `hn.quanly` *Xác nhận* → **Hàng hoá** (danh mục + quy cách lô + tồn theo kho) · **Lịch sử phát sinh**
 
 **② Điều chuyển → kiểm kê → điều chỉnh**
 `hn.nv1` *Điều chuyển kho* HN01→DN01 → `hn.quanly` *Xác nhận* (sinh **DCX + DCN**) → `dn.nv1` *Kiểm kê* nhập số đếm + lý do → `dn.quanly` *Xác nhận chênh lệch* → **Đối chiếu tồn** báo **KHỚP**

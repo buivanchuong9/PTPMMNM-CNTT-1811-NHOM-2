@@ -112,10 +112,32 @@ function cmdDemo(array $argv): int
     return cmdServe();
 }
 
+/**
+ * Trước khi chạy web: tự đồng bộ cấu trúc CSDL MySQL với mã nguồn (sau khi `git pull` có đổi database/migrations thì chỉ việc chạy `serve`).
+ * Dữ liệu cũ được sao lưu rồi nạp lại; lỗi đồng bộ chỉ cảnh báo, không chặn chạy web.
+ */
+function autoSyncDatabase(): void
+{
+    try {
+        $config = Config::database();
+        if (($config['driver'] ?? 'mysql') === 'sqlite') {
+            return;
+        }
+        SchemaSync::ensureDatabase($config);
+        $log = (new SchemaSync(connect(), $config))->run(true);
+        if (!str_starts_with($log[0], '✔ CSDL')) {   // chỉ in khi có thay đổi
+            echo implode("\n", $log), "\n";
+        }
+    } catch (Throwable $e) {
+        fwrite(STDERR, '⚠ Không tự đồng bộ được CSDL: ' . Db::explain($e) . "\n  Thử chạy: bin/stockflow db-sync\n");
+    }
+}
+
 function cmdServe(): int
 {
     $port = getenv('PORT') ?: '8080';
     $root = Config::root();
+    autoSyncDatabase();
     @mkdir("$root/.local/sessions", 0700, true);
     echo "▶ StockFlow tại http://127.0.0.1:$port  (Ctrl+C để dừng)\n";
     passthru(sprintf('php -d session.save_path=%s -S 127.0.0.1:%s -t %s %s',

@@ -31,6 +31,13 @@ final class Branch { public function __construct(public Leaf $leaf) {} }
 $c = new Container();
 same($c->get(Branch::class)->leaf === $c->get(Leaf::class), true, 'tự nối dependency, dùng chung một instance');
 
+section('Quy đổi lô (quy cách)');
+same(pack_label(130, 24), '5 lô + 10 lẻ', '130 cái, 24/lô → 5 lô + 10 lẻ');
+same(pack_label(48, 24), '2 lô', 'chẵn lô');
+same(pack_label(7, 24), '7 lẻ', 'chưa đủ một lô');
+same(pack_label(50, 1), '', 'quy cách 1 ⇒ không quy đổi');
+same(pack_label(0, 24), '', 'hết hàng ⇒ không quy đổi');
+
 section('User');
 same((new User(1, 'x', 'Hoàng Gia Khánh (giám sát)', AccountRole::Staff, 1))->initials(), 'K', 'chữ cái đầu bỏ phần trong ngoặc');
 finish();

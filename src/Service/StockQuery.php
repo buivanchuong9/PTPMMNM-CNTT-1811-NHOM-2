@@ -75,12 +75,12 @@ final class StockQuery
         $batchCols = $byBatch ? ', b.id AS lo_hang_id, b.so_lo, b.han_dung' : '';
         $group = $byBatch ? ', b.id, b.so_lo, b.han_dung' : '';
         $rows = $this->db->all(
-            "SELECT w.id AS kho_id, w.ma AS wh_code, i.id AS mat_hang_id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma AS unit $batchCols,
+            "SELECT w.id AS kho_id, w.ma AS wh_code, i.id AS mat_hang_id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, u.ma AS unit $batchCols,
                     SUM(m.bien_dong) AS so_luong, MAX(m.ngay_ghi_so) AS last_move
              FROM so_phat_sinh m JOIN kho w ON w.id = m.kho_id JOIN mat_hang i ON i.id = m.mat_hang_id
              JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = m.lo_hang_id
              WHERE m.kho_id IN ({$this->in($warehouseIds)}) AND (i.ma_hang LIKE ? OR i.ten LIKE ?)
-             GROUP BY w.id, w.ma, i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma $group
+             GROUP BY w.id, w.ma, i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, u.ma $group
              " . ($includeZero ? '' : 'HAVING SUM(m.bien_dong) <> 0 ') . 'ORDER BY i.ma_hang, w.ma' . ($byBatch ? ', b.so_lo' : ''),
             [...$warehouseIds, "%$search%", "%$search%"]
         );

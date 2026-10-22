@@ -105,7 +105,7 @@ final class CatalogService
         return $this->db->insert('INSERT INTO don_vi_tinh (ma, ten) VALUES (?,?)', [$code, $name]);
     }
 
-    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder): int
+    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1): int
     {
         $this->auth->requireAdmin($actor);
         $sku = strtoupper(trim($sku));
@@ -119,19 +119,37 @@ final class CatalogService
         if ($reorder < 0) {
             throw new DomainError('Định mức tồn tối thiểu không được âm');
         }
+        if ($packSize < 1 || $packSize > 1000000) {
+            throw new DomainError('Quy cách lô phải từ 1 trở lên');
+        }
         if (!$this->db->value('SELECT 1 FROM don_vi_tinh WHERE id = ?', [$unitId])) {
             throw new DomainError('Đơn vị tính không hợp lệ');
         }
         $this->requireUnique('mat_hang', 'ma_hang', $sku, "SKU $sku đã tồn tại");
-        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder) {
-            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu) VALUES (?,?,?,?,?)',
-                [$sku, $name, $unitId, (int)$trackBatch, $reorder]);
+        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize) {
+            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo) VALUES (?,?,?,?,?,?)',
+                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize]);
             if (!$trackBatch) {
                 $this->db->exec('INSERT INTO lo_hang (mat_hang_id, so_lo) VALUES (?,?)', [$id, self::NO_LOT]);
             }
             $this->audit->record($actor->id, 'item.create', 'item', $id, $sku);
             return $id;
         });
+    }
+
+    /** Sửa quy cách lô (1 lô = bao nhiêu đơn vị tính) và định mức tồn tối thiểu của mặt hàng. */
+    public function updateItem(User $actor, int $itemId, int $packSize, int $reorder): void
+    {
+        $this->auth->requireAdmin($actor);
+        if ($packSize < 1 || $packSize > 1000000) {
+            throw new DomainError('Quy cách lô phải từ 1 trở lên');
+        }
+        if ($reorder < 0) {
+            throw new DomainError('Định mức tồn tối thiểu không được âm');
+        }
+        $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
+        $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ? WHERE id = ?', [$packSize, $reorder, $itemId]);
+        $this->audit->record($actor->id, 'item.update', 'item', $itemId, "{$item['ma_hang']} · quy cách $packSize · định mức $reorder");
     }
 
     /** Thêm lô cho mặt hàng quản lý theo lô — tài khoản được giao chức năng «Thêm lô hàng». */

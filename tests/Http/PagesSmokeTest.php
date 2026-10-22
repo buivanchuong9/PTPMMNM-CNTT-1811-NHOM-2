@@ -54,12 +54,13 @@ section('Chủ hệ thống (tài khoản cấp cao): xem thống kê mọi kho,
 $login($f->both->username);
 $pages = ['/', '/inventory', '/inventory?view=batch', '/inventory?q=' . $f->it['x']['ma_hang'], '/vouchers', '/vouchers?status=DRAFT', '/vouchers?type=TRANSFER_OUT&q=DC',
     "/vouchers/{$issue['id']}", "/vouchers/{$transfer['id']}", "/vouchers/{$pair['id']}",
-    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/items', '/users', '/roles'];
+    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles'];
 foreach ($pages as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "admin GET $p ⇒ 200");
     truthy($noPhpError($body), "admin GET $p: không lộ lỗi PHP");
 }
+same($get('/items')[0], 303, 'trang «Mặt hàng & lô» cũ chuyển sang «Hàng hoá» (/inventory)');
 [, $dash] = $get('/');
 truthy(str_contains($dash, 'Từng kho: tồn') && str_contains($dash, 'A' . $f->tag) && str_contains($dash, 'B' . $f->tag), 'tổng quan liệt kê từng kho: tồn và xuất nhập');
 foreach (['/vouchers/new?type=RECEIPT', '/vouchers/new?type=ISSUE', '/transfers/new'] as $p) {
@@ -75,7 +76,7 @@ same($get('/vouchers/99999999')[0], 404, 'phiếu nhập xuất không tồn t�
 section('Quản lý kho A: tác nghiệp trong kho mình, không vào trang quản trị, không xem kho B');
 $login($f->approverA->username);
 foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouchers/new?type=ISSUE', '/transfers/new', "/vouchers/{$issue['id']}",
-          '/counts', "/counts/$cid", '/history', '/reconcile', '/reports', '/warehouses', '/items'] as $p) {
+          '/counts', "/counts/$cid", '/history', '/reconcile', '/reports', '/warehouses', '/inventory?stock=in'] as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "quản lý GET $p ⇒ 200");
     truthy($noPhpError($body), "quản lý GET $p: không lộ lỗi PHP");

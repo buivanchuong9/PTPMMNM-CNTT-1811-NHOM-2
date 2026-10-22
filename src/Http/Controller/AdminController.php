@@ -49,37 +49,38 @@ final class AdminController extends Controller
         }, '', '/warehouses');
     }
 
+    /** Trang «Mặt hàng & lô» cũ đã gộp vào «Hàng hoá». */
     public function items(Request $r, array $p, ?User $user): Response
     {
-        $this->need($user, Permission::XemDanhMuc);
-        $items = $this->catalog->items();
-        [$pageItems, $pg] = Paginator::of($items, $r);
-        [$pageBatches, $bpg] = Paginator::of($this->catalog->batches(), $r, 'bpage');
-        return $this->render('admin/items', $user, 'items', [
-            'items' => $items, 'pageItems' => $pageItems, 'pg' => $pg, 'units' => $this->catalog->units(), 'batches' => $pageBatches, 'bpg' => $bpg,
-            'canAddBatch' => $this->auth->allows($user, Permission::ThemLo),
-        ], 'Mặt hàng');
+        return Response::redirect('/inventory');
     }
 
     public function addItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1);
-        }, 'Đã thêm mặt hàng.', '/items');
+            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, (int)($r->int('pack_size') ?? 1));
+        }, 'Đã thêm mặt hàng.', '/inventory');
+    }
+
+    public function updateItem(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(function () use ($r, $user) {
+            $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1);
+        }, 'Đã cập nhật quy cách lô.', '/inventory');
     }
 
     public function addUnit(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
             $this->catalog->addUnit($user, $r->str('code'), $r->str('name'));
-        }, 'Đã thêm đơn vị tính.', '/items');
+        }, 'Đã thêm đơn vị tính.', '/inventory');
     }
 
     public function addBatch(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
             $this->catalog->addBatch($user, (int)$r->int('item_id'), $r->str('batch_no'), $r->str('expiry') ?: null);
-        }, 'Đã thêm lô hàng.', '/items');
+        }, 'Đã thêm lô hàng.', '/inventory');
     }
 
     public function users(Request $r, array $p, ?User $user): Response
