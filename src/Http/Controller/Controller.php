@@ -8,6 +8,8 @@ use StockFlow\Core\Response;
 use StockFlow\Core\Session;
 use StockFlow\Core\View;
 use StockFlow\Domain\DomainError;
+use StockFlow\Domain\Forbidden;
+use StockFlow\Domain\Permission;
 use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
 
@@ -18,7 +20,8 @@ abstract class Controller
     /** @param array<string,mixed> $data */
     protected function render(string $template, User $user, string $active, array $data = [], string $title = ''): Response
     {
-        return $this->view->render($template, $data + ['user' => $user, 'active' => $active, 'title' => $title, 'auth' => $this->auth]);
+        return $this->view->render($template, $data + ['user' => $user, 'active' => $active, 'title' => $title, 'auth' => $this->auth,
+            'myWarehouse' => $this->auth->warehouseOf($user)]);
     }
 
     /**
@@ -40,16 +43,27 @@ abstract class Controller
         return Response::redirect(is_string($to) ? $to : $back);
     }
 
-    /** Khoá chống gửi lặp: token ngẫu nhiên đặt trong form; người dùng bấm 2 lần/refresh POST vẫn chỉ tạo một chứng từ. */
+    /** Khoá chống gửi lặp: token ngẫu nhiên đặt trong form; người dùng bấm 2 lần/refresh POST vẫn chỉ tạo một phiếu nhập xuất. */
     protected function idemKey(Request $r): ?string
     {
         $k = $r->str('idem');
         return preg_match('/^[a-f0-9]{32}$/', $k) ? $k : null;
     }
 
-    /** @return list<int> các kho người dùng được thao tác theo vai trò */
-    protected function warehouseIdsFor(User $user, \StockFlow\Domain\Role $role): array
+    /** Chặn truy cập nếu vai trò của tài khoản không được giao chức năng nào trong danh sách. */
+    protected function need(?User $user, Permission ...$any): void
     {
-        return $this->auth->warehousesWith($user, $role);
+        foreach ($any as $p) {
+            if ($this->auth->allows($user, $p)) {
+                return;
+            }
+        }
+        throw new Forbidden("Tài khoản {$user->role->label()} không được dùng chức năng «{$any[0]->label()}»");
+    }
+
+    /** @return list<int> các kho tài khoản được thao tác chức năng này (ADMIN: mọi kho; còn lại: kho được gắn) */
+    protected function warehouseIdsFor(User $user, Permission $permission): array
+    {
+        return $this->auth->warehousesWith($user, $permission);
     }
 }

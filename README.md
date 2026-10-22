@@ -76,12 +76,15 @@ Lần đầu tự dựng bảng + nạp dữ liệu mẫu (**3 kho · 30 mặt h
 
 ### 4️⃣ Đăng nhập (mật khẩu chung `demo1234`)
 
-| Tài khoản | Làm được gì |
-|---|---|
-| `hn.keeper` · `dn.keeper` · `hcm.keeper` | Lập phiếu, kiểm kê **ở kho của mình** |
-| `hn.approver` · `dn.approver` · `hcm.approver` | Xác nhận / điều chỉnh **ở kho của mình** |
-| `giamsat` | Mọi quyền trên cả 3 kho |
-| `admin` | Danh mục · tài khoản · phân quyền |
+| Tài khoản | Vai trò | Làm được gì |
+|---|---|---|
+| `admin` | **Quản trị hệ thống** (chủ hệ thống) | **Xem thống kê** tồn & xuất nhập của từng kho · **quản lý** kho, mặt hàng, tài khoản con, phân quyền · *không* lập phiếu hay kiểm kê |
+| `hn.quanly` · `dn.quanly` · `hcm.quanly` | **Quản lý kho** (mỗi kho đúng 1) | Xác nhận / huỷ / điều chỉnh phiếu nhập xuất · duyệt kiểm kê · đối chiếu, báo cáo — **chỉ trong kho mình** |
+| `hn.nv1` `hn.nv2` · `dn.nv1` `dn.nv2` · `hcm.nv1` `hcm.nv2` | **Nhân viên kho** (mỗi kho nhiều) | Lập phiếu nhập / xuất / điều chuyển (nháp) · nhập số đếm kiểm kê — **chỉ trong kho mình** |
+
+**Mô hình tài khoản:** một tài khoản cấp cao quản lý nhiều tài khoản con; mỗi kho có **1 quản lý + nhiều nhân viên**.
+Tài khoản con được gắn đúng một kho nên khi lập phiếu, hệ thống **tự lấy kho (và địa chỉ) của tài khoản**.
+Trang **Phân quyền chức năng** cho phép quản trị bật/tắt từng chức năng theo vai trò: chức năng bị thu hồi sẽ **ẩn khỏi menu và bị chặn ở máy chủ**, nhưng **không bị xoá** — bật lại là dùng được ngay.
 
 <details><summary><b>🛠 Gặp lỗi?</b></summary>
 
@@ -121,12 +124,12 @@ Lỗi kết nối được giải thích kèm cách xử lý (MySQL chưa chạy
 ## 🧭 Thử ngay: 2 tình huống
 
 **① Nhập → xác nhận → xuất → tra cứu**
-`hn.keeper` *Lập phiếu nhập* → đăng xuất → `hn.approver` *Xác nhận* → `hn.keeper` *Lập phiếu xuất* → `hn.approver` *Xác nhận* → **Tồn kho** · **Lịch sử phát sinh**
+`hn.nv1` *Lập phiếu nhập* → đăng xuất → `hn.quanly` *Xác nhận* → `hn.nv1` *Lập phiếu xuất* → `hn.quanly` *Xác nhận* → **Tồn kho** · **Lịch sử phát sinh**
 
 **② Điều chuyển → kiểm kê → điều chỉnh**
-`hn.keeper` *Điều chuyển kho* HN01→DN01 → `hn.approver` *Xác nhận* (sinh **DCX + DCN**) → `dn.keeper` *Kiểm kê* nhập số đếm + lý do → `dn.approver` *Xác nhận chênh lệch* → **Đối chiếu tồn** báo **KHỚP**
+`hn.nv1` *Điều chuyển kho* HN01→DN01 → `hn.quanly` *Xác nhận* (sinh **DCX + DCN**) → `dn.nv1` *Kiểm kê* nhập số đếm + lý do → `dn.quanly` *Xác nhận chênh lệch* → **Đối chiếu tồn** báo **KHỚP**
 
-> 🔒 Đăng nhập `hn.keeper` rồi mở chứng từ của kho DN01 ⇒ **403**. Quyền kiểm tra ở máy chủ, không chỉ ẩn nút.
+> 🔒 Đăng nhập `hn.nv1` rồi mở phiếu nhập xuất của kho DN01 ⇒ **403**; nhân viên mở trang *Đối chiếu* / *Báo cáo* (bị thu hồi) ⇒ **403**. Quyền kiểm tra ở máy chủ, không chỉ ẩn nút.
 
 <img src="docs/images/divider.svg" width="100%" height="6" alt="">
 
@@ -140,7 +143,7 @@ bin/stockflow test         # 263 test · cần MySQL (xem mục MySQL ở trên)
 |---|---|
 | Còn 5, hai yêu cầu cùng xuất 4 ⇒ chỉ một thành công | `ConcurrentIssueTest` — 2 tiến trình thật |
 | Lỗi giữa trừ A và cộng B ⇒ không dở dang | `TransferAtomicityTest` — chèn lỗi giữa chừng |
-| Gửi lại chứng từ đã xác nhận ⇒ không ghi thêm | `IdempotencyTest` |
+| Gửi lại phiếu nhập xuất đã xác nhận ⇒ không ghi thêm | `IdempotencyTest` |
 | Tài khoản kho A không xuất được kho B | `AuthorizationTest` + `AuthorizationHttpTest` (POST thật) |
 | Điều chỉnh kiểm kê có lý do, tồn khớp sổ | `StockCountTest` · `ScenarioTest` |
 
@@ -158,7 +161,7 @@ tests/             Unit · Integration · Http
 bin/stockflow      demo · db-config · migrate · seed · setup · serve · test
 ```
 
-Điểm cốt lõi: tồn **tính từ sổ phát sinh bất biến** · khoá dòng theo thứ tự cố định (không deadlock) · `CHECK quantity ≥ 0` · khoá `idempotency_key` + `UNIQUE voucher_line_id` · sửa bằng chứng từ đảo (`UNIQUE correction_of`).
+Điểm cốt lõi: tồn **tính từ sổ phát sinh bất biến** · khoá dòng theo thứ tự cố định (không deadlock) · `CHECK quantity ≥ 0` · khoá `idempotency_key` + `UNIQUE voucher_line_id` · sửa bằng phiếu nhập xuất đảo (`UNIQUE correction_of`).
 </details>
 
 <img src="docs/images/divider.svg" width="100%" height="6" alt="">

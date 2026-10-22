@@ -14,10 +14,10 @@ final class Migrator
     private const SQLITE_TRIGGERS = [
         "CREATE TRIGGER IF NOT EXISTS so_phat_sinh_khong_sua BEFORE UPDATE ON so_phat_sinh BEGIN SELECT RAISE(ABORT, 'stock_movements is append-only'); END",
         "CREATE TRIGGER IF NOT EXISTS so_phat_sinh_khong_xoa BEFORE DELETE ON so_phat_sinh BEGIN SELECT RAISE(ABORT, 'stock_movements is append-only'); END",
-        "CREATE TRIGGER IF NOT EXISTS chung_tu_khong_xoa BEFORE DELETE ON chung_tu BEGIN SELECT RAISE(ABORT, 'vouchers cannot be deleted; cancel or correct them instead'); END",
-        "CREATE TRIGGER IF NOT EXISTS chung_tu_da_duyet_khoa BEFORE UPDATE ON chung_tu WHEN OLD.status = 'CONFIRMED' BEGIN SELECT RAISE(ABORT, 'confirmed vouchers are immutable; issue an adjustment voucher'); END",
-        "CREATE TRIGGER IF NOT EXISTS chi_tiet_chung_tu_khong_xoa BEFORE DELETE ON chi_tiet_chung_tu BEGIN SELECT RAISE(ABORT, 'voucher lines cannot be deleted'); END",
-        "CREATE TRIGGER IF NOT EXISTS chi_tiet_chung_tu_khong_sua BEFORE UPDATE ON chi_tiet_chung_tu BEGIN SELECT RAISE(ABORT, 'voucher lines are immutable'); END",
+        "CREATE TRIGGER IF NOT EXISTS phieu_nhap_xuat_khong_xoa BEFORE DELETE ON phieu_nhap_xuat BEGIN SELECT RAISE(ABORT, 'vouchers cannot be deleted; cancel or correct them instead'); END",
+        "CREATE TRIGGER IF NOT EXISTS phieu_nhap_xuat_da_duyet_khoa BEFORE UPDATE ON phieu_nhap_xuat WHEN OLD.trang_thai = 'CONFIRMED' BEGIN SELECT RAISE(ABORT, 'confirmed vouchers are immutable; issue an adjustment voucher'); END",
+        "CREATE TRIGGER IF NOT EXISTS chi_tiet_phieu_nhap_xuat_khong_xoa BEFORE DELETE ON chi_tiet_phieu_nhap_xuat BEGIN SELECT RAISE(ABORT, 'voucher lines cannot be deleted'); END",
+        "CREATE TRIGGER IF NOT EXISTS chi_tiet_phieu_nhap_xuat_khong_sua BEFORE UPDATE ON chi_tiet_phieu_nhap_xuat BEGIN SELECT RAISE(ABORT, 'voucher lines are immutable'); END",
     ];
 
     /**

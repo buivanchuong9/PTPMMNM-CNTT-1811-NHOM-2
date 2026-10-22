@@ -6,12 +6,12 @@ namespace StockFlow\Service;
 use mysqli_sql_exception;
 use StockFlow\Core\Db;
 use StockFlow\Domain\DomainError;
-use StockFlow\Domain\Role;
+use StockFlow\Domain\Permission;
 use StockFlow\Domain\StockRules;
 use StockFlow\Domain\User;
 use StockFlow\Domain\VoucherType;
 
-/** Vòng đời phiếu nhập / xuất / điều chỉnh: lập → kiểm tra → xác nhận (ghi sổ) hoặc huỷ; sửa bằng chứng từ điều chỉnh. */
+/** Vòng đời phiếu nhập / xuất / điều chỉnh: lập → kiểm tra → xác nhận (ghi sổ) hoặc huỷ; sửa bằng phiếu nhập xuất điều chỉnh. */
 final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
@@ -28,7 +28,7 @@ final class VoucherService
         if (!in_array($type, [VoucherType::Receipt, VoucherType::Issue], true)) {
             throw new DomainError('Chỉ lập tay phiếu nhập hoặc phiếu xuất');
         }
-        $this->auth->require($user, $warehouseId, Role::Keeper);
+        $this->auth->require($user, $warehouseId, $type === VoucherType::Receipt ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);
         if ($idempotencyKey !== null && ($existing = $this->repo->findByKey($idempotencyKey))) {
             return ['voucher' => $existing, 'created' => false];
         }
@@ -37,8 +37,8 @@ final class VoucherService
                 $this->requireActiveWarehouse($warehouseId);
                 $this->validateLines($lines);
                 $id = $this->repo->insert([
-                    'type' => $type->value, 'warehouse_id' => $warehouseId, 'partner' => trim($partner), 'note' => trim($note),
-                    'idempotency_key' => $idempotencyKey, 'created_by' => $user->id,
+                    'loai' => $type->value, 'kho_id' => $warehouseId, 'doi_tac' => trim($partner), 'ghi_chu' => trim($note),
+                    'khoa_chong_trung' => $idempotencyKey, 'nguoi_lap_id' => $user->id,
                 ], $lines);
                 $this->audit->record($user->id, 'voucher.create', 'voucher', $id, $type->value);
                 return $id;
@@ -57,15 +57,15 @@ final class VoucherService
     public function check(User $user, int $id): array
     {
         $v = $this->repo->find($id);
-        $this->auth->requireVisible($user, (int)$v['warehouse_id']);
+        $this->auth->requireVisible($user, (int)$v['kho_id']);
         $lines = $this->repo->lines($id);
         $result = [];
         foreach ($lines as $l) {
             $available = (int)$this->db->value(
-                'SELECT COALESCE(SUM(qty_change),0) FROM so_phat_sinh WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
-                [$v['warehouse_id'], $l['item_id'], $l['batch_id']]
+                'SELECT COALESCE(SUM(bien_dong),0) FROM so_phat_sinh WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
+                [$v['kho_id'], $l['mat_hang_id'], $l['lo_hang_id']]
             );
-            $delta = StockRules::delta(VoucherType::from($v['type']), (int)$l['qty']);
+            $delta = StockRules::delta(VoucherType::from($v['loai']), (int)$l['so_luong']);
             $result[] = ['line' => $l, 'available' => $available, 'ok' => $available + $delta >= 0];
         }
         return $result;
@@ -78,19 +78,19 @@ final class VoucherService
     public function confirm(User $user, int $id): array
     {
         $peek = $this->repo->find($id);
-        if ($peek['type'] === VoucherType::TransferOut->value) {
+        if ($peek['loai'] === VoucherType::TransferOut->value) {
             return $this->transfers->confirm($user, $id);
         }
-        if ($peek['type'] === VoucherType::TransferIn->value) {
-            throw new DomainError('Chứng từ điều chuyển đến được tạo tự động cùng phiếu điều chuyển đi');
+        if ($peek['loai'] === VoucherType::TransferIn->value) {
+            throw new DomainError('Phiếu nhập xuất điều chuyển đến được tạo tự động cùng phiếu điều chuyển đi');
         }
-        $this->auth->require($user, (int)$peek['warehouse_id'], Role::Approver);
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
         $already = $this->db->transaction(function () use ($user, $id) {
             $v = $this->repo->lock($id);
-            if ($v['status'] === 'CONFIRMED') {
+            if ($v['trang_thai'] === 'CONFIRMED') {
                 return true;
             }
-            if ($v['status'] !== 'DRAFT') {
+            if ($v['trang_thai'] !== 'DRAFT') {
                 throw new DomainError('Chỉ phiếu nháp mới được xác nhận');
             }
             $lines = $this->repo->lines($id);
@@ -100,8 +100,8 @@ final class VoucherService
             $ops = $this->repo->ops($v, $lines);
             $this->ledger->lock($this->repo->lockKeys($ops));
             $this->ledger->post($ops);
-            $this->db->exec("UPDATE chung_tu SET status = 'CONFIRMED', confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $id]);
-            $this->audit->record($user->id, 'voucher.confirm', 'voucher', $id, $v['code']);
+            $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CONFIRMED', nguoi_xac_nhan_id = ?, ngay_xac_nhan = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $id]);
+            $this->audit->record($user->id, 'voucher.confirm', 'voucher', $id, $v['ma']);
             return false;
         });
         return ['voucher' => $this->repo->find($id), 'already' => $already];
@@ -111,23 +111,23 @@ final class VoucherService
     public function cancel(User $user, int $id): void
     {
         $peek = $this->repo->find($id);
-        // Người lập hoặc người duyệt của kho đều được huỷ nháp.
-        if (!$this->auth->can($user, (int)$peek['warehouse_id'], Role::Approver)) {
-            $this->auth->require($user, (int)$peek['warehouse_id'], Role::Keeper);
+        // Người có chức năng xác nhận, hoặc người được lập loại phiếu đó ở kho, đều được huỷ nháp.
+        if (!$this->auth->can($user, (int)$peek['kho_id'], Permission::XacNhanPhieu)) {
+            $this->auth->require($user, (int)$peek['kho_id'], $peek['loai'] === VoucherType::Receipt->value ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);
         }
         $this->db->transaction(function () use ($user, $id) {
             $v = $this->repo->lock($id);
-            if ($v['status'] !== 'DRAFT') {
+            if ($v['trang_thai'] !== 'DRAFT') {
                 throw new DomainError('Chỉ phiếu nháp mới được huỷ');
             }
-            $this->db->exec("UPDATE chung_tu SET status = 'CANCELLED' WHERE id = ?", [$id]);
-            $this->audit->record($user->id, 'voucher.cancel', 'voucher', $id, $v['code']);
+            $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CANCELLED' WHERE id = ?", [$id]);
+            $this->audit->record($user->id, 'voucher.cancel', 'voucher', $id, $v['ma']);
         });
     }
 
     /**
-     * Sửa chứng từ đã ghi sổ bằng chứng từ điều chỉnh đảo (không xoá/sửa lịch sử). Mỗi chứng từ chỉ đảo được một lần.
-     * @return array{voucher:array} chứng từ điều chỉnh vừa lập (hoặc phía nơi đi nếu là điều chuyển)
+     * Sửa phiếu nhập xuất đã ghi sổ bằng phiếu nhập xuất điều chỉnh đảo (không xoá/sửa lịch sử). Mỗi phiếu nhập xuất chỉ đảo được một lần.
+     * @return array{voucher:array} phiếu nhập xuất điều chỉnh vừa lập (hoặc phía nơi đi nếu là điều chuyển)
      */
     public function correct(User $user, int $id, string $reason): array
     {
@@ -136,32 +136,32 @@ final class VoucherService
             throw new DomainError('Cần ghi rõ lý do điều chỉnh');
         }
         $peek = $this->repo->find($id);
-        if (in_array($peek['type'], [VoucherType::TransferOut->value, VoucherType::TransferIn->value], true)) {
+        if (in_array($peek['loai'], [VoucherType::TransferOut->value, VoucherType::TransferIn->value], true)) {
             return $this->transfers->correct($user, $id, $reason);
         }
-        $this->auth->require($user, (int)$peek['warehouse_id'], Role::Approver);
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::DieuChinhPhieu);
         $newId = $this->db->transaction(function () use ($user, $id, $reason) {
             $v = $this->repo->lock($id);
-            if ($v['status'] !== 'CONFIRMED') {
-                throw new DomainError('Chỉ chứng từ đã xác nhận mới cần điều chỉnh');
+            if ($v['trang_thai'] !== 'CONFIRMED') {
+                throw new DomainError('Chỉ phiếu nhập xuất đã xác nhận mới cần điều chỉnh');
             }
             if ($this->repo->correctionOf($id)) {
-                throw new DomainError('Chứng từ này đã được điều chỉnh');
+                throw new DomainError('Phiếu nhập xuất này đã được điều chỉnh');
             }
-            $type = VoucherType::from($v['type']);
+            $type = VoucherType::from($v['loai']);
             $lines = array_map(fn($l) => [
-                'item_id' => (int)$l['item_id'], 'batch_id' => (int)$l['batch_id'],
-                'qty' => StockRules::reversalQty($type, (int)$l['qty']), 'note' => 'Đảo ' . $v['code'],
+                'mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'],
+                'so_luong' => StockRules::reversalQty($type, (int)$l['so_luong']), 'ghi_chu' => 'Đảo ' . $v['ma'],
             ], $this->repo->lines($id));
             $newId = $this->repo->insert([
-                'type' => VoucherType::Adjustment->value, 'status' => 'CONFIRMED', 'warehouse_id' => (int)$v['warehouse_id'],
-                'correction_of' => $id, 'reason' => $reason, 'created_by' => $user->id,
+                'loai' => VoucherType::Adjustment->value, 'trang_thai' => 'CONFIRMED', 'kho_id' => (int)$v['kho_id'],
+                'dieu_chinh_cho_id' => $id, 'ly_do' => $reason, 'nguoi_lap_id' => $user->id,
             ], $lines);
             $adj = $this->repo->lock($newId);
             $ops = $this->repo->ops($adj, $this->repo->lines($newId));
             $this->ledger->lock($this->repo->lockKeys($ops));
             $this->ledger->post($ops);
-            $this->audit->record($user->id, 'voucher.correct', 'voucher', $id, "{$v['code']} → $newId: $reason");
+            $this->audit->record($user->id, 'voucher.correct', 'voucher', $id, "{$v['ma']} → $newId: $reason");
             return $newId;
         });
         return ['voucher' => $this->repo->find($newId)];
@@ -169,7 +169,7 @@ final class VoucherService
 
     private function requireActiveWarehouse(int $id): void
     {
-        if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND active', [$id])) {
+        if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND hoat_dong', [$id])) {
             throw new DomainError('Kho không tồn tại hoặc đã ngừng hoạt động');
         }
     }
@@ -181,12 +181,12 @@ final class VoucherService
             throw new DomainError('Phiếu cần ít nhất một dòng hàng');
         }
         foreach ($lines as $l) {
-            $ok = $this->db->value('SELECT 1 FROM mat_hang i JOIN lo_hang b ON b.item_id = i.id WHERE i.id = ? AND b.id = ? AND i.active',
-                [$l['item_id'], $l['batch_id']]);
+            $ok = $this->db->value('SELECT 1 FROM mat_hang i JOIN lo_hang b ON b.mat_hang_id = i.id WHERE i.id = ? AND b.id = ? AND i.hoat_dong',
+                [$l['mat_hang_id'], $l['lo_hang_id']]);
             if (!$ok) {
                 throw new DomainError('Mặt hàng/lô không hợp lệ hoặc đã ngừng hoạt động');
             }
-            if ((int)$l['qty'] < 1) {
+            if ((int)$l['so_luong'] < 1) {
                 throw new DomainError('Số lượng phải là số nguyên dương');
             }
         }

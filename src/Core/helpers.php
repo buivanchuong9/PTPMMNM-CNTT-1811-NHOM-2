@@ -83,9 +83,9 @@ function pick_options(array $pick, ?string $selected = null): string
 {
     $html = '<option value="">Chọn mặt hàng / lô…</option>';
     foreach ($pick as $p) {
-        $lot = $p['track_batch'] ? ' · lô ' . $p['batch_no'] . ($p['expiry_date'] ? ' (HSD ' . dt($p['expiry_date'], false) . ')' : '') : '';
-        $v = $p['item_id'] . ':' . $p['batch_id'];
-        $html .= '<option value="' . e($v) . '"' . ($v === $selected ? ' selected' : '') . '>' . e($p['sku'] . ' — ' . $p['name'] . $lot . ' [' . $p['unit'] . ']') . '</option>';
+        $lot = $p['quan_ly_lo'] ? ' · lô ' . $p['so_lo'] . ($p['han_dung'] ? ' (HSD ' . dt($p['han_dung'], false) . ')' : '') : '';
+        $v = $p['mat_hang_id'] . ':' . $p['lo_hang_id'];
+        $html .= '<option value="' . e($v) . '"' . ($v === $selected ? ' selected' : '') . '>' . e($p['ma_hang'] . ' — ' . $p['ten'] . $lot . ' [' . $p['unit'] . ']') . '</option>';
     }
     return $html;
 }
@@ -94,9 +94,19 @@ function wh_options(array $rows, ?int $selected = null, string $placeholder = ''
 {
     $html = $placeholder !== '' ? '<option value="">' . e($placeholder) . '</option>' : '';
     foreach ($rows as $r) {
-        $html .= '<option value="' . (int)$r['id'] . '"' . ((int)$r['id'] === $selected ? ' selected' : '') . '>' . e($r['code'] . ' — ' . $r['name']) . '</option>';
+        $html .= '<option value="' . (int)$r['id'] . '"' . ((int)$r['id'] === $selected ? ' selected' : '')
+            . (isset($r['dia_chi']) ? ' data-addr="' . e($r['dia_chi']) . '"' : '') . '>' . e($r['ma'] . ' — ' . $r['ten']) . '</option>';
     }
     return $html;
+}
+
+/** Kho cố định của tài khoản quản lý / nhân viên: hiển thị mã, tên, địa chỉ và gửi kèm kho_id ẩn — không cho chọn kho khác. */
+function wh_fixed(array $wh, string $label, string $field): string
+{
+    return '<div class="wh-fixed"><span class="wh-fixed-label">' . e($label) . '</span>'
+        . '<b><span class="wh-code">' . e($wh['ma']) . '</span> ' . e($wh['ten']) . '</b>'
+        . '<small class="muted">' . icon('warehouse') . e($wh['dia_chi'] ?: 'Chưa có địa chỉ') . '</small>'
+        . '<input type="hidden" name="' . e($field) . '" value="' . (int)$wh['id'] . '"></div>';
 }
 
 /** Giờ ngắn gọn cho bảng dày: 21/10 15:00. */

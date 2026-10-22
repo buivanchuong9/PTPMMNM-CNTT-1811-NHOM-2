@@ -10,8 +10,8 @@ use StockFlow\Core\Response;
 use StockFlow\Core\Session;
 use StockFlow\Core\View;
 use StockFlow\Domain\DomainError;
-use StockFlow\Domain\Role;
 use StockFlow\Domain\StockRules;
+use StockFlow\Domain\Permission;
 use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
 use StockFlow\Service\StockCountService;
@@ -25,12 +25,13 @@ final class CountController extends Controller
 
     public function index(Request $r, array $p, ?User $user): Response
     {
+        $this->need($user, Permission::XemKiemKe, Permission::KiemKeThucHien, Permission::KiemKeDuyet);
         $ids = $this->auth->visibleWarehouseIds($user);
-        $countable = $this->auth->warehousesWith($user, Role::Counter);
+        $countable = $this->auth->warehousesWith($user, Permission::KiemKeThucHien);
         [$rows, $pg] = Paginator::of($this->counts->list($ids), $r);
         return $this->render('counts/index', $user, 'counts', [
             'rows' => $rows, 'pg' => $pg,
-            'warehouses' => $countable ? $this->db->all('SELECT id, code, name FROM kho WHERE active AND id IN (' . implode(',', array_map('intval', $countable)) . ') ORDER BY code') : [],
+            'warehouses' => $countable ? $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong AND id IN (' . implode(',', array_map('intval', $countable)) . ') ORDER BY ma') : [],
         ], 'Kiểm kê');
     }
 
@@ -42,14 +43,15 @@ final class CountController extends Controller
 
     public function show(Request $r, array $p, ?User $user): Response
     {
+        $this->need($user, Permission::XemKiemKe, Permission::KiemKeThucHien, Permission::KiemKeDuyet);
         $c = $this->counts->find((int)$p['id']);
-        $this->auth->requireVisible($user, (int)$c['warehouse_id']);
+        $this->auth->requireVisible($user, (int)$c['kho_id']);
         return $this->render('counts/show', $user, 'counts', [
             'c' => $c,
-            'canCount' => $this->auth->can($user, (int)$c['warehouse_id'], Role::Counter),
-            'canApprove' => $this->auth->can($user, (int)$c['warehouse_id'], Role::Approver),
-            'reasons' => ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng', 'Xuất sai số lượng', 'Chưa ghi chứng từ', 'Nhầm lô / nhầm hàng', 'Khác'],
-        ], $c['code']);
+            'canCount' => $this->auth->can($user, (int)$c['kho_id'], Permission::KiemKeThucHien),
+            'canApprove' => $this->auth->can($user, (int)$c['kho_id'], Permission::KiemKeDuyet),
+            'reasons' => ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng', 'Xuất sai số lượng', 'Chưa ghi phiếu nhập xuất', 'Nhầm lô / nhầm hàng', 'Khác'],
+        ], $c['ma']);
     }
 
     /** @return array{0:array<string,?int>,1:array<string,string>} */
@@ -103,9 +105,9 @@ final class CountController extends Controller
         $id = (int)$p['id'];
         return $this->act(function () use ($user, $id) {
             $res = $this->counts->approve($user, $id);
-            $this->session->flash('ok', $res['already'] ? 'Đợt kiểm kê đã được xác nhận trước đó — không lập thêm chứng từ.'
-                : ($res['adjusted'] === 0 ? 'Sổ sách khớp thực tế — không cần chứng từ điều chỉnh.'
-                    : 'Đã lập chứng từ điều chỉnh ' . $res['voucher']['code'] . ' (' . $res['adjusted'] . ' dòng, chênh lệch ròng ' . signed($res['net']) . ').'));
+            $this->session->flash('ok', $res['already'] ? 'Đợt kiểm kê đã được xác nhận trước đó — không lập thêm phiếu nhập xuất.'
+                : ($res['adjusted'] === 0 ? 'Sổ sách khớp thực tế — không cần phiếu nhập xuất điều chỉnh.'
+                    : 'Đã lập phiếu nhập xuất điều chỉnh ' . $res['voucher']['ma'] . ' (' . $res['adjusted'] . ' dòng, chênh lệch ròng ' . signed($res['net']) . ').'));
         }, '', "/counts/$id");
     }
 

@@ -64,14 +64,19 @@ final class App
 
         $r->get('/warehouses', [C\AdminController::class, 'warehouses']);
         $r->post('/warehouses', [C\AdminController::class, 'addWarehouse']);
+        $r->post('/warehouses/staff', [C\AdminController::class, 'addStaff']);
         $r->get('/items', [C\AdminController::class, 'items']);
         $r->post('/items', [C\AdminController::class, 'addItem']);
         $r->post('/units', [C\AdminController::class, 'addUnit']);
         $r->post('/batches', [C\AdminController::class, 'addBatch']);
         $r->get('/users', [C\AdminController::class, 'users']);
         $r->post('/users', [C\AdminController::class, 'addUser']);
-        $r->post('/users/grant', [C\AdminController::class, 'grant']);
-        $r->post('/users/revoke', [C\AdminController::class, 'revoke']);
+        $r->post('/users/update', [C\AdminController::class, 'updateUser']);
+        $r->post('/users/active', [C\AdminController::class, 'setUserActive']);
+        $r->post('/users/password', [C\AdminController::class, 'resetUserPassword']);
+        $r->get('/roles', [C\AdminController::class, 'roles']);
+        $r->post('/roles', [C\AdminController::class, 'saveRoles']);
+        $r->post('/roles/reset', [C\AdminController::class, 'resetRoles']);
         return $r;
     }
 

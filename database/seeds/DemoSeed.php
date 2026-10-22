@@ -6,7 +6,7 @@ namespace StockFlow\Seeds;
 use StockFlow\Core\Container;
 use StockFlow\Core\Db;
 use StockFlow\Domain\DomainError;
-use StockFlow\Domain\Role;
+use StockFlow\Domain\AccountRole;
 use StockFlow\Domain\StockRules;
 use StockFlow\Domain\User;
 use StockFlow\Domain\VoucherType;
@@ -19,7 +19,7 @@ use StockFlow\Service\VoucherService;
 
 /**
  * Dữ liệu demo: 3 kho, 30 mặt hàng (10 mặt hàng có lô/hạn dùng), ≥200 dòng sổ phát sinh,
- * có điều chuyển, chênh lệch kiểm kê, chứng từ điều chỉnh. Mọi thao tác đi qua chính các service
+ * có điều chuyển, chênh lệch kiểm kê, phiếu nhập xuất điều chỉnh. Mọi thao tác đi qua chính các service
  * (không INSERT tắt) nên dữ liệu mẫu luôn nhất quán với quy tắc nghiệp vụ. Xác định (seed cố định).
  */
 final class DemoSeed
@@ -41,41 +41,34 @@ final class DemoSeed
         $counts = $c->get(StockCountService::class);
         $query = $c->get(StockQuery::class);
 
-        // ── người dùng + kho + quyền ──
-        $adminId = $db->insert('INSERT INTO nguoi_dung (username, full_name, password_hash, is_admin) VALUES (?,?,?,1)',
-            ['admin', 'Quản trị hệ thống', password_hash(self::PASSWORD, PASSWORD_DEFAULT)]);
-        $admin = new User($adminId, 'admin', 'Quản trị hệ thống', true);
+        // ── kho + tài khoản: 1 tài khoản cấp cao; mỗi kho có 1 quản lý và nhiều nhân viên ──
+        $adminId = $db->insert('INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau_ma_hoa, vai_tro) VALUES (?,?,?,?)',
+            ['admin', 'Quản trị hệ thống', password_hash(self::PASSWORD, PASSWORD_DEFAULT), AccountRole::Admin->value]);
+        $admin = new User($adminId, 'admin', 'Quản trị hệ thống', AccountRole::Admin);
         $wh = [];
         foreach ([['HN01', 'Kho trung tâm Hà Nội', 'KCN Thăng Long, Đông Anh, Hà Nội'],
                   ['DN01', 'Kho Đà Nẵng', 'KCN Hoà Khánh, Liên Chiểu, Đà Nẵng'],
                   ['HCM01', 'Kho TP. Hồ Chí Minh', 'KCN Tân Bình, TP. Hồ Chí Minh']] as [$code, $name, $addr]) {
             $wh[$code] = $catalog->addWarehouse($admin, $code, $name, $addr);
         }
-        $people = [
-            'hn.keeper' => ['Nguyễn Văn An', 'HN01', [Role::Keeper, Role::Counter]],
-            'hn.approver' => ['Trần Thị Bình', 'HN01', [Role::Approver]],
-            'dn.keeper' => ['Lê Minh Châu', 'DN01', [Role::Keeper, Role::Counter]],
-            'dn.approver' => ['Phạm Quốc Dũng', 'DN01', [Role::Approver]],
-            'hcm.keeper' => ['Võ Thanh Hà', 'HCM01', [Role::Keeper, Role::Counter]],
-            'hcm.approver' => ['Đặng Thu Hương', 'HCM01', [Role::Approver]],
+        // kho => [quản lý [tài khoản, họ tên], nhân viên [[tài khoản, họ tên], …]]
+        $team = [
+            'HN01' => [['hn.quanly', 'Trần Thị Bình'], [['hn.nv1', 'Nguyễn Văn An'], ['hn.nv2', 'Lý Hoàng Nam']]],
+            'DN01' => [['dn.quanly', 'Phạm Quốc Dũng'], [['dn.nv1', 'Lê Minh Châu'], ['dn.nv2', 'Ngô Thị Lan']]],
+            'HCM01' => [['hcm.quanly', 'Đặng Thu Hương'], [['hcm.nv1', 'Võ Thanh Hà'], ['hcm.nv2', 'Bùi Quang Huy']]],
         ];
-        $u = [];
-        foreach ($people as $username => [$full, $code, $roles]) {
-            $id = $catalog->addUser($admin, $username, $full, self::PASSWORD, false);
-            foreach ($roles as $role) {
-                $catalog->grant($admin, $id, $wh[$code], $role);
-            }
-            $u[$username] = new User($id, $username, $full, false);
-        }
-        $gid = $catalog->addUser($admin, 'giamsat', 'Hoàng Gia Khánh', self::PASSWORD, false);
-        foreach ($wh as $wid) {
-            foreach ([Role::Keeper, Role::Approver, Role::Counter] as $role) {
-                $catalog->grant($admin, $gid, $wid, $role);
+        $keeper = [];    // nhân viên đầu tiên của mỗi kho: lập phiếu, kiểm kê
+        $approver = [];  // quản lý kho: xác nhận phiếu, duyệt kiểm kê
+        foreach ($team as $code => [[$mgrName, $mgrFull], $staff]) {
+            $mid = $catalog->createAccount($admin, $mgrName, $mgrFull, self::PASSWORD, AccountRole::Manager, $wh[$code]);
+            $approver[$code] = new User($mid, $mgrName, $mgrFull, AccountRole::Manager, $wh[$code]);
+            foreach ($staff as $i => [$sName, $sFull]) {
+                $sid = $catalog->createAccount($admin, $sName, $sFull, self::PASSWORD, AccountRole::Staff, $wh[$code]);
+                if ($i === 0) {
+                    $keeper[$code] = new User($sid, $sName, $sFull, AccountRole::Staff, $wh[$code]);
+                }
             }
         }
-        $u['giamsat'] = new User($gid, 'giamsat', 'Hoàng Gia Khánh', false);
-        $keeper = ['HN01' => $u['hn.keeper'], 'DN01' => $u['dn.keeper'], 'HCM01' => $u['hcm.keeper']];
-        $approver = ['HN01' => $u['hn.approver'], 'DN01' => $u['dn.approver'], 'HCM01' => $u['hcm.approver']];
 
         // ── đơn vị + mặt hàng + lô ──
         $unit = [];
@@ -109,7 +102,7 @@ final class DemoSeed
                     $batches[] = $catalog->addBatch($admin, $id, $no, gmdate('Y-m-d', strtotime($rel)));
                 }
             } else {
-                $batches[] = (int)$db->value('SELECT id FROM lo_hang WHERE item_id = ?', [$id]);
+                $batches[] = (int)$db->value('SELECT id FROM lo_hang WHERE mat_hang_id = ?', [$id]);
             }
             $item[$sku] = ['id' => $id, 'batches' => $batches, 'hub' => end($defs[array_search($sku, array_column($defs, 0))])];
         }
@@ -120,9 +113,9 @@ final class DemoSeed
             $vouchers->confirm($approver[$code], (int)$v['id']);
             return $v;
         };
-        $line = fn(string $sku, int $bi, int $qty) => ['item_id' => $item[$sku]['id'], 'batch_id' => $item[$sku]['batches'][$bi], 'qty' => $qty];
+        $line = fn(string $sku, int $bi, int $qty) => ['mat_hang_id' => $item[$sku]['id'], 'lo_hang_id' => $item[$sku]['batches'][$bi], 'so_luong' => $qty];
         $stock = function (string $code, string $sku, int $bi) use ($db, $item, $wh): int {
-            return (int)$db->value('SELECT COALESCE(SUM(qty_change),0) FROM so_phat_sinh WHERE warehouse_id = ? AND item_id = ? AND batch_id = ?',
+            return (int)$db->value('SELECT COALESCE(SUM(bien_dong),0) FROM so_phat_sinh WHERE kho_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
                 [$wh[$code], $item[$sku]['id'], $item[$sku]['batches'][$bi]]);
         };
 
@@ -181,7 +174,7 @@ final class DemoSeed
             }
         }
 
-        // ── 4) nhập nhầm ở DN → chứng từ điều chỉnh đảo (có lý do, giữ nguyên lịch sử) ──
+        // ── 4) nhập nhầm ở DN → phiếu nhập xuất điều chỉnh đảo (có lý do, giữ nguyên lịch sử) ──
         $wrong = $post('DN01', VoucherType::Receipt, [$line('CAB-USBC', 0, 900)], 'NPP Điện tử Phong Vũ', 'Nhập cáp USB-C');
         $vouchers->correct($approver['DN01'], (int)$wrong['id'], 'Nhập nhầm: thực nhận 90, nhân viên gõ thừa một số 0');
         $post('DN01', VoucherType::Receipt, [$line('CAB-USBC', 0, 90)], 'NPP Điện tử Phong Vũ', 'Nhập lại đúng số lượng');
@@ -193,11 +186,11 @@ final class DemoSeed
             $counted = [];
             $reasons = [];
             foreach ($c['lines'] as $i => $l) {
-                $key = $l['item_id'] . ':' . $l['batch_id'];
+                $key = $l['mat_hang_id'] . ':' . $l['lo_hang_id'];
                 $delta = $variances[$i] ?? 0;
-                $counted[$key] = max(0, (int)$l['system_qty'] + $delta);
-                if ($delta !== 0 && (int)$l['system_qty'] + $delta >= 0) {
-                    $reasons[$key] = $delta < 0 ? ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng'][$i % 3] : 'Chưa ghi chứng từ';
+                $counted[$key] = max(0, (int)$l['so_luong_so_sach'] + $delta);
+                if ($delta !== 0 && (int)$l['so_luong_so_sach'] + $delta >= 0) {
+                    $reasons[$key] = $delta < 0 ? ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng'][$i % 3] : 'Chưa ghi phiếu nhập xuất';
                 }
             }
             $counts->submit($keeper[$code], $id, $counted, $reasons);
@@ -212,7 +205,7 @@ final class DemoSeed
         $lines = $counts->find($hn)['lines'];
         $partial = [];
         foreach (array_slice($lines, 0, 8) as $l) {
-            $partial[$l['item_id'] . ':' . $l['batch_id']] = (int)$l['system_qty'];
+            $partial[$l['mat_hang_id'] . ':' . $l['lo_hang_id']] = (int)$l['so_luong_so_sach'];
         }
         $counts->save($keeper['HN01'], $hn, $partial);
 
@@ -222,10 +215,10 @@ final class DemoSeed
         $transfers->createDraft($keeper['DN01'], $wh['DN01'], $wh['HCM01'], [$line('BOX-S', 0, 25)], 'Chuyển bao bì dư', null);
 
         $m = (int)$db->value('SELECT COUNT(*) FROM so_phat_sinh');
-        $v = (int)$db->value('SELECT COUNT(*) FROM chung_tu');
+        $v = (int)$db->value('SELECT COUNT(*) FROM phieu_nhap_xuat');
         $rec = $query->reconcile(array_values($wh));
-        printf("✔ Đã nạp dữ liệu mẫu: 3 kho · 30 mặt hàng · %d chứng từ · %d dòng sổ phát sinh · đối chiếu: %s\n", $v, $m, $rec['mismatches'] === 0 ? 'KHỚP' : 'LỆCH!');
-        printf("  Đăng nhập demo (mật khẩu chung: %s): admin · hn.keeper · hn.approver · dn.keeper · dn.approver · hcm.keeper · hcm.approver · giamsat\n", self::PASSWORD);
+        printf("✔ Đã nạp dữ liệu mẫu: 3 kho · 30 mặt hàng · %d phiếu nhập xuất · %d dòng sổ phát sinh · đối chiếu: %s\n", $v, $m, $rec['mismatches'] === 0 ? 'KHỚP' : 'LỆCH!');
+        printf("  Đăng nhập demo (mật khẩu chung: %s): admin (cấp cao) · hn.quanly · dn.quanly · hcm.quanly (quản lý) · hn.nv1 · hn.nv2 · dn.nv1 · dn.nv2 · hcm.nv1 · hcm.nv2 (nhân viên)\n", self::PASSWORD);
         return $rec['mismatches'] === 0 ? 0 : 1;
     }
 }

@@ -5,6 +5,7 @@ require __DIR__ . '/../Support/bootstrap.php';
 use StockFlow\Core\Container;
 use StockFlow\Core\Response;
 use StockFlow\Core\Router;
+use StockFlow\Domain\AccountRole;
 use StockFlow\Domain\User;
 
 section('Router');
@@ -31,5 +32,5 @@ $c = new Container();
 same($c->get(Branch::class)->leaf === $c->get(Leaf::class), true, 'tự nối dependency, dùng chung một instance');
 
 section('User');
-same((new User(1, 'x', 'Hoàng Gia Khánh (giám sát)', false))->initials(), 'K', 'chữ cái đầu bỏ phần trong ngoặc');
+same((new User(1, 'x', 'Hoàng Gia Khánh (giám sát)', AccountRole::Staff, 1))->initials(), 'K', 'chữ cái đầu bỏ phần trong ngoặc');
 finish();
