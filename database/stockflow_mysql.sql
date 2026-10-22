@@ -68,10 +68,12 @@ CREATE TABLE IF NOT EXISTS mat_hang (
     ten                       varchar(160) NOT NULL,
     don_vi_tinh_id            integer      NOT NULL,
     quan_ly_lo                boolean      NOT NULL DEFAULT FALSE,
+    quy_cach_lo               integer      NOT NULL DEFAULT 1,
     dinh_muc_toi_thieu        integer      NOT NULL DEFAULT 0,
     hoat_dong                 boolean      NOT NULL DEFAULT TRUE,
     ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT items_reorder_nonneg CHECK (dinh_muc_toi_thieu >= 0),
+    CONSTRAINT items_pack_positive  CHECK (quy_cach_lo >= 1),
     CONSTRAINT items_unit_fk FOREIGN KEY (don_vi_tinh_id) REFERENCES don_vi_tinh(id),
     UNIQUE (ma_hang)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

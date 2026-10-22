@@ -13,6 +13,17 @@ function n(int|string|null $v): string
     return number_format((int)$v, 0, ',', '.');
 }
 
+/** Quy đổi số lượng ra lô theo quy cách: 130 với 24/lô → "5 lô + 10 lẻ". Quy cách 1 (không đóng lô) → chuỗi rỗng. */
+function pack_label(int $qty, int $pack): string
+{
+    if ($pack <= 1 || $qty <= 0) {
+        return '';
+    }
+    $full = intdiv($qty, $pack);
+    $rest = $qty % $pack;
+    return trim(($full > 0 ? n($full) . ' lô' : '') . ($rest > 0 ? ($full > 0 ? ' + ' : '') . n($rest) . ' lẻ' : ''));
+}
+
 /** Số có dấu: +5 / −3. */
 function signed(int $v): string
 {

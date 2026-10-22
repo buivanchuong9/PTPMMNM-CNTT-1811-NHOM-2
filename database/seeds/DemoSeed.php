@@ -93,9 +93,14 @@ final class DemoSeed
             ['VIT-C', 'Vitamin C 1000 mg (hộp 20 viên)', 'hộp', 1, 40, 150], ['MASK-50', 'Khẩu trang y tế (hộp 50)', 'hộp', 1, 60, 220],
             ['OIL-1L', 'Dầu ăn 1 L', 'chai', 1, 80, 300], ['SGR-1KG', 'Đường tinh luyện 1 kg', 'kg', 1, 100, 400],
         ];
+        // Quy cách lô: 1 lô (thùng/kiện đóng sẵn) gồm bao nhiêu đơn vị tính; không có trong bảng ⇒ bán lẻ (1)
+        $pack = ['BOX-S' => 50, 'BOX-M' => 50, 'BOX-L' => 25, 'TAPE-48' => 6, 'BUBBLE' => 4, 'PE-BAG' => 10, 'LBL-A6' => 10, 'STRETCH' => 6, 'PALLET' => 10,
+            'STRAP' => 4, 'GLOVE' => 12, 'CUTTER' => 24, 'PHN-A15' => 10, 'PHN-A25' => 10, 'EARBUD' => 20, 'CHG-65W' => 20, 'CAB-USBC' => 50, 'PWR-20K' => 10,
+            'SPK-BT' => 10, 'WATCH-S' => 10, 'MLK-1L' => 12, 'NDL-PK' => 10, 'CFE-3IN1' => 24, 'TEA-GRN' => 24, 'SOAP-500' => 24, 'DET-3KG' => 6,
+            'VIT-C' => 20, 'MASK-50' => 40, 'OIL-1L' => 12, 'SGR-1KG' => 20];
         $item = [];   // sku => ['id'=>, 'batches'=>[batchId,…]]
         foreach ($defs as [$sku, $name, $un, $lot, $reorder]) {
-            $id = $catalog->addItem($admin, $sku, $name, $unit[$un], (bool)$lot, $reorder);
+            $id = $catalog->addItem($admin, $sku, $name, $unit[$un], (bool)$lot, $reorder, $pack[$sku] ?? 1);
             $batches = [];
             if ($lot) {
                 foreach ([['L2601A', '+5 months'], ['L2602B', '+11 months']] as [$no, $rel]) {

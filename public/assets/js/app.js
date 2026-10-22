@@ -319,6 +319,12 @@
         dlg.querySelector('form').reset();
         dlg.querySelectorAll('.combo-input').forEach((i) => (i.value = ''));
         dlg.querySelectorAll('select[data-role-select]').forEach((s) => s.dispatchEvent(new Event('change')));
+        // data-fill='{"tên_ô":"giá trị"}': điền sẵn các ô của form; data-fill-label hiện ở phần tử [data-dlg-label]
+        if (open.dataset.fill) {
+          try { Object.entries(JSON.parse(open.dataset.fill)).forEach(([k, v]) => { const f = dlg.querySelector(`[name="${k}"]`); if (f) f.value = v; }); } catch (e) { /* bỏ qua */ }
+        }
+        const fl = dlg.querySelector('[data-dlg-label]');
+        if (fl) fl.textContent = open.dataset.fillLabel || '';
         dlg.showModal();
         dlg.querySelector('input:not([type=hidden])')?.focus();
       }

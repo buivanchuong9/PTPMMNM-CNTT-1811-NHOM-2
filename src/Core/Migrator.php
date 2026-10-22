@@ -79,6 +79,14 @@ final class Migrator
             }
             $log[] = '✔ ' . basename($file) . " ($applied câu lệnh)";
         }
+        // SQLite (chế độ demo) không tự thêm cột vào bảng đã có: bổ sung cột mới của các phiên bản sau
+        if ($this->db->isSqlite()) {
+            $cols = array_column($this->db->all('PRAGMA table_info(mat_hang)'), 'name');
+            if ($cols && !in_array('quy_cach_lo', $cols, true)) {
+                $this->db->raw('ALTER TABLE mat_hang ADD COLUMN quy_cach_lo integer NOT NULL DEFAULT 1');
+                $log[] = '✔ Đã thêm cột mat_hang.quy_cach_lo (SQLite)';
+            }
+        }
         return $log;
     }
 

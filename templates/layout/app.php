@@ -12,14 +12,13 @@ $groups = [
         'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
     ],
     'Tra cứu & báo cáo' => [
-        'inventory' => ['/inventory', 'layers', 'Tồn kho', [P::XemTonKho]],
+        'inventory' => ['/inventory', 'box', 'Hàng hoá', [P::XemTonKho]],
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
         'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
         'reports' => ['/reports', 'chart', 'Báo cáo', [P::XemBaoCao]],
     ],
     'Danh mục' => [
         'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],
-        'items' => ['/items', 'box', 'Mặt hàng & lô', [P::XemDanhMuc]],
     ],
     'Quản trị hệ thống' => [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
