@@ -172,3 +172,109 @@ dialog.dlg:has(.addr) { overflow: visible; } .addr-list { max-height: 220px; }
 /* lọc tự động: làm mờ nhẹ kết quả cũ trong lúc chờ kết quả mới */
 [data-live] { transition: opacity .15s ease; }
 .is-filtering [data-live="results"] { opacity: .5; pointer-events: none; }
+
+/* Ô «Thực đếm»: cảnh báo số bất thường ngay cạnh ô (không chặn nhập). */
+.count-input.is-warn { border-color: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
+.count-warn { display: block; max-width: 230px; margin: 4px 0 0 auto; font-size: .76rem; line-height: 1.35; text-align: right; color: var(--warn); }
+.count-warn.err { color: var(--danger); }
+.count-warn:not([hidden]) { animation: cw-in .25s ease both; }
+@keyframes cw-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* Điều hướng không tải lại trang: thanh tiến trình mảnh trên cùng + làm mờ nhẹ vùng nội dung khi đang tải. */
+@keyframes spa-run { 0% { transform: scaleX(0); opacity: 1; } 70% { transform: scaleX(.85); } 100% { transform: scaleX(.95); opacity: 1; } }
+.spa-bar { position: fixed; z-index: 60; left: 0; right: 0; top: 0; height: 3px; background: var(--brand); transform: scaleX(0); transform-origin: left; opacity: 0; pointer-events: none; }
+body.spa-busy .spa-bar { animation: spa-run 1.6s cubic-bezier(.2, .7, .2, 1) .12s both; }
+@media (prefers-reduced-motion: reduce) { body.spa-busy .spa-bar { animation: none; opacity: 1; transform: scaleX(1); } }
+
+/* ── Khung ứng dụng cố định: thanh đầu + menu đứng yên, chỉ vùng nội dung bên phải cuộn (thanh cuộn nằm gọn trong vùng đó). ── */
+body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+.app-shell .topbar { flex: none; }
+.app-shell .shell { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+.main-wrap { position: relative; min-width: 0; min-height: 0; }
+.app-shell main { height: 100%; overflow-x: auto; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-right: calc(clamp(14px, 2.2vw, 30px) + 14px); }
+.app-shell main::-webkit-scrollbar { display: none; }
+@media (min-width: 1001px) { .app-shell .sidebar { position: static; height: calc(100% - 28px); } }   /* 28px = lề trên + dưới của thẻ menu */
+.app-shell .sidebar { scrollbar-width: none; }
+.app-shell .sidebar::-webkit-scrollbar { display: none; }
+
+/* Thanh cuộn xe tải: đường chạy mảnh bên phải vùng nội dung; xe chạy xuống khi cuộn xuống, quay đầu lên khi cuộn lên. */
+@keyframes truck-spin { to { transform: rotate(360deg); } }
+@keyframes truck-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -1.5px; } }
+.truck-bar { position: absolute; z-index: 5; top: 10px; bottom: 10px; right: 3px; width: 26px; display: block; visibility: hidden; touch-action: none; user-select: none; cursor: pointer; }   /* ẩn bằng visibility (không phải display) để vẫn đo được chiều cao đường chạy */
+.truck-bar.on { visibility: visible; }
+.truck-road { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 2px dashed var(--line); transform: translateX(-50%); opacity: .9; transition: border-color .2s; }
+.truck-bar:hover .truck-road, .truck-bar.drag .truck-road { border-color: var(--brand); }
+.truck-thumb { position: absolute; left: 0; top: 0; width: 26px; height: 40px; cursor: grab; will-change: transform; }
+.truck-bar.drag .truck-thumb { cursor: grabbing; }
+.truck-thumb svg { position: absolute; left: 50%; top: 50%; width: 38px; height: 22px; overflow: visible; transform: translate(-50%, -50%) rotate(90deg); transition: transform .28s ease; filter: drop-shadow(0 2px 2px rgba(17, 24, 39, .28)); }
+.truck-bar.up .truck-thumb svg { transform: translate(-50%, -50%) rotate(-90deg); }
+.truck-bar.moving .truck-thumb svg { animation: truck-bob .22s ease-in-out infinite; }
+.truck-bar.moving .truck-wh { animation: truck-spin .35s linear infinite; transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .truck-bar.moving .truck-thumb svg, .truck-bar.moving .truck-wh { animation: none; } .truck-thumb svg { transition: none; } }
+@media (max-width: 1000px) { .truck-bar { right: 1px; width: 22px; } .truck-thumb { width: 22px; } }
+
+/* ── Hiệu ứng chuyển chức năng «hút vào – mở ra»: nội dung cũ co lại về chỗ vừa bấm rồi tan; nội dung mới bung ra từ chính điểm đó.
+      Điểm gốc (--vx-ox / --vx-oy) do JS đặt theo vị trí phần tử vừa bấm; thời lượng chỉnh bằng --vx-out / --vx-in. ── */
+@keyframes vx-out { from { opacity: 1; transform: none; filter: none; } to { opacity: 0; transform: scale(.62); filter: blur(5px); } }
+@keyframes vx-in { from { opacity: 0; transform: scale(.62); filter: blur(5px); } 55% { opacity: 1; } to { opacity: 1; transform: none; filter: none; } }
+.app-shell main { animation: none; transform-origin: var(--vx-ox, 50%) var(--vx-oy, 30%); }   /* bỏ hiệu ứng «rise» cũ: nếu không, nó chạy lại ngay sau khi bung ra và gây giật */
+.app-shell main.vx-out { animation: vx-out var(--vx-out, .26s) cubic-bezier(.6, 0, .9, .4) both; pointer-events: none; will-change: transform, opacity, filter; }
+.app-shell main.vx-in { animation: vx-in var(--vx-in, .46s) cubic-bezier(.16, .9, .25, 1) both; will-change: transform, opacity, filter; }
+
+/* ── Kiểu «thẻ trượt»: trang cũ thu thành thẻ nhỏ (bản sao .main-ghost), thẻ của chức năng sau trượt từ dưới lên ĐẨY thẻ cũ lên trên,
+      rồi mở rộng ra thành trang đầy đủ. Hai thẻ cách nhau đúng 82% chiều cao nên chạy sát nhau như một dải thẻ. ── */
+@keyframes card-ghost {
+  0% { transform: none; border-radius: 0; box-shadow: 0 0 0 1px transparent, 0 0 0 0 transparent; }
+  30% { transform: scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
+  100% { transform: translateY(-82%) scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
+}
+@keyframes card-in {
+  0% { transform: translateY(82%) scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
+  55% { transform: scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
+  100% { transform: none; border-radius: 0; box-shadow: 0 0 0 1px transparent, 0 0 0 0 transparent; }
+}
+.main-wrap { overflow: hidden; }
+.main-ghost { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: var(--bg); transform-origin: 50% 50%; }
+html[data-vx="card"] .app-shell main { transform-origin: 50% 50%; }
+html[data-vx="card"] .app-shell main.vx-in { background: var(--bg); filter: none; animation: card-in var(--vx-in, .8s) cubic-bezier(.45, 0, .25, 1) both; }
+html[data-vx="card"] .main-ghost { animation: card-ghost var(--vx-out, .64s) cubic-bezier(.45, 0, .25, 1) both; }   /* cùng đường cong với thẻ mới để hai thẻ chạy sát nhau */
+
+/* ── Kiểu «Mượt» (mặc định): không phóng to / xoay / làm mờ nét — nội dung cũ mờ đi rất nhanh, nội dung mới hiện lần lượt từng khối,
+      mỗi khối trượt nhẹ từ dưới lên vài pixel. Thứ tự do JS gán qua biến --i (khối đầu tiên là 0). ── */
+@keyframes fx-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-6px); } }
+@keyframes fx-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+html[data-vx="fade"] .app-shell main.vx-out { animation: fx-out var(--vx-out, .14s) cubic-bezier(.4, 0, 1, 1) both; filter: none; }
+html[data-vx="fade"] .app-shell main.vx-in { animation: none; filter: none; }
+html[data-vx="fade"] .app-shell main.vx-in > *:not(dialog) { animation: fx-up var(--vx-in, .42s) cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+/* ── Kiểu «Trượt ngang» (mặc định): trang cũ thu lại một chút rồi mờ đi, trang mới chạy từ mép phải sang trái. Vùng nội dung đã cắt ở mép (.main-wrap) nên không tràn ra menu. ── */
+@keyframes sl-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-5%) scale(.100); } }
+@keyframes sl-in { from { opacity: .35; transform: translateX(100%); } to { opacity: 1; transform: none; } }
+html[data-vx="slide"] .app-shell main { transform-origin: 50% 45%; }
+html[data-vx="slide"] .app-shell main.vx-out { animation: sl-out var(--vx-out, .22s) cubic-bezier(.4, 0, 1, 1) both; filter: none; }
+html[data-vx="slide"] .app-shell main.vx-in { animation: sl-in var(--vx-in, .48s) cubic-bezier(.22, .8, .22, 1) both; filter: none; }
+
+/* ── Logo Chương Đại Dương ── */
+.brand img { width: 40px; height: 40px; object-fit: cover; border-radius: 11px; box-shadow: 0 1px 4px rgba(120, 12, 24, .35); }
+.login-brand img { object-fit: cover; padding: 0; border: 0; box-shadow: 0 1px 4px rgba(120, 12, 24, .3); }
+.login-head { text-align: left; }
+.login-logo { display: block; width: 112px; height: 112px; margin: 0 0 20px; object-fit: cover; border-radius: 26px; box-shadow: 0 14px 30px -12px rgba(150, 14, 28, .55); }
+.error-logo { border-radius: 16px; box-shadow: 0 10px 24px -10px rgba(150, 14, 28, .5); }
+@media (max-width: 1000px) { .brand img { width: 34px; height: 34px; } }
+
+/* ── Ảnh đại diện ── */
+.avatar { overflow: hidden; flex: none; }
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.avatar.sm { display: inline-grid; width: 30px; height: 30px; margin-right: 9px; vertical-align: middle; font-size: .8rem; }
+.avatar.xl { display: grid; width: 96px; height: 96px; font-size: 2.1rem; box-shadow: 0 8px 20px -10px rgba(17, 24, 39, .45); }
+.person { display: flex; align-items: center; gap: 0; } .person .avatar.sm { margin-right: 10px; }
+.avatar-edit { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.avatar-ctrl { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.file-pick { position: relative; cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.file-pick:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ── Trang Phân quyền: ghi chú phụ thuộc + nháy dòng khi hệ thống tự bật / tắt quyền đi kèm ── */
+.matrix .dep { color: var(--brand-600); font-weight: 600; }
+@keyframes dep-flash { 0% { background: var(--warn-bg); } 100% { background: transparent; } }
+.matrix tr.dep-flash { animation: dep-flash 1.2s ease-out; }

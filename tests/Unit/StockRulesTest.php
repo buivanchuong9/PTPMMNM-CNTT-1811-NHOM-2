@@ -40,4 +40,8 @@ throws(fn() => R::normalizeLines(['abc'], ['1']), DomainError::class, 'khoá hà
 throws(fn() => R::normalizeLines([''], ['5']), DomainError::class, 'có SL nhưng chưa chọn hàng');
 throws(fn() => R::normalizeLines(['1:2'], ['']), DomainError::class, 'có hàng nhưng chưa nhập SL');
 
+section('variance');
+same(R::variance(10, 8), -2, 'thiếu 2');
+same(R::variance(10, 13), 3, 'thừa 3');
+same(R::variance(10, null), null, 'chưa đếm');
 finish();

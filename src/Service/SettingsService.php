@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace StockFlow\Service;
 
+use StockFlow\Core\Config;
 use StockFlow\Core\Db;
 use StockFlow\Domain\AccountRole;
 use StockFlow\Domain\DomainError;
@@ -114,6 +115,92 @@ final class SettingsService
         }
         $this->db->exec('UPDATE nguoi_dung SET mat_khau_ma_hoa = ? WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $actor->id]);
         $this->audit->record($actor->id, 'user.password.self', 'user', $actor->id, $actor->username);
+    }
+
+    // ───── ảnh đại diện ─────
+    public const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+    private const AVATAR_TYPES = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
+    private const AVATAR_MIME = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
+    /** Tên file do hệ thống tự sinh: u{mã tài khoản}_{12 ký tự ngẫu nhiên}.{đuôi} — không bao giờ dùng tên file người dùng gửi. */
+    private const AVATAR_NAME = '/^u\d+_[a-f0-9]{12}\.(jpg|png|webp)$/';
+
+    public static function avatarDir(): string
+    {
+        $dir = Config::storage('avatars');
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new DomainError('Không tạo được thư mục lưu ảnh đại diện');
+        }
+        return $dir;
+    }
+
+    /**
+     * Lưu ảnh đại diện của chính $actor: kiểm tra nội dung thật của file (không tin đuôi file / loại do trình duyệt khai),
+     * lưu vào storage/avatars rồi ghi tên file vào CSDL; ảnh cũ bị xoá. @return string tên file đã lưu
+     */
+    public function saveAvatar(User $actor, string $tmpPath, int $size): string
+    {
+        if ($size <= 0 || !is_file($tmpPath)) {
+            throw new DomainError('Hãy chọn một ảnh');
+        }
+        if ($size > self::AVATAR_MAX_BYTES) {
+            throw new DomainError('Ảnh quá lớn — tối đa 2 MB');
+        }
+        $info = @getimagesize($tmpPath);
+        if (!$info || !isset(self::AVATAR_TYPES[$info[2]])) {
+            throw new DomainError('Chỉ nhận ảnh JPG, PNG hoặc WebP');
+        }
+        if ($info[0] < 64 || $info[1] < 64) {
+            throw new DomainError('Ảnh quá nhỏ — tối thiểu 64×64 điểm ảnh');
+        }
+        if ($info[0] > 6000 || $info[1] > 6000) {
+            throw new DomainError('Ảnh quá lớn về kích thước — tối đa 6000×6000 điểm ảnh');
+        }
+        $name = sprintf('u%d_%s.%s', $actor->id, bin2hex(random_bytes(6)), self::AVATAR_TYPES[$info[2]]);
+        $dest = self::avatarDir() . '/' . $name;
+        if (!@copy($tmpPath, $dest)) {
+            throw new DomainError('Không lưu được ảnh. Hãy thử lại.');
+        }
+        @chmod($dest, 0644);
+        try {
+            $old = $this->db->value('SELECT anh_dai_dien FROM nguoi_dung WHERE id = ?', [$actor->id]);
+            $this->db->exec('UPDATE nguoi_dung SET anh_dai_dien = ? WHERE id = ?', [$name, $actor->id]);
+        } catch (\Throwable $e) {
+            @unlink($dest);
+            throw $e;
+        }
+        if ($old && $old !== $name) {
+            $this->deleteAvatarFile((string)$old);
+        }
+        $this->audit->record($actor->id, 'user.avatar', 'user', $actor->id, $actor->username);
+        return $name;
+    }
+
+    public function removeAvatar(User $actor): void
+    {
+        $old = $this->db->value('SELECT anh_dai_dien FROM nguoi_dung WHERE id = ?', [$actor->id]);
+        $this->db->exec('UPDATE nguoi_dung SET anh_dai_dien = NULL WHERE id = ?', [$actor->id]);
+        if ($old) {
+            $this->deleteAvatarFile((string)$old);
+            $this->audit->record($actor->id, 'user.avatar.remove', 'user', $actor->id, $actor->username);
+        }
+    }
+
+    private function deleteAvatarFile(string $name): void
+    {
+        if (preg_match(self::AVATAR_NAME, $name)) {
+            @unlink(self::avatarDir() . '/' . $name);
+        }
+    }
+
+    /** @return ?array{path:string,mime:string} file ảnh của tài khoản, hoặc null nếu chưa có / file đã mất */
+    public function avatarFile(int $userId): ?array
+    {
+        $name = $this->db->value('SELECT anh_dai_dien FROM nguoi_dung WHERE id = ?', [$userId]);
+        if (!$name || !preg_match(self::AVATAR_NAME, (string)$name)) {
+            return null;
+        }
+        $path = self::avatarDir() . '/' . $name;
+        return is_file($path) ? ['path' => $path, 'mime' => self::AVATAR_MIME[substr((string)$name, strrpos((string)$name, '.') + 1)]] : null;
     }
 
     // ───── quản lý kho ─────

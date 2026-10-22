@@ -31,6 +31,9 @@ final class TransferService
         if ($fromWh === $toWh) {
             throw new DomainError('Kho đi và kho đến phải khác nhau');
         }
+        if (mb_strlen(trim($note)) > 255) {
+            throw new DomainError('Ghi chú tối đa 255 ký tự');
+        }
         if ($idempotencyKey !== null && ($existing = $this->repo->findByKey($idempotencyKey))) {
             return ['voucher' => $existing, 'created' => false];
         }
@@ -138,7 +141,7 @@ final class TransferService
     }
 
     /**
-     * Đảo toàn bộ một điều chuyển đã xác nhận: lập 2 phiếu nhập xuất điều chỉnh (nơi đi +, nơi đến −) trong một giao dịch.
+     * Đảo toàn bộ một điều chuyển đã xác nhận: lập 2 phiếu điều chỉnh (nơi đi +, nơi đến −) trong một giao dịch.
      * @return array{voucher:array}
      */
     public function correct(User $user, int $voucherId, string $reason): array

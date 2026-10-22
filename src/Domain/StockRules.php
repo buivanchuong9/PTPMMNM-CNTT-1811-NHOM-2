@@ -72,6 +72,12 @@ final class StockRules
         return array_values($merged);
     }
 
+    /** Chênh lệch kiểm kê = thực đếm − sổ sách (null nếu chưa đếm). */
+    public static function variance(int $system, ?int $counted): ?int
+    {
+        return $counted === null ? null : $counted - $system;
+    }
+
     /** Dòng đảo của phiếu nhập xuất gốc (điều chỉnh sửa phiếu nhập xuất, không xoá lịch sử). */
     public static function reversalQty(VoucherType $type, int $qty): int
     {

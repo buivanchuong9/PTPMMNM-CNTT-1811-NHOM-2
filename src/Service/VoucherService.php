@@ -11,7 +11,7 @@ use StockFlow\Domain\StockRules;
 use StockFlow\Domain\User;
 use StockFlow\Domain\VoucherType;
 
-/** Vòng đời phiếu nhập / xuất / điều chỉnh: lập → kiểm tra → xác nhận (ghi sổ) hoặc huỷ; sửa bằng phiếu nhập xuất điều chỉnh. */
+/** Vòng đời phiếu nhập / xuất / điều chỉnh: lập → kiểm tra → xác nhận (ghi sổ) hoặc huỷ; sửa bằng phiếu điều chỉnh. */
 final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
@@ -29,6 +29,12 @@ final class VoucherService
             throw new DomainError('Chỉ lập tay phiếu nhập hoặc phiếu xuất');
         }
         $this->auth->require($user, $warehouseId, $type === VoucherType::Receipt ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);
+        if (mb_strlen(trim($partner)) > 120) {
+            throw new DomainError('Đối tác tối đa 120 ký tự');
+        }
+        if (mb_strlen(trim($note)) > 255) {
+            throw new DomainError('Ghi chú tối đa 255 ký tự');
+        }
         if ($idempotencyKey !== null && ($existing = $this->repo->findByKey($idempotencyKey))) {
             return ['voucher' => $existing, 'created' => false];
         }
@@ -129,14 +135,17 @@ final class VoucherService
     }
 
     /**
-     * Sửa phiếu nhập xuất đã ghi sổ bằng phiếu nhập xuất điều chỉnh đảo (không xoá/sửa lịch sử). Mỗi phiếu nhập xuất chỉ đảo được một lần.
-     * @return array{voucher:array} phiếu nhập xuất điều chỉnh vừa lập (hoặc phía nơi đi nếu là điều chuyển)
+     * Sửa phiếu nhập xuất đã ghi sổ bằng phiếu điều chỉnh đảo (không xoá/sửa lịch sử). Mỗi phiếu nhập xuất chỉ đảo được một lần.
+     * @return array{voucher:array} phiếu điều chỉnh vừa lập (hoặc phía nơi đi nếu là điều chuyển)
      */
     public function correct(User $user, int $id, string $reason): array
     {
         $reason = trim($reason);
         if ($reason === '') {
             throw new DomainError('Cần ghi rõ lý do điều chỉnh');
+        }
+        if (mb_strlen($reason) > 255) {
+            throw new DomainError('Lý do điều chỉnh tối đa 255 ký tự');
         }
         $peek = $this->repo->find($id);
         if (in_array($peek['loai'], [VoucherType::TransferOut->value, VoucherType::TransferIn->value], true)) {

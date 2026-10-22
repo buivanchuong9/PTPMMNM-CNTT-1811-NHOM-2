@@ -48,7 +48,7 @@
   <form method="post" action="/batches" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="batch-dlg-t">Thêm lô</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Mặt hàng<select name="item_id" required data-combo aria-label="Mặt hàng theo lô"><option value="">Chọn mặt hàng theo lô…</option><?php foreach ($items as $i): if ($i['quan_ly_lo']): ?><option value="<?= (int)$i['id'] ?>"><?= e($i['ma_hang'] . ' — ' . $i['ten']) ?></option><?php endif; endforeach; ?></select></label>
-    <label>Số lô<input name="batch_no" required maxlength="40" placeholder="L2607C" autocomplete="off"></label>
+    <label>Số lô<input name="batch_no" required maxlength="40" pattern="[A-Za-z0-9._\-]{1,40}" title="1–40 ký tự: chữ không dấu, số, . _ -" placeholder="L2607C" autocomplete="off"></label>
     <label>Hạn dùng<input type="date" name="expiry"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm lô</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
@@ -58,12 +58,12 @@
 <dialog id="item-dlg" class="dlg" aria-labelledby="item-dlg-t">
   <form method="post" action="/items" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="item-dlg-t">Thêm mặt hàng</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
-    <label>SKU<input name="sku" required maxlength="40" autocomplete="off"></label>
+    <label>SKU<input name="sku" required minlength="2" maxlength="40" pattern="[A-Za-z0-9._\-]{2,40}" title="2–40 ký tự: chữ không dấu, số, . _ -" autocomplete="off"></label>
     <label>Tên hàng<input name="name" required maxlength="160"></label>
     <label>Đơn vị tính<select name="unit_id" required><?php foreach ($units as $u): ?><option value="<?= (int)$u['id'] ?>"><?= e($u['ma']) ?></option><?php endforeach; ?></select></label>
-    <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" value="1" required></label>
+    <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" value="1" required></label>
     <label class="check"><input type="checkbox" name="track_batch" value="1"> Quản lý theo lô / hạn dùng</label>
-    <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" value="0"></label>
+    <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" max="1000000" step="1" value="0"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm mặt hàng</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
@@ -71,8 +71,8 @@
   <form method="post" action="/items/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="item_id">
     <div class="dlg-head"><h2 id="edit-dlg-t">Sửa quy cách</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted" data-dlg-label></p>
-    <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" required></label>
-    <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" required></label>
+    <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" required></label>
+    <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" max="1000000" step="1" required></label>
     <div class="actions"><button type="submit">Lưu</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>

@@ -10,3 +10,39 @@ dialog.dlg[open]::backdrop, dialog.fv-dlg[open]::backdrop { animation: dlg-bd-in
 
 dialog.dlg[open].is-closing, dialog.fv-dlg[open].is-closing { animation: dlg-out .2s ease-in both; }
 dialog.dlg[open].is-closing::backdrop, dialog.fv-dlg[open].is-closing::backdrop { animation: dlg-bd-out .2s ease-in both; }
+
+/* Hộp thoại xác nhận (JS tạo khi bấm phần tử có data-confirm). Hiệu ứng mở/đóng dùng chung dialog.css + dialog-fx.js. */
+@keyframes cf-pop { 0% { transform: scale(.4) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.15) rotate(4deg); opacity: 1; } 100% { transform: none; } }
+@keyframes cf-ring { 0% { box-shadow: 0 0 0 0 var(--cf-ring); } 100% { box-shadow: 0 0 0 18px transparent; } }
+dialog.dlg-confirm { width: min(400px, calc(100% - 32px)); text-align: center; padding: 28px 26px 22px; border-top-width: 0; }
+.dlg-confirm { --cf-c: var(--brand); --cf-ring: rgba(209, 47, 63, .35); }
+.dlg-confirm.is-danger { --cf-c: var(--danger); --cf-ring: rgba(220, 38, 38, .35); }
+.dlg-confirm .cf-icon { width: 58px; height: 58px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; font-size: 1.9rem; font-weight: 700; color: #fff; background: var(--cf-c); }
+dialog.dlg-confirm[open] .cf-icon { animation: cf-pop .5s cubic-bezier(.2, .9, .3, 1.3) .12s both, cf-ring .9s ease-out .35s 1 both; }
+.dlg-confirm h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.dlg-confirm .cf-msg { margin: 0 0 20px; color: var(--ink-2); line-height: 1.5; }
+.dlg-confirm .cf-actions { justify-content: center; margin: 0; }
+.dlg-confirm .cf-actions button { min-width: 112px; }
+.btn-danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger-solid:hover { filter: brightness(.92); }
+@media (prefers-reduced-motion: reduce) { dialog.dlg-confirm[open] .cf-icon { animation: none; } }
+
+/* Popup thông báo kết quả thao tác (flash): giữa trang, biểu tượng tự vẽ, thành công tự đóng kèm thanh đếm ngược. */
+@keyframes nt-draw { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+@keyframes nt-pop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: none; } }
+@keyframes nt-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+@keyframes nt-count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+dialog.dlg-notice { width: min(400px, calc(100% - 32px)); text-align: center; padding: 28px 26px 22px; border-top-width: 0; overflow: hidden; --nt-c: var(--ok); }
+.dlg-notice.is-err { --nt-c: var(--danger); }
+.dlg-notice .nt-icon { width: 62px; height: 62px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; background: var(--nt-c); }
+.dlg-notice .nt-icon svg { width: 34px; height: 34px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 30; }
+dialog.dlg-notice[open] .nt-icon { animation: nt-pop .5s cubic-bezier(.2, .9, .3, 1.3) .1s both; }
+dialog.dlg-notice.is-ok[open] .nt-icon svg { animation: nt-draw .45s ease-out .4s both; stroke-dashoffset: 30; }
+dialog.dlg-notice.is-err[open] .nt-icon { animation: nt-pop .5s cubic-bezier(.2, .9, .3, 1.3) .1s both, nt-shake .5s ease .6s 1; }
+.dlg-notice.is-err .nt-icon svg { stroke-dasharray: none; }
+.dlg-notice h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.dlg-notice .nt-msg p { margin: 0 0 6px; color: var(--ink-2); line-height: 1.5; }
+.dlg-notice .nt-actions { justify-content: center; margin: 14px 0 0; }
+.dlg-notice .nt-actions button { min-width: 112px; }
+.dlg-notice .nt-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--nt-c); transform-origin: left; animation: nt-count var(--nt-ms, 3200ms) linear forwards; }
+@media (prefers-reduced-motion: reduce) { dialog.dlg-notice[open] .nt-icon, dialog.dlg-notice[open] .nt-icon svg, .dlg-notice .nt-bar { animation: none; } }

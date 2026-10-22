@@ -87,7 +87,34 @@ final class Migrator
                 $log[] = '✔ Đã thêm cột mat_hang.quy_cach_lo (SQLite)';
             }
         }
+        foreach (self::ADDED_COLUMNS as [$table, $column, $definition]) {
+            if ($this->addColumnIfMissing($table, $column, $definition)) {
+                $log[] = "✔ Đã thêm cột $table.$column";
+            }
+        }
         return $log;
+    }
+
+    /** Cột thêm ở các phiên bản sau: [bảng, cột, định nghĩa]. Bảng mới dựng từ 001_schema.sql đã có sẵn cột này. */
+    private const ADDED_COLUMNS = [
+        ['nguoi_dung', 'anh_dai_dien', 'varchar(255) NULL'],
+    ];
+
+    private function addColumnIfMissing(string $table, string $column, string $definition): bool
+    {
+        if ($this->db->isSqlite()) {
+            $cols = array_column($this->db->all("PRAGMA table_info($table)"), 'name');
+            if (!$cols || in_array($column, $cols, true)) {
+                return false;
+            }
+            $this->db->raw("ALTER TABLE $table ADD COLUMN $column " . preg_replace('/varchar\(\d+\)/', 'text', $definition));
+            return true;
+        }
+        if ($this->db->value('SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $column])) {
+            return false;
+        }
+        $this->db->raw("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
+        return true;
     }
 
     /** XOÁ MỌI BẢNG trong CSDL hiện tại — chỉ dùng cho CSDL kiểm thử. */

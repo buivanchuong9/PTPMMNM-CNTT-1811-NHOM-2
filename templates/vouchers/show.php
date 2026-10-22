@@ -33,8 +33,8 @@ $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
 <div class="flash flash-muted"><?= icon('alert') ?><span>Phiếu đã bị huỷ khi còn là bản nháp; không có tác động đến tồn.</span></div>
 <?php endif; ?>
 
-<?php if ($original): ?><div class="flash flash-info"><?= icon('scale') ?><span>Phiếu nhập xuất điều chỉnh đảo cho <a href="/vouchers/<?= (int)$original['id'] ?>"><b><?= e($original['ma']) ?></b></a>. Lý do: <?= e($v['ly_do']) ?></span></div><?php endif; ?>
-<?php if ($correction): ?><div class="flash flash-info"><?= icon('scale') ?><span>Phiếu nhập xuất này đã được điều chỉnh bằng <a href="/vouchers/<?= (int)$correction['id'] ?>"><b><?= e($correction['ma']) ?></b></a>. Lịch sử gốc được giữ nguyên.</span></div><?php endif; ?>
+<?php if ($original): ?><div class="flash flash-info"><?= icon('scale') ?><span>Đây là phiếu điều chỉnh, dùng để sửa sai cho phiếu <a href="/vouchers/<?= (int)$original['id'] ?>"><b><?= e($original['ma']) ?></b></a>. Lý do: <?= e($v['ly_do']) ?></span></div><?php endif; ?>
+<?php if ($correction): ?><div class="flash flash-info"><?= icon('scale') ?><span>Phiếu này đã được sửa sai bằng phiếu điều chỉnh <a href="/vouchers/<?= (int)$correction['id'] ?>"><b><?= e($correction['ma']) ?></b></a>. Lịch sử gốc được giữ nguyên.</span></div><?php endif; ?>
 
 <div class="grid-main">
   <div>
@@ -88,11 +88,11 @@ $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
 
     <?php if ($canCorrect && !$correction && $canAdjust): ?>
     <section class="card">
-      <h2>Điều chỉnh phiếu nhập xuất</h2>
-      <p class="muted small">Phiếu nhập xuất đã ghi sổ không được sửa hoặc xoá. Hãy lập phiếu nhập xuất điều chỉnh đảo<?= $isTransfer ? ' (đảo cả hai kho trong một giao dịch)' : '' ?> kèm lý do.</p>
+      <h2>Sửa sai phiếu này</h2>
+      <p class="muted small">Phiếu đã ghi sổ không được sửa hoặc xoá. Nếu phiếu bị sai, hãy lập phiếu điều chỉnh kèm lý do: phiếu điều chỉnh sẽ hoàn lại số lượng của phiếu này<?= $isTransfer ? ' ở cả hai kho trong một giao dịch' : '' ?>, lịch sử cũ vẫn được giữ nguyên.</p>
       <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/correct" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
         <label>Lý do điều chỉnh<textarea name="reason" rows="3" maxlength="255" required placeholder="VD: Nhập nhầm số lượng, thực nhận 90"></textarea></label>
-        <button class="btn-danger" data-confirm="Lập phiếu nhập xuất điều chỉnh đảo cho phiếu nhập xuất này?">Lập phiếu nhập xuất điều chỉnh</button>
+        <button class="btn-danger" data-confirm="Lập phiếu điều chỉnh để hoàn lại số lượng của phiếu này? Việc này không xoá lịch sử cũ.">Lập phiếu điều chỉnh</button>
       </form>
     </section>
     <?php endif; ?>

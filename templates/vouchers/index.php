@@ -4,7 +4,7 @@ $total = array_sum($counts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh], $over), fn($v) => $v !== null && $v !== ''));
 ?>
 <header class="page-head">
-  <div><h1>Phiếu nhập xuất kho</h1><p class="muted">Phiếu nhập, xuất, điều chuyển và điều chỉnh. Phiếu nhập xuất đã xác nhận không bị sửa/xoá — chỉ điều chỉnh bằng phiếu nhập xuất đảo.</p></div>
+  <div><h1>Phiếu nhập xuất kho</h1><p class="muted">Phiếu nhập, xuất, điều chuyển và điều chỉnh. Phiếu đã xác nhận không bị sửa hay xoá — nếu sai thì lập phiếu điều chỉnh.</p></div>
   <div class="actions"><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuNhap)): ?><a class="btn" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Phiếu nhập</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuXuat)): ?><a class="btn btn-ghost" href="/vouchers/new?type=ISSUE"><?= icon('out') ?>Phiếu xuất</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuDieuChuyen)): ?><a class="btn btn-ghost" href="/transfers/new"><?= icon('truck') ?>Điều chuyển</a><?php endif; ?></div>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">

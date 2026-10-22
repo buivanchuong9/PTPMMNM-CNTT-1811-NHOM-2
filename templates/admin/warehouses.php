@@ -6,6 +6,9 @@ $anyAdd = (bool)array_filter($rows, $canAddStaff);
 // Sửa địa chỉ: tài khoản cấp cao mọi kho; quản lý kho của mình
 $canEditAddr = fn(array $w) => $user->isAdmin || ($user->role === \StockFlow\Domain\AccountRole::Manager && (int)$user->warehouseId === (int)$w['id']);
 $anyAddr = (bool)array_filter($rows, $canEditAddr);
+// Sửa / khoá nhân viên: chỉ quản lý của chính kho đó (SettingsService::ownStaff kiểm lại ở máy chủ)
+$canEditStaff = fn(array $w) => $user->role === \StockFlow\Domain\AccountRole::Manager && (int)$user->warehouseId === (int)$w['id'] && $auth->allows($user, P::QuanLyNhanVien);
+$anyEdit = (bool)array_filter($rows, $canEditStaff);
 ?>
 <header class="page-head">
   <div><h1>Kho &amp; nhân sự</h1><p class="muted">Mỗi kho có <b>một quản lý</b> và <b>nhiều nhân viên</b>. Tài khoản quản lý / nhân viên chỉ thao tác trong kho được gắn; tài khoản cấp cao thấy mọi kho.</p></div>
@@ -31,24 +34,28 @@ $anyAddr = (bool)array_filter($rows, $canEditAddr);
       <div class="wh-manager">
         <span class="wh-role">Quản lý kho</span>
         <?php if ($m): ?>
-          <b><?= e($m['ho_ten']) ?></b> <span class="muted">· tài khoản <code><?= e($m['ten_dang_nhap']) ?></code></span>
+          <?= avatar_html((int)$m['id'], $m['anh_dai_dien'] ?? null, $m['ho_ten'], 'sm') ?><b><?= e($m['ho_ten']) ?></b> <span class="muted">· tài khoản <code><?= e($m['ten_dang_nhap']) ?></code></span>
           <?= $m['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?>
         <?php else: ?><span class="tag tag-warn">Chưa có quản lý</span><?php endif; ?>
       </div>
 
       <div class="table-wrap"><table class="dense staff-table">
         <caption class="staff-cap">Nhân viên kho <span class="count"><?= count($w['nhan_vien']) ?></span></caption>
-        <thead><tr><th>#</th><th>Họ và tên</th><th>Tên đăng nhập</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
+        <thead><tr><th>#</th><th>Họ và tên</th><th>Tên đăng nhập</th><th>Trạng thái</th><th>Ngày tạo</th><?php if ($canEditStaff($w)): ?><th>Thao tác</th><?php endif; ?></tr></thead>
         <tbody>
         <?php foreach ($w['nhan_vien'] as $i => $nv): ?>
           <tr class="<?= $nv['hoat_dong'] ? '' : 'row-off' ?>">
             <td class="muted"><?= $i + 1 ?></td>
-            <td class="wrap"><b><?= e($nv['ho_ten']) ?></b></td>
+            <td class="wrap"><?= avatar_html((int)$nv['id'], $nv['anh_dai_dien'] ?? null, $nv['ho_ten'], 'sm') ?><b><?= e($nv['ho_ten']) ?></b></td>
             <td class="wrap"><code><?= e($nv['ten_dang_nhap']) ?></code></td>
             <td><?= $nv['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?></td>
             <td class="muted"><?= e(dt_short($nv['ngay_tao'])) ?></td>
+            <?php if ($canEditStaff($w)): ?><td>
+              <button type="button" class="btn-ghost btn-sm" data-dialog-open="staff-edit-dlg" data-fill-label="<?= e($nv['ho_ten']) ?>"
+                data-fill="<?= e(json_encode(['user_id' => (int)$nv['id'], 'username' => $nv['ten_dang_nhap'], 'active' => $nv['hoat_dong'] ? '0' : '1', 'lock_label' => $nv['hoat_dong'] ? 'Khoá tài khoản' : 'Mở khoá'], JSON_UNESCAPED_UNICODE)) ?>"><?= icon('settings') ?>Sửa</button>
+            </td><?php endif; ?>
           </tr>
-        <?php endforeach; if (!$w['nhan_vien']): ?><tr><td colspan="5" class="empty">Kho chưa có nhân viên<?= $canAddStaff($w) ? ' — bấm «Thêm nhân viên» để tạo tài khoản đầu tiên.' : '.' ?></td></tr><?php endif; ?>
+        <?php endforeach; if (!$w['nhan_vien']): ?><tr><td colspan="<?= $canEditStaff($w) ? 6 : 5 ?>" class="empty">Kho chưa có nhân viên<?= $canAddStaff($w) ? ' — bấm «Thêm nhân viên» để tạo tài khoản đầu tiên.' : '.' ?></td></tr><?php endif; ?>
         </tbody>
       </table></div>
     </section>
@@ -59,7 +66,7 @@ $anyAddr = (bool)array_filter($rows, $canEditAddr);
 <dialog id="wh-dlg" class="dlg" aria-labelledby="wh-dlg-t">
   <form method="post" action="/warehouses" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="wh-dlg-t">Thêm kho</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
-    <label>Mã kho<input name="code" required maxlength="20" placeholder="VD: HP01" autocomplete="off"></label>
+    <label>Mã kho<input name="code" required minlength="2" maxlength="20" pattern="[A-Za-z0-9_\-]{2,20}" title="2–20 ký tự: chữ không dấu, số, _ hoặc -" placeholder="VD: HP01" autocomplete="off"></label>
     <label>Tên kho<input name="name" required maxlength="120"></label>
     <?php $addr = []; $addrRequired = false; include __DIR__ . '/../partials/address_fields.php'; ?>
     <p class="muted small">Sau khi tạo kho, gắn quản lý ở trang <a href="/users">Tài khoản</a>; quản lý kho sẽ tự thêm nhân viên cho kho của mình tại đây.</p>
@@ -88,8 +95,23 @@ $anyAddr = (bool)array_filter($rows, $canEditAddr);
     <p class="muted dlg-sub">Kho: <b data-dlg-wh></b></p>
     <label>Họ và tên<input name="full_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
     <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" placeholder="chữ thường, số, dấu . _ -" pattern="[A-Za-z0-9._\-]{3,40}"></label>
-    <label>Mật khẩu (≥ 8 ký tự)<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <label>Mật khẩu (≥ <?= (int)$minPassword ?> ký tự)<input type="password" name="password" required minlength="<?= (int)$minPassword ?>" maxlength="72" autocomplete="new-password"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm nhân viên</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+<?php endif; ?>
+<?php if ($anyEdit): ?>
+<dialog id="staff-edit-dlg" class="dlg" aria-labelledby="staff-edit-t">
+  <form method="post" action="/warehouses/staff/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value=""><input type="hidden" name="active" value="">
+    <div class="dlg-head"><h2 id="staff-edit-t">Sửa nhân viên</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <p class="muted dlg-sub">Nhân viên: <b data-dlg-label></b></p>
+    <label>Tên đăng nhập<input name="username" required maxlength="40" autocomplete="off" pattern="[A-Za-z0-9._\-]{3,40}" title="3–40 ký tự: chữ không dấu, số, dấu . _ -" placeholder="chữ thường, số, dấu . _ -"></label>
+    <label>Mật khẩu mới<input type="password" name="password" minlength="<?= (int)$minPassword ?>" maxlength="72" autocomplete="new-password" placeholder="Để trống nếu không đổi (≥ <?= (int)$minPassword ?> ký tự)"></label>
+    <div class="actions">
+      <button type="submit">Lưu thay đổi</button>
+      <button type="submit" class="btn-danger" formaction="/warehouses/staff/active" formnovalidate data-confirm="Đổi trạng thái khoá của nhân viên này? Lịch sử thao tác vẫn được giữ."><span data-fill-text="lock_label">Khoá tài khoản</span></button>
+      <button type="button" class="btn-ghost" data-dialog-close>Huỷ</button>
+    </div>
   </form>
 </dialog>
 <?php endif; ?>

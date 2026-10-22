@@ -1,6 +1,6 @@
 <div class="login">
   <aside class="login-aside">
-    <a class="login-brand" href="/login"><img src="/assets/img/logo-mark.svg" alt="" width="36" height="36"><span>Stock<b>Flow</b></span><small>WMS</small></a>
+    <a class="login-brand" href="/login"><img src="/assets/img/logo-mark.png" alt="" width="36" height="36"><span><?= app_brand() ?></span><small><?= e(APP_TAGLINE) ?></small></a>
     <div class="login-intro">
       <h2>Quản lý kho, <span>rõ từng dòng.</span></h2>
       <ul class="login-points">
@@ -42,13 +42,14 @@
         </div>
       </div>
     </div>
-    <p class="login-foot">© StockFlow WMS</p>
+    <p class="login-foot">© <?= e(APP_NAME) ?></p>
   </aside>
 
   <button class="theme-fab theme-toggle" type="button" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= str_replace('class="icon"', 'class="icon ic-sun"', icon('sun')) ?><?= str_replace('class="icon"', 'class="icon ic-moon"', icon('moon')) ?></button>
   <main class="login-main">
     <section class="login-card" aria-labelledby="login-title">
       <header class="login-head">
+        <img class="login-logo" src="/assets/img/logo.png" alt="Chương Đại Dương" width="112" height="112">
         <h1 id="login-title">Đăng nhập</h1>
         <p>Dùng tài khoản được cấp quyền theo kho.</p>
       </header>
