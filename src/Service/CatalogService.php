@@ -14,7 +14,7 @@ final class CatalogService
 {
     public const NO_LOT = 'NOLOT';
 
-    public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit) {}
+    public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit, private SettingsService $settings) {}
 
     // ───── đọc ─────
     public function warehouses(): array
@@ -91,6 +91,21 @@ final class CatalogService
         $id = $this->db->insert('INSERT INTO kho (ma, ten, dia_chi) VALUES (?,?,?)', [$code, $name, trim($address)]);
         $this->audit->record($actor->id, 'warehouse.create', 'warehouse', $id, $code);
         return $id;
+    }
+
+    /** Đổi địa chỉ kho: tài khoản cấp cao sửa mọi kho; quản lý chỉ sửa kho của mình. Mọi trang đọc kho.dia_chi nên thấy địa chỉ mới ngay. */
+    public function setWarehouseAddress(User $actor, int $warehouseId, string $address): void
+    {
+        $manages = $actor->role === AccountRole::Manager && $actor->warehouseId === $warehouseId;
+        if (!$actor->isAdmin && !$manages) {
+            throw new \StockFlow\Domain\Forbidden('Chỉ tài khoản cấp cao hoặc quản lý của kho này mới đổi được địa chỉ kho');
+        }
+        if (mb_strlen($address) > 255) {
+            throw new DomainError('Địa chỉ quá dài (tối đa 255 ký tự)');
+        }
+        $w = $this->db->one('SELECT ma, dia_chi FROM kho WHERE id = ?', [$warehouseId]) ?? throw new DomainError('Kho không tồn tại');
+        $this->db->exec('UPDATE kho SET dia_chi = ? WHERE id = ?', [$address, $warehouseId]);
+        $this->audit->record($actor->id, 'warehouse.address', 'warehouse', $warehouseId, $w['ma'] . ': ' . ($w['dia_chi'] ?: '—') . ' → ' . ($address ?: '—'));
     }
 
     public function addUnit(User $actor, string $code, string $name): int
@@ -217,15 +232,12 @@ final class CatalogService
 
     private function insertAccount(User $actor, string $username, string $fullName, string $password, AccountRole $role, ?int $warehouseId): int
     {
-        $username = strtolower(trim($username));
-        if (!preg_match('/^[a-z0-9._-]{3,40}$/', $username)) {
-            throw new DomainError('Tên đăng nhập gồm 3–40 ký tự a-z, 0-9, ., _ hoặc -');
-        }
+        $username = User::normalizeUsername($username);
         if (trim($fullName) === '' || mb_strlen($fullName) > 120) {
             throw new DomainError('Họ tên không hợp lệ');
         }
-        if (strlen($password) < 8) {
-            throw new DomainError('Mật khẩu tối thiểu 8 ký tự');
+        if (strlen($password) < ($min = $this->settings->minPassword())) {
+            throw new DomainError("Mật khẩu tối thiểu $min ký tự");
         }
         $this->requireUnique('nguoi_dung', 'ten_dang_nhap', $username, "Tên đăng nhập $username đã tồn tại");
         $kho = $this->checkPlacement($role, $warehouseId);
@@ -253,6 +265,39 @@ final class CatalogService
         $this->auth->forget();
     }
 
+    /**
+     * Sửa một tài khoản kho trong một lần lưu: tên đăng nhập, vai trò, kho, và (tuỳ chọn) mật khẩu mới.
+     * Không áp dụng cho tài khoản quản trị cấp cao. Mật khẩu để trống = giữ nguyên.
+     */
+    public function editAccount(User $actor, int $userId, string $username, AccountRole $role, ?int $warehouseId, string $newPassword = ''): void
+    {
+        $this->auth->requirePermission($actor, Permission::QuanLyTaiKhoan);
+        $u = $this->db->one('SELECT * FROM nguoi_dung WHERE id = ?', [$userId]) ?? throw new DomainError('Tài khoản không tồn tại');
+        if ($u['vai_tro'] === AccountRole::Admin->value) {
+            throw new DomainError('Không sửa tài khoản quản trị cấp cao tại đây');
+        }
+        $username = User::normalizeUsername($username);
+        if ($newPassword !== '' && strlen($newPassword) < ($min = $this->settings->minPassword())) {
+            throw new DomainError("Mật khẩu mới tối thiểu $min ký tự");
+        }
+        $this->db->transaction(function () use ($actor, $userId, $u, $username, $role, $warehouseId, $newPassword) {
+            if ($username !== $u['ten_dang_nhap']) {
+                if ($this->db->one('SELECT id FROM nguoi_dung WHERE ten_dang_nhap = ? AND id <> ?', [$username, $userId])) {
+                    throw new DomainError("Tên đăng nhập $username đã tồn tại");
+                }
+                $this->db->exec('UPDATE nguoi_dung SET ten_dang_nhap = ? WHERE id = ?', [$username, $userId]);
+                $this->audit->record($actor->id, 'user.rename', 'user', $userId, "{$u['ten_dang_nhap']} → $username");
+            }
+            if ($role->value !== $u['vai_tro'] || (int)$warehouseId !== (int)$u['kho_id']) {
+                $this->updateAccount($actor, $userId, $role, $warehouseId);
+            }
+            if ($newPassword !== '') {
+                $this->db->exec('UPDATE nguoi_dung SET mat_khau_ma_hoa = ? WHERE id = ?', [password_hash($newPassword, PASSWORD_DEFAULT), $userId]);
+                $this->audit->record($actor->id, 'user.password', 'user', $userId, $username);
+            }
+        });
+    }
+
     public function setAccountActive(User $actor, int $userId, bool $active): void
     {
         $this->auth->requirePermission($actor, Permission::QuanLyTaiKhoan);
@@ -270,8 +315,8 @@ final class CatalogService
     public function resetPassword(User $actor, int $userId, string $password): void
     {
         $this->auth->requirePermission($actor, Permission::QuanLyTaiKhoan);
-        if (strlen($password) < 8) {
-            throw new DomainError('Mật khẩu tối thiểu 8 ký tự');
+        if (strlen($password) < ($min = $this->settings->minPassword())) {
+            throw new DomainError("Mật khẩu tối thiểu $min ký tự");
         }
         $u = $this->db->one('SELECT ten_dang_nhap FROM nguoi_dung WHERE id = ?', [$userId]) ?? throw new DomainError('Tài khoản không tồn tại');
         $this->db->exec('UPDATE nguoi_dung SET mat_khau_ma_hoa = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $userId]);

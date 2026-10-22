@@ -21,6 +21,30 @@ final class Session
         $_SESSION['csrf'] ??= bin2hex(random_bytes(24));
     }
 
+    /** @var array<string,mixed> tuỳ chọn hiển thị của tài khoản đang đăng nhập (do App nạp mỗi yêu cầu) */
+    private array $prefs = [];
+
+    public function setPrefs(array $prefs): void
+    {
+        $this->prefs = $prefs;
+    }
+
+    public function pref(string $key, mixed $default = null): mixed
+    {
+        return $this->prefs[$key] ?? $default;
+    }
+
+    /** Số giây kể từ thao tác trước (0 nếu chưa có mốc). */
+    public function idleSeconds(): int
+    {
+        return isset($_SESSION['seen']) ? max(0, time() - (int)$_SESSION['seen']) : 0;
+    }
+
+    public function touch(): void
+    {
+        $_SESSION['seen'] = time();
+    }
+
     public function userId(): ?int
     {
         return isset($_SESSION['uid']) ? (int)$_SESSION['uid'] : null;

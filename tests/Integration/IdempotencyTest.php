@@ -5,14 +5,12 @@ require __DIR__ . '/../Support/bootstrap.php';
 
 use StockFlow\Domain\DomainError;
 use StockFlow\Domain\VoucherType;
-use StockFlow\Service\StockCountService;
 use StockFlow\Service\TransferService;
 use StockFlow\Service\VoucherService;
 
 $f = Fx::make();
 $vs = $f->c->get(VoucherService::class);
 $ts = $f->c->get(TransferService::class);
-$cs = $f->c->get(StockCountService::class);
 
 section('Xác nhận phiếu nhập hai lần');
 $v = $vs->createDraft($f->keeperA, VoucherType::Receipt, $f->wa, [$f->line('x', 12), $f->line('y', 3)], 'NCC', '', null)['voucher'];
@@ -50,26 +48,6 @@ $sb = [$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f
 $inId = (int)$f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($t1['voucher'])['id'];
 same($ts->receive($f->approverB, $inId)['already'], true, 'nhận hàng lần hai: đã nhận');
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x'), $f->movements($f->wa), $f->movements($f->wb)], $sb, 'nhận hai lần không cộng thêm');
-
-section('Chốt kiểm kê hai lần');
-$cid = $cs->open($f->keeperA, $f->wa, '');
-$lines = $cs->find($cid)['lines'];
-$counted = [];
-$reasons = [];
-foreach ($lines as $l) {
-    $key = $l['mat_hang_id'] . ':' . $l['lo_hang_id'];
-    $counted[$key] = (int)$l['so_luong_so_sach'] + ($l['mat_hang_id'] === $f->it['x']['item'] ? 2 : 0);
-    if ($l['mat_hang_id'] === $f->it['x']['item']) {
-        $reasons[$key] = 'Chưa ghi phiếu nhập xuất';
-    }
-}
-$cs->submit($f->keeperA, $cid, $counted, $reasons);
-$ra = $cs->approve($f->approverA, $cid);
-$mv = $f->movements($f->wa);
-$rb = $cs->approve($f->approverA, $cid);
-same([$ra['already'], $rb['already']], [false, true], 'lần hai báo đã xác nhận');
-same($f->movements($f->wa), $mv, 'không lập thêm phiếu nhập xuất điều chỉnh / dòng sổ');
-same((int)$f->db->value("SELECT COUNT(*) FROM phieu_nhap_xuat WHERE loai = 'ADJUSTMENT' AND kho_id = ?", [$f->wa]), 1, 'chỉ một phiếu nhập xuất điều chỉnh');
 
 section('Ràng buộc CSDL là lớp bảo vệ cuối cùng');
 $lineId = (int)$f->db->value('SELECT id FROM chi_tiet_phieu_nhap_xuat WHERE phieu_nhap_xuat_id = ? LIMIT 1', [$v['id']]);

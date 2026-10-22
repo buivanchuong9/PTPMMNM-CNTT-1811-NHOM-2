@@ -7,7 +7,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
   <div><h1>Phiếu nhập xuất kho</h1><p class="muted">Phiếu nhập, xuất, điều chuyển và điều chỉnh. Phiếu nhập xuất đã xác nhận không bị sửa/xoá — chỉ điều chỉnh bằng phiếu nhập xuất đảo.</p></div>
   <div class="actions"><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuNhap)): ?><a class="btn" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Phiếu nhập</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuXuat)): ?><a class="btn btn-ghost" href="/vouchers/new?type=ISSUE"><?= icon('out') ?>Phiếu xuất</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuDieuChuyen)): ?><a class="btn btn-ghost" href="/transfers/new"><?= icon('truck') ?>Điều chuyển</a><?php endif; ?></div>
 </header>
-<nav class="tabs" aria-label="Trạng thái">
+<nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => $label): $n = $k === '' ? $total : ($counts[$k] ?? 0); ?>
   <a href="/vouchers?<?= e($qs(['status' => $k])) ?>"<?= ($status ?? '') === $k || ($k === '' && !$status) ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($n) ?></span></a>
   <?php endforeach; ?>
@@ -18,9 +18,8 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
   <select name="type" aria-label="Loại"><option value="">Mọi loại</option><?php foreach (TYPE_LABELS as $k => [$l]): ?><option value="<?= $k ?>"<?= $k === $type ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Mọi kho') ?></select>
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>
-  <button type="submit">Lọc</button>
 </form>
-<section class="card flush"><div class="table-wrap"><table class="dense">
+<section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>Mã phiếu nhập xuất</th><th>Loại</th><th>Kho</th><th>Đối tác / lý do</th><th class="num">Số lượng</th><th>Trạng thái</th><th>Người lập</th><th>Thời gian</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $v): ?>

@@ -13,6 +13,7 @@ use StockFlow\Domain\AccountRole;
 use StockFlow\Domain\StockRules;
 use StockFlow\Domain\Permission;
 use StockFlow\Domain\User;
+use StockFlow\Domain\VnAddress;
 use StockFlow\Service\Authorizer;
 use StockFlow\Service\CatalogService;
 use StockFlow\Service\StockQuery;
@@ -36,8 +37,16 @@ final class AdminController extends Controller
     public function addWarehouse(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->addWarehouse($user, $r->str('code'), $r->str('name'), $r->str('address'));
+            $this->catalog->addWarehouse($user, $r->str('code'), $r->str('name'), VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province'), false));
         }, 'Đã thêm kho.', '/warehouses');
+    }
+
+    /** Đổi địa chỉ kho (tỉnh/thành, phường/xã chọn từ danh mục; máy chủ kiểm tra lại). */
+    public function updateWarehouseAddress(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(function () use ($r, $user) {
+            $this->catalog->setWarehouseAddress($user, (int)$r->int('warehouse_id'), VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province')));
+        }, 'Đã cập nhật địa chỉ kho. Các trang khác sẽ hiển thị địa chỉ mới ngay.', '/warehouses');
     }
 
     /** Quản lý kho thêm nhân viên cho kho của mình (tài khoản cấp cao: chọn kho). */
@@ -86,7 +95,8 @@ final class AdminController extends Controller
     public function users(Request $r, array $p, ?User $user): Response
     {
         $this->need($user, Permission::QuanLyTaiKhoan);
-        [$pageUsers, $pg] = Paginator::of($this->catalog->users(), $r);
+        // Không liệt kê chính tài khoản đang đăng nhập (đổi mật khẩu / họ tên ở Cài đặt; không tự đổi vai trò hay tự khoá được)
+        [$pageUsers, $pg] = Paginator::of(array_values(array_filter($this->catalog->users(), fn($u) => (int)$u['id'] !== $user->id)), $r);
         return $this->render('admin/users', $user, 'users', [
             'users' => $pageUsers, 'pg' => $pg, 'warehouses' => array_values(array_filter($this->catalog->warehouses(), fn($w) => $w['hoat_dong'])),
             'accountRoles' => AccountRole::cases(),
@@ -108,8 +118,8 @@ final class AdminController extends Controller
     public function updateUser(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->updateAccount($user, (int)$r->int('user_id'), $this->roleFrom($r), $r->int('warehouse_id'));
-        }, 'Đã cập nhật vai trò / kho. Chức năng của tài khoản này thay đổi theo vai trò mới ngay lần tải trang kế tiếp.', '/users');
+            $this->catalog->editAccount($user, (int)$r->int('user_id'), $r->str('username'), $this->roleFrom($r), $r->int('warehouse_id'), (string)($r->post['password'] ?? ''));
+        }, 'Đã lưu thay đổi tài khoản. Tên đăng nhập, mật khẩu, vai trò và kho có hiệu lực ngay lần đăng nhập / tải trang kế tiếp.', '/users');
     }
 
     public function setUserActive(Request $r, array $p, ?User $user): Response

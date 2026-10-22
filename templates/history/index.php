@@ -9,14 +9,13 @@
   <select name="item" aria-label="Mặt hàng" data-combo><option value="">Mọi mặt hàng</option><?php foreach ($items as $i): ?><option value="<?= (int)$i['id'] ?>"<?= (int)$i['id'] === $f['item'] ? ' selected' : '' ?>><?= e($i['ma_hang'] . ' — ' . $i['ten']) ?></option><?php endforeach; ?></select>
   <select name="type" aria-label="Loại"><option value="">Mọi loại</option><?php foreach (TYPE_LABELS as $k => [$l]): ?><option value="<?= $k ?>"<?= $k === $f['type'] ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
   <input type="date" name="from" value="<?= e($f['from']) ?>" aria-label="Từ ngày"><input type="date" name="to" value="<?= e($f['to']) ?>" aria-label="Đến ngày">
-  <button type="submit">Lọc</button>
 </form>
-<section class="card flush"><div class="table-wrap"><table class="dense">
+<section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>#</th><th>Thời gian</th><th>Phiếu nhập xuất</th><th>Loại</th><th>Kho</th><th>Hàng / lô</th><th class="num">Biến động</th><th class="num">Tồn sau</th><th>Lý do / ghi chú</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $m): ?>
     <tr><td class="muted"><?= (int)$m['id'] ?></td><td class="muted"><?= e(dt($m['ngay_ghi_so'])) ?></td><td><a href="/vouchers/<?= (int)$m['phieu_nhap_xuat_id'] ?>"><b><?= e($m['voucher_code']) ?></b></a></td><td><?= type_chip($m['loai']) ?></td>
-      <td><span class="wh-code"><?= e($m['wh_code']) ?></span></td><td><b><?= e($m['ma_hang']) ?></b> <span class="muted"><?= e($m['ten']) ?></span><?= $m['so_lo'] !== 'NOLOT' ? ' <small class="tag tag-muted">' . e($m['so_lo']) . '</small>' : '' ?></td>
-      <td class="num <?= $m['bien_dong'] > 0 ? 'pos' : 'neg' ?>"><b><?= signed((int)$m['bien_dong']) ?></b></td><td class="num"><?= n($m['ton_sau']) ?></td><td class="muted"><?= e($m['ly_do'] ?: $m['ghi_chu']) ?></td></tr>
+      <td><span class="wh-code"><?= e($m['wh_code']) ?></span></td><td class="col-item"><b><?= e($m['ma_hang']) ?></b> <span class="muted"><?= e($m['ten']) ?></span><?= $m['so_lo'] !== 'NOLOT' ? ' <small class="tag tag-muted">' . e($m['so_lo']) . '</small>' : '' ?></td>
+      <td class="num <?= $m['bien_dong'] > 0 ? 'pos' : 'neg' ?>"><b><?= signed((int)$m['bien_dong']) ?></b></td><td class="num"><?= n($m['ton_sau']) ?></td><td class="muted wrap"><?= e($m['ly_do'] ?: $m['ghi_chu']) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="9" class="empty">Không có phát sinh phù hợp.</td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>

@@ -23,7 +23,7 @@
 
 | 🏬 | 📥📤 | 🚚 | 📋 | 📖 | ↩️ |
 |:-:|:-:|:-:|:-:|:-:|:-:|
-| **Nhiều kho**<br>quyền theo kho | **Nhập / Xuất**<br>nháp → duyệt | **Điều chuyển**<br>2 kho · 1 giao dịch | **Kiểm kê**<br>lý do + điều chỉnh | **Sổ bất biến**<br>tồn tính từ sổ | **Sửa = đảo**<br>không xoá lịch sử |
+| **Nhiều kho**<br>quyền theo kho | **Nhập / Xuất**<br>nháp → duyệt | **Điều chuyển**<br>2 kho · 1 giao dịch | **Đối chiếu**<br>tồn khớp sổ | **Sổ bất biến**<br>tồn tính từ sổ | **Sửa = đảo**<br>không xoá lịch sử |
 
 <div align="center"><img src="docs/images/transfer-flow.svg" alt="Điều chuyển: COMMIT hoặc ROLLBACK" width="92%"></div>
 
@@ -94,9 +94,9 @@ Lệnh này (bật **MySQL** trong XAMPP trước):
 
 | Tài khoản | Vai trò | Làm được gì |
 |---|---|---|
-| `admin` | **Quản trị hệ thống** (chủ hệ thống) | **Xem thống kê** tồn & xuất nhập của từng kho · **quản lý** kho, mặt hàng, tài khoản con, phân quyền · *không* lập phiếu hay kiểm kê |
-| `hn.quanly` · `dn.quanly` · `hcm.quanly` | **Quản lý kho** (mỗi kho đúng 1) | Xác nhận / huỷ / điều chỉnh phiếu nhập xuất · duyệt kiểm kê · đối chiếu, báo cáo — **chỉ trong kho mình** |
-| `hn.nv1` `hn.nv2` · `dn.nv1` `dn.nv2` · `hcm.nv1` `hcm.nv2` | **Nhân viên kho** (mỗi kho nhiều) | Lập phiếu nhập / xuất / điều chuyển (nháp) · nhập số đếm kiểm kê — **chỉ trong kho mình** |
+| `admin` | **Quản trị hệ thống** (chủ hệ thống) | **Xem thống kê** tồn & xuất nhập của từng kho · **quản lý** kho, mặt hàng, tài khoản con, phân quyền · *không* lập phiếu nhập xuất |
+| `hn.quanly` · `dn.quanly` · `hcm.quanly` | **Quản lý kho** (mỗi kho đúng 1) | Xác nhận / huỷ / điều chỉnh phiếu nhập xuất · đối chiếu, báo cáo — **chỉ trong kho mình** |
+| `hn.nv1` `hn.nv2` · `dn.nv1` `dn.nv2` · `hcm.nv1` `hcm.nv2` | **Nhân viên kho** (mỗi kho nhiều) | Lập phiếu nhập / xuất / điều chuyển (nháp) — **chỉ trong kho mình** |
 
 **Mô hình tài khoản:** một tài khoản cấp cao quản lý nhiều tài khoản con; mỗi kho có **1 quản lý + nhiều nhân viên**.
 Tài khoản con được gắn đúng một kho nên khi lập phiếu, hệ thống **tự lấy kho (và địa chỉ) của tài khoản**.
@@ -143,8 +143,8 @@ Lỗi kết nối được giải thích kèm cách xử lý (MySQL chưa chạy
 **① Nhập → xác nhận → xuất → tra cứu**
 `hn.nv1` *Lập phiếu nhập* → đăng xuất → `hn.quanly` *Xác nhận* → `hn.nv1` *Lập phiếu xuất* → `hn.quanly` *Xác nhận* → **Hàng hoá** (danh mục + quy cách lô + tồn theo kho) · **Lịch sử phát sinh**
 
-**② Điều chuyển → kiểm kê → điều chỉnh**
-`hn.nv1` *Điều chuyển kho* HN01→DN01 → `hn.quanly` *Xác nhận* (sinh **DCX + DCN**) → `dn.nv1` *Kiểm kê* nhập số đếm + lý do → `dn.quanly` *Xác nhận chênh lệch* → **Đối chiếu tồn** báo **KHỚP**
+**② Điều chuyển liên kho → đối chiếu**
+`hn.nv1` *Điều chuyển kho* HN01→DN01 → `hn.quanly` *Xác nhận* (sinh **DCX + DCN**) → `dn.quanly` *Nhận hàng* → **Đối chiếu tồn** báo **KHỚP**
 
 > 🔒 Đăng nhập `hn.nv1` rồi mở phiếu nhập xuất của kho DN01 ⇒ **403**; nhân viên mở trang *Đối chiếu* / *Báo cáo* (bị thu hồi) ⇒ **403**. Quyền kiểm tra ở máy chủ, không chỉ ẩn nút.
 
@@ -162,7 +162,7 @@ bin/stockflow test         # 263 test · cần MySQL (xem mục MySQL ở trên)
 | Lỗi giữa trừ A và cộng B ⇒ không dở dang | `TransferAtomicityTest` — chèn lỗi giữa chừng |
 | Gửi lại phiếu nhập xuất đã xác nhận ⇒ không ghi thêm | `IdempotencyTest` |
 | Tài khoản kho A không xuất được kho B | `AuthorizationTest` + `AuthorizationHttpTest` (POST thật) |
-| Điều chỉnh kiểm kê có lý do, tồn khớp sổ | `StockCountTest` · `ScenarioTest` |
+| Điều chuyển liên kho, tồn khớp sổ | `ScenarioTest` |
 
 <details><summary><b>🧱 Cấu trúc</b></summary>
 
@@ -170,7 +170,7 @@ bin/stockflow test         # 263 test · cần MySQL (xem mục MySQL ở trên)
 public/            front controller + CSS/JS thuần
 src/Core/          Router · Session+CSRF · Db (giao dịch, retry deadlock) · DI
 src/Domain/        quy tắc thuần · enum · lỗi nghiệp vụ
-src/Service/       Ledger · Voucher · Transfer · StockCount · StockQuery · Authorizer
+src/Service/       Ledger · Voucher · Transfer · StockQuery · Authorizer
 src/Http/          controller mỏng
 templates/         giao diện
 database/          migrations · seed

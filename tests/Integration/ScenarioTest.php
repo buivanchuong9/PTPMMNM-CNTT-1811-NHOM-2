@@ -4,7 +4,6 @@ declare(strict_types=1);
 require __DIR__ . '/../Support/bootstrap.php';
 
 use StockFlow\Domain\VoucherType;
-use StockFlow\Service\StockCountService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\TransferService;
 use StockFlow\Service\VoucherService;
@@ -12,7 +11,6 @@ use StockFlow\Service\VoucherService;
 $f = Fx::make();
 $vs = $f->c->get(VoucherService::class);
 $ts = $f->c->get(TransferService::class);
-$cs = $f->c->get(StockCountService::class);
 $q = $f->c->get(StockQuery::class);
 
 section('Tình huống 1: nhập hàng → xác nhận → xuất hàng → tra cứu tồn và lịch sử');
@@ -36,28 +34,12 @@ same(array_column($hist, 'voucher_code'), [$px['ma'], $pn['ma']], 'mỗi dòng s
 $lotRows = array_values(array_filter($q->onHand([$f->wa], '', true), fn($r) => $r['mat_hang_id'] === $f->it['lot']['item']));
 same([$lotRows[0]['so_lo'], $lotRows[0]['so_luong']], ['L1', 25], 'tồn theo lô');
 
-section('Tình huống 2: điều chuyển → kiểm kê → xác nhận chênh lệch → phiếu nhập xuất điều chỉnh');
+section('Tình huống 2: điều chuyển liên kho → đối chiếu tồn / sổ phát sinh');
 $t = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 20)], 'Bổ sung cho kho B', null)['voucher'];
 $ts->confirm($f->approverA, (int)$t['id']);
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [50, 0], 'đang vận chuyển: A đã trừ (50), B chưa có hàng');
 $f->arrive((int)$t['id']);
 same([$f->stock($f->wa, 'x'), $f->stock($f->wb, 'x')], [50, 20], 'sau khi kho B nhận: A=50, B=20');
-$cid = $cs->open($f->keeperB, $f->wb, 'Kiểm kê sau nhận hàng');
-$counted = [];
-$why = [];
-foreach ($cs->find($cid)['lines'] as $l) {
-    $key = $l['mat_hang_id'] . ':' . $l['lo_hang_id'];
-    $counted[$key] = (int)$l['so_luong_so_sach'];
-    if ($l['mat_hang_id'] === $f->it['x']['item']) {
-        $counted[$key] = 18;
-        $why[$key] = 'Thất thoát / mất hàng: thùng rách trong vận chuyển';
-    }
-}
-$cs->submit($f->keeperB, $cid, $counted, $why);
-$res = $cs->approve($f->approverB, $cid);
-same([$res['adjusted'], $res['net']], [1, -2], 'xác nhận chênh lệch −2');
-same($f->stock($f->wb, 'x'), 18, 'kho B sau điều chỉnh = 18');
-same($res['voucher']['loai'], 'ADJUSTMENT', 'có phiếu nhập xuất điều chỉnh');
 $rec = $q->reconcile([$f->wa, $f->wb]);
 $mine = array_filter($rec['rows'], fn($r) => in_array((int)$r['mat_hang_id'], array_column($f->it, 'item'), true));
 same(count(array_filter($mine, fn($r) => $r['balance'] != $r['ledger'])), 0, 'đối chiếu tồn/sổ: khớp');

@@ -9,6 +9,7 @@ use StockFlow\Domain\NotFound;
 use StockFlow\Domain\User;
 use StockFlow\Http\Controller as C;
 use StockFlow\Service\AuthService;
+use StockFlow\Service\SettingsService;
 use Throwable;
 
 /** Front controller: định tuyến, xác thực, CSRF, xử lý lỗi, header bảo mật. */
@@ -35,6 +36,15 @@ final class App
 
         $r->get('/', [C\DashboardController::class, 'index']);
         $r->get('/inventory', [C\InventoryController::class, 'index']);
+        $r->get('/settings', [C\SettingsController::class, 'index']);
+        $r->post('/settings/profile', [C\SettingsController::class, 'profile']);
+        $r->post('/settings/password', [C\SettingsController::class, 'password']);
+        $r->post('/settings/preferences', [C\SettingsController::class, 'preferences']);
+        $r->post('/settings/warehouse', [C\SettingsController::class, 'warehouse']);
+        $r->post('/settings/staff/active', [C\SettingsController::class, 'staffActive']);
+        $r->post('/settings/staff/update', [C\SettingsController::class, 'staffUpdate']);
+        $r->post('/settings/system', [C\SettingsController::class, 'system']);
+        $r->get('/finova/orders', [C\FinovaController::class, 'orders']);
 
         $r->get('/vouchers', [C\VoucherController::class, 'index']);
         $r->get('/vouchers/new', [C\VoucherController::class, 'create']);
@@ -46,15 +56,6 @@ final class App
         $r->get('/transfers/new', [C\VoucherController::class, 'createTransfer']);
         $r->post('/transfers', [C\VoucherController::class, 'storeTransfer']);
 
-        $r->get('/counts', [C\CountController::class, 'index']);
-        $r->post('/counts', [C\CountController::class, 'store']);
-        $r->get('/counts/{id}', [C\CountController::class, 'show']);
-        $r->post('/counts/{id}/save', [C\CountController::class, 'save']);
-        $r->post('/counts/{id}/submit', [C\CountController::class, 'submit']);
-        $r->post('/counts/{id}/approve', [C\CountController::class, 'approve']);
-        $r->post('/counts/{id}/reject', [C\CountController::class, 'reject']);
-        $r->post('/counts/{id}/cancel', [C\CountController::class, 'cancel']);
-
         $r->get('/history', [C\HistoryController::class, 'index']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);
@@ -64,6 +65,7 @@ final class App
 
         $r->get('/warehouses', [C\AdminController::class, 'warehouses']);
         $r->post('/warehouses', [C\AdminController::class, 'addWarehouse']);
+        $r->post('/warehouses/address', [C\AdminController::class, 'updateWarehouseAddress']);
         $r->post('/warehouses/staff', [C\AdminController::class, 'addStaff']);
         $r->get('/items', [C\AdminController::class, 'items']);
         $r->post('/items', [C\AdminController::class, 'addItem']);
@@ -104,6 +106,20 @@ final class App
                 $user = $this->c->get(AuthService::class)->find($uid);
                 if (!$user) {
                     $session->logout();
+                }
+            }
+            if ($user) {
+                $settings = $this->c->get(SettingsService::class);
+                $idle = $settings->system()['idle_minutes'];
+                if ($idle > 0 && $session->idleSeconds() > $idle * 60) {
+                    $session->logout();
+                    $session->flash('err', 'Phiên làm việc đã hết do không thao tác quá ' . $idle . ' phút. Hãy đăng nhập lại.');
+                    $user = null;
+                } else {
+                    $session->touch();
+                    $prefs = $settings->preferences($user);
+                    Paginator::$default = $prefs['rows'];
+                    $session->setPrefs($prefs);
                 }
             }
             if (!$match['public'] && !$user) {

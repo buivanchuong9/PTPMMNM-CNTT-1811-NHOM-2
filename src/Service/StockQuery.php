@@ -249,7 +249,7 @@ final class StockQuery
     {
         $ids = $this->auth->visibleWarehouseIds($user);
         if ($ids === []) {
-            return ['warehouses' => [], 'units' => 0, 'drafts' => 0, 'confirmed_today' => 0, 'open_counts' => 0, 'low' => [], 'recent' => [], 'pending' => [], 'flow' => [], 'daily' => []];
+            return ['warehouses' => [], 'units' => 0, 'drafts' => 0, 'confirmed_today' => 0, 'low' => [], 'recent' => [], 'pending' => [], 'flow' => [], 'daily' => []];
         }
         $in = $this->in($ids);
         $perWh = $this->db->all(
@@ -272,7 +272,6 @@ final class StockQuery
             'units' => array_sum(array_column($perWh, 'units')),
             'drafts' => array_sum(array_column($perWh, 'drafts')),
             'confirmed_today' => (int)$this->db->value("SELECT COUNT(*) FROM phieu_nhap_xuat WHERE trang_thai = 'CONFIRMED' AND kho_id IN ($in) AND ngay_xac_nhan >= CURRENT_DATE", $ids),
-            'open_counts' => (int)$this->db->value("SELECT COUNT(*) FROM dot_kiem_ke WHERE trang_thai IN ('OPEN','REVIEW') AND kho_id IN ($in)", $ids),
             'low' => $low,
             'pending' => $pending,
             'recent' => $this->history($ids, [], 8),

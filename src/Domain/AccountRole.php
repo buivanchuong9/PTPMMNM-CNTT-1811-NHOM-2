@@ -6,7 +6,7 @@ namespace StockFlow\Domain;
 /**
  * Vai trò của tài khoản.
  *  - ADMIN: tài khoản cấp cao (chủ hệ thống) — xem thống kê mọi kho và quản lý kho, mặt hàng, tài khoản, phân quyền;
- *    KHÔNG thao tác nhập/xuất/điều chuyển/kiểm kê (việc của quản lý & nhân viên). Không gắn với kho nào.
+ *    KHÔNG thao tác nhập/xuất/điều chuyển (việc của quản lý & nhân viên). Không gắn với kho nào.
  *  - MANAGER: quản lý kho — mỗi kho có đúng một.
  *  - STAFF: nhân viên kho — mỗi kho có nhiều.
  * Tài khoản MANAGER / STAFF luôn gắn với đúng một kho.

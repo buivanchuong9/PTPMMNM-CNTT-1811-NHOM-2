@@ -18,39 +18,42 @@
   // Biểu đồ (Chart.js nạp cục bộ từ /assets/vendor)
   const initCharts = () => {
     if (!window.Chart) return;
-    const palette = ['#e60012', '#2b2f3a', '#f59e0b', '#2563eb', '#16a34a', '#7a8190', '#7c3aed'];
+    const palette = ['#d12f3f', '#2b2f3a', '#f59e0b', '#2563eb', '#16a34a', '#7a8190', '#0ea5e9'];
     Chart.defaults.font.family = '"Be Vietnam Pro", system-ui, sans-serif';
-    Chart.defaults.color = '#7b8794';
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const paintChartTheme = () => { Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line'); };
+    paintChartTheme();
+    document.addEventListener('themechange', () => { paintChartTheme(); Object.values(Chart.instances).forEach((c) => c.update('none')); });
     document.querySelectorAll('canvas[data-chart]').forEach((cv) => {
       const labels = JSON.parse(cv.dataset.labels || '[]');
       if (cv.dataset.chart === 'doughnut') {
         new Chart(cv, { type: 'doughnut',
-          data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: palette, borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] },
+          data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: (c) => (c.dataIndex === 1 && document.documentElement.dataset.theme === 'dark' ? '#8b95b3' : palette[c.dataIndex % palette.length]), borderWidth: 2, borderColor: () => css('--surface'), hoverOffset: 6 }] },
           options: { cutout: '66%', maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
       } else if (cv.dataset.chart === 'flowbar') {
         new Chart(cv, { type: 'bar',
           data: { labels, datasets: [
-            { label: 'Tổng vào (nhập + chuyển đến)', data: JSON.parse(cv.dataset.vao || '[]'), backgroundColor: '#16a34a', borderRadius: 2, maxBarThickness: 38 },
-            { label: 'Tổng ra (xuất + chuyển đi)', data: JSON.parse(cv.dataset.ra || '[]'), backgroundColor: '#e60012', borderRadius: 2, maxBarThickness: 38 } ] },
+            { label: 'Tổng vào (nhập + chuyển đến)', data: JSON.parse(cv.dataset.vao || '[]'), backgroundColor: '#16a34a', borderRadius: 8, maxBarThickness: 38 },
+            { label: 'Tổng ra (xuất + chuyển đi)', data: JSON.parse(cv.dataset.ra || '[]'), backgroundColor: '#f59e0b', borderRadius: 8, maxBarThickness: 38 } ] },
           options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
-            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f5' }, border: { display: false } } },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: () => css('--line') }, border: { display: false } } },
             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
       } else if (cv.dataset.chart === 'dailyline') {
         new Chart(cv, { type: 'line',
           data: { labels, datasets: [
             { label: 'Tổng vào', data: JSON.parse(cv.dataset.vao || '[]'), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.12)', fill: true, tension: .3, pointRadius: 3 },
-            { label: 'Tổng ra', data: JSON.parse(cv.dataset.ra || '[]'), borderColor: '#e60012', backgroundColor: 'rgba(230,0,18,.10)', fill: true, tension: .3, pointRadius: 3 } ] },
+            { label: 'Tổng ra', data: JSON.parse(cv.dataset.ra || '[]'), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.10)', fill: true, tension: .3, pointRadius: 3 } ] },
           options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 900 }, interaction: { mode: 'index', intersect: false },
-            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f5' }, border: { display: false } } },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: () => css('--line') }, border: { display: false } } },
             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
       } else {
         new Chart(cv, { type: 'bar',
           data: { labels, datasets: [
-            { label: 'Số mã hàng', data: JSON.parse(cv.dataset.skus || '[]'), backgroundColor: '#e60012', borderRadius: 2, maxBarThickness: 38 },
-            { label: 'Phiếu chờ xác nhận', data: JSON.parse(cv.dataset.drafts || '[]'), backgroundColor: '#2b2f3a', borderRadius: 2, maxBarThickness: 38 } ] },
+            { label: 'Số mã hàng', data: JSON.parse(cv.dataset.skus || '[]'), backgroundColor: '#d12f3f', borderRadius: 8, maxBarThickness: 38 },
+            { label: 'Phiếu chờ xác nhận', data: JSON.parse(cv.dataset.drafts || '[]'), backgroundColor: '#2b2f3a', borderRadius: 8, maxBarThickness: 38 } ] },
           options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
-            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f5' }, border: { display: false } } },
+            scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: () => css('--line') }, border: { display: false } } },
             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
       }
     });
@@ -325,6 +328,9 @@
         }
         const fl = dlg.querySelector('[data-dlg-label]');
         if (fl) fl.textContent = open.dataset.fillLabel || '';
+        // sau khi điền: đồng bộ ô kho theo vai trò; [data-fill-text="khoá"] nhận chữ từ cùng JSON (VD: nhãn nút Khoá / Mở khoá)
+        dlg.querySelectorAll('select[data-role-select]').forEach((s) => s.dispatchEvent(new Event('change')));
+        try { const fd = JSON.parse(open.dataset.fill || '{}'); dlg.querySelectorAll('[data-fill-text]').forEach((el) => { if (fd[el.dataset.fillText] !== undefined) el.textContent = fd[el.dataset.fillText]; }); } catch (e) { /* bỏ qua */ }
         dlg.showModal();
         dlg.querySelector('input:not([type=hidden])')?.focus();
       }
@@ -334,33 +340,48 @@
     if (ev.target instanceof HTMLDialogElement) ev.target.close(); // bấm ra ngoài hộp thoại
   });
 
-  // Kiểm kê: tính chênh lệch ngay khi gõ, chỉ hiện ô lý do khi có lệch
-  const cf = document.querySelector('[data-count-form]');
-  if (cf) {
-    const rows = [...cf.querySelectorAll('tr[data-system]')];
-    const refresh = () => {
-      if (!cf.querySelector('.count-input')) return; // đợt đã nộp/đóng: giữ số liệu do máy chủ tính
-      let net = 0, n = 0;
-      rows.forEach((tr) => {
-        const input = tr.querySelector('.count-input');
-        if (!input) return;
-        const cell = tr.querySelector('.variance');
-        const sel = tr.querySelector('.reason-select'), note = tr.querySelector('.reason-note');
-        if (input.value === '') { cell.textContent = '—'; cell.className = 'num variance'; sel.hidden = note.hidden = true; return; }
-        const d = +input.value - +tr.dataset.system;
-        cell.textContent = d === 0 ? '✓' : (d > 0 ? '+' : '') + d;
-        cell.className = 'num variance ' + (d === 0 ? '' : d > 0 ? 'pos' : 'neg');
-        sel.hidden = note.hidden = d === 0;
-        sel.required = d !== 0;
-        if (d !== 0) { net += d; n++; }
-      });
-      const fmt = (v) => (v > 0 ? '+' : '') + v;
-      const netEl = cf.querySelector('[data-var-net]');
-      cf.querySelector('[data-var-lines]').textContent = n;
-      netEl.textContent = fmt(net);
-      netEl.className = net > 0 ? 'pos' : net < 0 ? 'neg' : '';
+  // ── Lọc tự động: chọn mục là lọc ngay, gõ tìm kiếm thì lọc dần (không cần bấm nút «Lọc») ──
+  // Chỉ thay các vùng [data-live] (bảng kết quả, thanh tab) bằng bản mới từ máy chủ — ô lọc giữ nguyên nên không mất con trỏ khi đang gõ.
+  // Ô có [data-live-reload] (đổi cả bộ lọc đi kèm, VD «Kiểu xem») thì tải lại trang.
+  document.querySelectorAll('form.filters[method=get]').forEach((form) => {
+    if (!document.querySelector('[data-live="results"]')) return;
+    let timer = 0, seq = 0;
+    const urlOf = () => {
+      const p = new URLSearchParams();
+      new FormData(form).forEach((v, k) => { const t = String(v).trim(); if (t !== '') p.append(k, t); });
+      const qs = p.toString();
+      return location.pathname + (qs ? '?' + qs : '');
     };
-    cf.addEventListener('input', refresh);
-    refresh();
-  }
+    let last = urlOf();
+    const run = async (reload) => {
+      const target = urlOf();
+      if (target === last) return;
+      last = target;
+      if (reload) { location.href = target; return; }
+      const mine = ++seq;
+      document.body.classList.add('is-filtering');
+      try {
+        const res = await fetch(target, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+        if (mine !== seq) return;                                   // đã có lần lọc mới hơn
+        if (!res.ok || new URL(res.url).pathname !== location.pathname) { location.href = target; return; }
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        let swapped = 0;
+        document.querySelectorAll('[data-live]').forEach((el) => {
+          const fresh = doc.querySelector('[data-live="' + el.dataset.live + '"]');
+          if (fresh) { el.replaceWith(fresh); swapped++; }
+        });
+        if (!swapped) { location.href = target; return; }
+        history.replaceState(null, '', target);                      // URL phản ánh bộ lọc: tải lại / chia sẻ vẫn đúng
+      } catch (e) {
+        location.href = target;
+      } finally {
+        if (mine === seq) document.body.classList.remove('is-filtering');
+      }
+    };
+    form.addEventListener('change', (e) => { clearTimeout(timer); run(!!e.target.closest('[data-live-reload]')); });
+    form.addEventListener('input', (e) => {
+      if (e.target.matches('input[type=search], input[type=text][name]')) { clearTimeout(timer); timer = setTimeout(() => run(false), 300); }
+    });
+    form.addEventListener('submit', (e) => { e.preventDefault(); clearTimeout(timer); run(false); });   // Enter: lọc ngay
+  });
 })();

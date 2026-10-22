@@ -1,0 +1,12 @@
+/* Hiệu ứng hộp thoại (popup form): mở trượt nhẹ + phóng to + mờ dần nền; đóng thu nhỏ + mờ dần. Logic đóng ở /assets/js/dialog-fx.js.
+   Chỉ dùng transform / opacity nên mượt và không làm xô bố cục. Máy bật «giảm chuyển động» thì app.css đã tắt mọi animation. */
+@keyframes dlg-in { from { opacity: 0; transform: translateY(22px) scale(.95); } to { opacity: 1; transform: none; } }
+@keyframes dlg-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(12px) scale(.97); } }
+@keyframes dlg-bd-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlg-bd-out { from { opacity: 1; } to { opacity: 0; } }
+
+dialog.dlg[open], dialog.fv-dlg[open] { animation: dlg-in .34s cubic-bezier(.2, .9, .25, 1.12) both; }
+dialog.dlg[open]::backdrop, dialog.fv-dlg[open]::backdrop { animation: dlg-bd-in .3s ease both; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+
+dialog.dlg[open].is-closing, dialog.fv-dlg[open].is-closing { animation: dlg-out .2s ease-in both; }
+dialog.dlg[open].is-closing::backdrop, dialog.fv-dlg[open].is-closing::backdrop { animation: dlg-bd-out .2s ease-in both; }
