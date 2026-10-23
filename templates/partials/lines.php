@@ -14,7 +14,7 @@ $pickItems = array_map(fn($p) => [
   <legend>Dòng hàng</legend>
   <div class="pick-box">
     <?= icon('search') ?>
-    <input type="text" id="pick-search" placeholder="Bấm để chọn, hoặc gõ tên / SKU / số lô để tìm…" autocomplete="off"
+    <input type="text" id="pick-search" maxlength="50" data-search-clean placeholder="Bấm để chọn, hoặc gõ tên / SKU / số lô để tìm…" autocomplete="off"
            role="combobox" aria-expanded="false" aria-controls="pick-list" aria-label="Tìm mặt hàng">
     <ul id="pick-list" role="listbox" hidden></ul>
   </div>

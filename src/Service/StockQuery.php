@@ -79,7 +79,7 @@ final class StockQuery
                     SUM(m.bien_dong) AS so_luong, MAX(m.ngay_ghi_so) AS last_move
              FROM so_phat_sinh m JOIN kho w ON w.id = m.kho_id JOIN mat_hang i ON i.id = m.mat_hang_id
              JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = m.lo_hang_id
-             WHERE m.kho_id IN ({$this->in($warehouseIds)}) AND (i.ma_hang LIKE ? OR i.ten LIKE ?)
+             WHERE m.kho_id IN ({$this->in($warehouseIds)}) AND (LOWER(i.ma_hang) LIKE ? OR LOWER(i.ten) LIKE ?)
              GROUP BY w.id, w.ma, i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, u.ma $group
              " . ($includeZero ? '' : 'HAVING SUM(m.bien_dong) <> 0 ') . 'ORDER BY i.ma_hang, w.ma' . ($byBatch ? ', b.so_lo' : ''),
             [...$warehouseIds, "%$search%", "%$search%"]
@@ -111,7 +111,7 @@ final class StockQuery
         if (!empty($f['warehouse'])) { $where[] = 'm.kho_id = ?'; $params[] = (int)$f['warehouse']; }
         if (!empty($f['item'])) { $where[] = 'm.mat_hang_id = ?'; $params[] = (int)$f['item']; }
         if (!empty($f['type'])) { $where[] = 'v.loai = ?'; $params[] = $f['type']; }
-        if (!empty($f['q'])) { $where[] = '(v.ma LIKE ? OR i.ma_hang LIKE ? OR i.ten LIKE ? OR b.so_lo LIKE ?)'; array_push($params, ...array_fill(0, 4, '%' . $f['q'] . '%')); }
+        if (!empty($f['q'])) { $where[] = '(LOWER(v.ma) LIKE ? OR LOWER(i.ma_hang) LIKE ? OR LOWER(i.ten) LIKE ? OR LOWER(b.so_lo) LIKE ?)'; array_push($params, ...array_fill(0, 4, '%' . $f['q'] . '%')); }
         if (!empty($f['from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['from'])) { $where[] = 'm.ngay_ghi_so >= ?'; $params[] = $f['from'] . ' 00:00:00'; }
         if (!empty($f['to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['to'])) { $where[] = 'm.ngay_ghi_so < DATE_ADD(?, INTERVAL 1 DAY)'; $params[] = $f['to'] . ' 00:00:00'; }
         return [implode(' AND ', $where), $params];
@@ -249,7 +249,7 @@ final class StockQuery
     {
         $ids = $this->auth->visibleWarehouseIds($user);
         if ($ids === []) {
-            return ['warehouses' => [], 'units' => 0, 'drafts' => 0, 'confirmed_today' => 0, 'low' => [], 'recent' => [], 'pending' => [], 'flow' => [], 'daily' => []];
+            return ['warehouses' => [], 'units' => 0, 'drafts' => 0, 'confirmed_today' => 0, 'low' => [], 'recent' => [], 'pending' => [], 'flow' => [], 'daily' => [], 'voucher_status' => [], 'stock_status' => [], 'top' => []];
         }
         $in = $this->in($ids);
         $perWh = $this->db->all(
@@ -267,7 +267,25 @@ final class StockQuery
                     (SELECT COUNT(*) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS line_count
              FROM phieu_nhap_xuat v JOIN kho w ON w.id = v.kho_id JOIN nguoi_dung cu ON cu.id = v.nguoi_lap_id
              WHERE v.trang_thai = 'DRAFT' AND v.kho_id IN ($in) ORDER BY v.id DESC LIMIT 6", $ids);
+        $voucherStatus = ['DRAFT' => 0, 'CONFIRMED' => 0, 'CANCELLED' => 0];
+        foreach ($this->db->all("SELECT trang_thai, COUNT(*) AS n FROM phieu_nhap_xuat WHERE kho_id IN ($in) GROUP BY trang_thai", $ids) as $r) {
+            $voucherStatus[$r['trang_thai']] = (int)$r['n'];
+        }
+        $stockStatus = ['ok' => 0, 'low' => 0, 'out' => 0];   // còn hàng / sắp hết (≤ định mức) / hết hàng, tính theo mặt hàng
+        foreach ($this->db->all(
+            "SELECT i.dinh_muc_toi_thieu AS dm, SUM(m.bien_dong) AS q FROM mat_hang i JOIN so_phat_sinh m ON m.mat_hang_id = i.id AND m.kho_id IN ($in)
+             WHERE i.hoat_dong GROUP BY i.id, i.dinh_muc_toi_thieu", $ids) as $r) {
+            $q = (int)$r['q'];
+            $stockStatus[$q <= 0 ? 'out' : ($q <= (int)$r['dm'] ? 'low' : 'ok')]++;
+        }
+        $top = $this->db->all(
+            "SELECT i.ma_hang, i.ten, u.ma AS unit, SUM(m.bien_dong) AS so_luong FROM so_phat_sinh m JOIN mat_hang i ON i.id = m.mat_hang_id
+             JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id WHERE m.kho_id IN ($in) AND i.hoat_dong
+             GROUP BY i.id, i.ma_hang, i.ten, u.ma HAVING SUM(m.bien_dong) > 0 ORDER BY SUM(m.bien_dong) DESC LIMIT 6", $ids);
         return [
+            'top' => $top,
+            'voucher_status' => $voucherStatus,
+            'stock_status' => $stockStatus,
             'warehouses' => $perWh,
             'units' => array_sum(array_column($perWh, 'units')),
             'drafts' => array_sum(array_column($perWh, 'drafts')),

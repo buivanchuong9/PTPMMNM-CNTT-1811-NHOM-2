@@ -25,7 +25,7 @@ final class HistoryController extends Controller
     private function filters(Request $r): array
     {
         return ['warehouse' => $r->int('warehouse'), 'item' => $r->int('item'), 'type' => VoucherType::tryFrom($r->str('type'))?->value,
-                'q' => $r->str('q'), 'from' => $r->str('from'), 'to' => $r->str('to')];
+                'q' => $r->search('q'), 'from' => $r->str('from'), 'to' => $r->str('to')];
     }
 
     public function index(Request $r, array $p, ?User $user): Response

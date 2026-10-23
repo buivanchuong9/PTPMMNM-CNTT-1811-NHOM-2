@@ -5,7 +5,7 @@
 <a href="https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-1"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=2600&pause=800&color=EE4D2D&center=true&vCenter=true&width=700&lines=Qu%E1%BA%A3n+l%C3%BD+kho+%C4%91a+%C4%91i%E1%BB%83m;%C4%90i%E1%BB%81u+chuy%E1%BB%83n+h%C3%A0ng+an+to%C3%A0n+nguy%C3%AAn;Ki%E1%BB%83m+k%C3%AA+%E2%86%92+%C4%91i%E1%BB%81u+ch%E1%BB%89nh+c%C3%B3+d%E1%BA%A5u+v%E1%BA%BFt;T%E1%BB%93n+lu%C3%B4n+kh%E1%BB%9Bp+s%E1%BB%95+ph%C3%A1t+sinh" alt="Typing SVG"></a>
 
 [![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
-[![SQLite · MySQL](https://img.shields.io/badge/SQLite%20demo%20·%20MySQL%208%2B-4479A1?logo=sqlite&logoColor=white)](#-chạy-từ-a-đến-z)
+[![MySQL](https://img.shields.io/badge/MySQL%208%2B%20·%20XAMPP-4479A1?logo=mysql&logoColor=white)](#-chạy-từ-a-đến-z)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#-cấu-trúc)
 [![Tests](https://img.shields.io/badge/tests-263%20passing-ee4d2d)](#-kiểm-thử)
 [![License](https://img.shields.io/badge/license-MIT-fbbf24)](LICENSE)
@@ -31,32 +31,12 @@
 
 ## 🚀 Chạy từ A đến Z
 
-<div align="center"><img src="docs/images/terminal.svg" alt="Chạy demo bằng 3 lệnh" width="92%"></div>
+> **Cả nhóm dùng một database duy nhất: MySQL (XAMPP).** Cần `git` + **PHP ≥ 8.1** (có `pdo_mysql`, XAMPP đã kèm sẵn) + **MySQL ≥ 8.0.16 / MariaDB ≥ 10.4**.
 
-> **Chỉ cần:** `git` + **PHP ≥ 8.1**. Không cần MySQL, không cần cấu hình — dữ liệu mẫu nằm trong một file SQLite tự sinh.
+### 1️⃣ Chuẩn bị
 
-### 1️⃣ Cài PHP (nếu chưa có)
-
-<details open><summary><b>🍎 macOS</b></summary>
-
-```bash
-brew install php git
-```
-</details>
-
-<details><summary><b>🐧 Ubuntu / Debian / WSL</b></summary>
-
-```bash
-sudo apt update && sudo apt install -y git php-cli php-sqlite3
-```
-</details>
-
-<details><summary><b>🪟 Windows</b></summary>
-
-Cài **WSL2** (`wsl --install` trong PowerShell quản trị) rồi làm theo tab Ubuntu.
-</details>
-
-Kiểm tra: `php -v` (≥ 8.1) · `php -m | grep sqlite` (phải thấy `pdo_sqlite`)
+- Cài [XAMPP](https://www.apachefriends.org), mở XAMPP Control Panel → bấm **Start** ở **MySQL**.
+- Cài `git`. Kiểm tra PHP: `php -v` (≥ 8.1). Chưa có PHP trong PATH thì dùng PHP của XAMPP (`C:\xampp\php`).
 
 ### 2️⃣ Lấy mã nguồn
 
@@ -65,32 +45,34 @@ git clone https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-1.git stockflo
 cd stockflow
 ```
 
-### 3️⃣ Chạy
+### 3️⃣ Một lệnh để cập nhật mọi thứ
 
 ```bash
-bin/stockflow demo
+php bin/stockflow update
 ```
 
-Lần đầu tự dựng bảng + nạp dữ liệu mẫu (**3 kho · 30 mặt hàng · 235 dòng sổ phát sinh**, đối chiếu **KHỚP**), rồi mở web tại **http://127.0.0.1:8080**.
-Đổi cổng: `PORT=9000 bin/stockflow demo` · Làm lại từ đầu: `bin/stockflow demo --reset`
+Lệnh này dùng cho **cả máy mới lẫn sau mỗi lần `git pull`** (chạy lại bao nhiêu lần cũng an toàn):
+1. **Cấu hình kết nối:** chưa có thì dùng mặc định của XAMPP (`root`, không mật khẩu, database `stockflow`) → `.local/db.json` (chỉ nằm trên máy bạn, không bị commit). Mật khẩu khác thì chạy `php bin/stockflow db-config`.
+2. **Tạo database** `stockflow` nếu máy chưa có, rồi **so với chuẩn của dự án** (bảng · cột · khoá ngoại/CHECK · trigger — chuẩn lấy thẳng từ `database/migrations`).
+   - Đúng chuẩn → không đụng gì.
+   - Thiếu bảng mới → chỉ thêm bảng, giữ nguyên dữ liệu.
+   - Cấu trúc đổi → **sao lưu toàn bộ dữ liệu** vào `.local/backup-…/` → dựng lại đúng chuẩn → nạp lại dữ liệu cũ.
+3. **Database trống** → nạp dữ liệu mẫu (3 kho · 30 mặt hàng · phiếu nhập xuất · sổ phát sinh, đối chiếu **KHỚP**).
+4. **Bật git hook** `.githooks/post-merge`: từ giờ mỗi lần `git pull` mà thư mục `database/` có thay đổi thì **database tự được cập nhật**.
 
-### 🔄 Máy khác `git pull` về — kiểm tra & tự sửa database (XAMPP / MySQL)
+> ⚠️ Khi `update` / `db-sync` đang chạy **đừng tắt terminal hay kill tiến trình php** — nếu bị ngắt giữa lúc nạp lại, dữ liệu vẫn nằm trong `.local/backup-…/` (mỗi bảng một file `.ndjson`).
 
-Mã nguồn đổi thì cấu trúc database có thể đổi theo (tên bảng, cột, ràng buộc…). **Không cần làm gì thêm:** `php bin/stockflow serve` tự chạy `db-sync` trước khi mở web — database cũ được sao lưu, sửa đúng chuẩn và nạp lại dữ liệu (chỉ in thông báo khi có thay đổi; lỗi đồng bộ chỉ cảnh báo, web vẫn chạy). Muốn chạy riêng/ kiểm tra bằng tay:
+`php bin/stockflow db-sync --check` chỉ **báo cáo** database có đúng chuẩn không, không sửa.
+
+### 4️⃣ Chạy web
 
 ```bash
-php bin/stockflow db-sync
+php bin/stockflow serve        # → http://127.0.0.1:8080   (đổi cổng: PORT=9000 php bin/stockflow serve)
 ```
 
-Lệnh này (bật **MySQL** trong XAMPP trước):
-1. **Tự tạo database** `stockflow` nếu máy chưa có.
-2. **So database trên máy với chuẩn của dự án** (bảng · cột · kiểu dữ liệu · khoá ngoại/CHECK · trigger) — chuẩn lấy thẳng từ `database/migrations`.
-3. Nếu **đúng** → báo `✔ đã đúng chuẩn`, không đụng gì.
-4. Nếu **sai/cũ** → liệt kê chỗ khác biệt, rồi **tự sửa**: *sao lưu* toàn bộ dữ liệu vào `.local/backup-…/` → dựng lại đúng chuẩn → *nạp lại* dữ liệu cũ (kể cả đổi tên `chung_tu` → `phieu_nhap_xuat`). Xong báo `✔ Đã sửa xong`.
+`serve` cũng tự kiểm tra database trước khi mở web.
 
-`php bin/stockflow db-sync --check` chỉ **báo cáo**, không sửa. Máy mới hoàn toàn: `php bin/stockflow db-config` rồi `php bin/stockflow setup` (= `db-sync` + nạp dữ liệu mẫu).
-
-### 4️⃣ Đăng nhập (mật khẩu chung `demo1234`)
+### 5️⃣ Đăng nhập (mật khẩu chung `demo1234`)
 
 | Tài khoản | Vai trò | Làm được gì |
 |---|---|---|
@@ -106,15 +88,15 @@ Trang **Phân quyền chức năng** cho phép quản trị bật/tắt từng c
 
 | Thông báo | Cách xử lý |
 |---|---|
-| `php: command not found` | Cài PHP ở bước 1 rồi mở lại terminal |
-| `PHP chưa có extension pdo_sqlite` | macOS: `brew install php` · Ubuntu: `sudo apt install php-sqlite3` |
-| `Permission denied: bin/stockflow` | `chmod +x bin/stockflow` hoặc chạy `php bin/stockflow demo` |
-| Cổng 8080 bận | `PORT=9000 bin/stockflow demo` |
+| `php: command not found` | Thêm `C:\xampp\php` vào PATH (hoặc gọi `C:\xampp\php\php.exe bin/stockflow update`) |
+| Không kết nối được MySQL / `Connection refused` | Mở XAMPP → Start **MySQL** rồi chạy lại `update` |
+| `Access denied` | Máy bạn đặt mật khẩu cho `root`: chạy `php bin/stockflow db-config` |
+| Cổng 8080 bận | `PORT=9000 php bin/stockflow serve` |
+
+Lỗi kết nối được giải thích kèm cách xử lý (MySQL chưa chạy / sai mật khẩu / chưa có CSDL / thiếu quyền).
 </details>
 
-<details><summary><b>🗄 Dùng MySQL thật (tuỳ chọn, cho môi trường chạy lâu dài)</b></summary>
-
-Cần **MySQL ≥ 8.0.16** hoặc **MariaDB ≥ 10.4 (XAMPP)**. Trong `mysql`:
+<details><summary><b>🗄 Dùng tài khoản MySQL riêng thay vì root (tuỳ chọn)</b></summary>
 
 ```sql
 CREATE DATABASE stockflow      CHARACTER SET utf8mb4;
@@ -126,14 +108,10 @@ SET GLOBAL log_bin_trust_function_creators = 1;         -- tuỳ chọn: khoá b
 ```
 
 ```bash
-bin/stockflow db-config    # nhập kết nối → .local/db.json
-bin/stockflow setup        # db-sync (tạo/sửa database cho đúng chuẩn) + nạp dữ liệu mẫu
-bin/stockflow db-sync      # sau mỗi lần git pull: kiểm tra database, sai thì tự sửa (--check: chỉ báo cáo)
-bin/stockflow serve        # → http://127.0.0.1:8080
-bin/stockflow test         # 263 test trên CSDL stockflow_test
+php bin/stockflow db-config    # nhập kết nối → .local/db.json
+php bin/stockflow update
+php bin/stockflow test         # chạy test trên CSDL stockflow_test (tự xoá sạch & dựng lại, không đụng dữ liệu thật)
 ```
-
-Lỗi kết nối được giải thích kèm cách xử lý (MySQL chưa chạy / sai mật khẩu / chưa có CSDL / thiếu quyền).
 </details>
 
 <img src="docs/images/divider.svg" width="100%" height="6" alt="">
@@ -176,7 +154,7 @@ templates/         giao diện
 database/          migrations · seed
 storage/avatars/   ảnh đại diện do người dùng tải lên (tên file lưu ở cột nguoi_dung.anh_dai_dien; không commit ảnh)
 tests/             Unit · Integration · Http
-bin/stockflow      demo · db-config · db-sync · migrate · seed · setup · serve · test
+bin/stockflow      update · db-config · db-sync · migrate · seed · setup · serve · test
 ```
 
 Điểm cốt lõi: tồn **tính từ sổ phát sinh bất biến** · khoá dòng theo thứ tự cố định (không deadlock) · `CHECK quantity ≥ 0` · khoá `idempotency_key` + `UNIQUE voucher_line_id` · sửa bằng phiếu nhập xuất đảo (`UNIQUE correction_of`).

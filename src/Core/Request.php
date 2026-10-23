@@ -15,6 +15,13 @@ final class Request
         return new self(strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'), $path, $_GET, $_POST, $_FILES);
     }
 
+    /** Từ khoá tìm kiếm: chỉ chữ, số, khoảng trắng và - . / ; về chữ thường; tối đa 50 ký tự. */
+    public function search(string $key): string
+    {
+        $v = preg_replace('/[^\p{L}\p{N}\s.\/-]/u', '', $this->str($key)) ?? '';
+        return trim(mb_substr(mb_strtolower($v), 0, 50));
+    }
+
     public function str(string $key, string $default = ''): string
     {
         $v = $this->post[$key] ?? $this->query[$key] ?? $default;

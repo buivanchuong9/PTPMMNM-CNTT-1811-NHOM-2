@@ -22,6 +22,7 @@ $groups = [
     ],
     'Quản trị hệ thống' => [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
+        'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::QuanLyDoiXe]],
         'roles' => ['/roles', 'shield', 'Phân quyền chức năng', [P::PhanQuyen]],
     ],
 ];
@@ -59,7 +60,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
   <a class="brand" href="/"><img src="/assets/img/logo-mark.png" alt="" width="40" height="40"><span><?= app_brand() ?> <small><?= e(APP_TAGLINE) ?></small></span></a>
   <form class="topsearch" action="/history" method="get" role="search">
-    <?= icon('search') ?><input type="search" name="q" placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
+    <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>
   <div class="topuser">
     <button class="icon-btn theme-toggle" type="button" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= str_replace('class="icon"', 'class="icon ic-sun"', icon('sun')) ?><?= str_replace('class="icon"', 'class="icon ic-moon"', icon('moon')) ?></button>

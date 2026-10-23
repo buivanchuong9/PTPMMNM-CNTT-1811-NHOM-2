@@ -35,6 +35,7 @@ enum Permission: string
     case QuanLyMatHang = 'quan_ly_mat_hang';
     case QuanLyTaiKhoan = 'quan_ly_tai_khoan';
     case PhanQuyen = 'phan_quyen';
+    case QuanLyDoiXe = 'quan_ly_doi_xe';
 
     public function label(): string
     {
@@ -61,6 +62,7 @@ enum Permission: string
             self::QuanLyMatHang => 'Quản lý mặt hàng, đơn vị tính',
             self::QuanLyTaiKhoan => 'Quản lý tài khoản',
             self::PhanQuyen => 'Phân quyền chức năng',
+            self::QuanLyDoiXe => 'Quản lý đội xe & tài xế',
         };
     }
 
@@ -89,6 +91,7 @@ enum Permission: string
             self::QuanLyMatHang => 'Thêm mặt hàng, đơn vị tính',
             self::QuanLyTaiKhoan => 'Tạo tài khoản, đổi kho / vai trò, khoá tài khoản',
             self::PhanQuyen => 'Bật/tắt chức năng cho từng vai trò',
+            self::QuanLyDoiXe => 'Thêm xe, tài xế; xem xe đang ở kho nào / đang chạy tới đâu; theo dõi các chuyến điều chuyển',
         };
     }
 
@@ -99,7 +102,7 @@ enum Permission: string
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
             self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
-            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen => 'Quản trị hệ thống',
+            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe => 'Quản trị hệ thống',
         };
     }
 
@@ -132,7 +135,7 @@ enum Permission: string
     /** Chức năng hệ thống: chỉ ADMIN dùng, không giao cho quản lý / nhân viên. */
     public function adminOnly(): bool
     {
-        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen], true);
+        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe], true);
     }
 
     /** Quyền mặc định của vai trò (khi chưa có dòng trong phan_quyen_vai_tro). */

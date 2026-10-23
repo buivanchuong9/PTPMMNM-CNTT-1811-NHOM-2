@@ -8,7 +8,7 @@ $scopeNote = match ($user->role) {
 };
 $rowsLabel = fn(int $n) => $n . ' dòng / trang';
 ?>
-<header class="page-head"><div><h1>Cài đặt</h1><p class="muted"><?= e($scopeNote) ?></p></div></header>
+<header class="page-head"><div><h1>Cài đặt</h1></div></header>
 
 <?php if (count($tabs) > 1): ?>
 <nav class="tabs" aria-label="Nhóm cài đặt">
@@ -71,15 +71,6 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
       <select name="rows">
         <option value="0"<?= $prefs['rows_choice'] === 0 ? ' selected' : '' ?>>Theo mặc định hệ thống (<?= (int)$system['rows_default'] ?>)</option>
         <?php foreach ($rowOptions as $n): ?><option value="<?= $n ?>"<?= $prefs['rows_choice'] === $n ? ' selected' : '' ?>><?= e($rowsLabel($n)) ?></option><?php endforeach; ?>
-      </select>
-    </label>
-    <label>Hiệu ứng khi chuyển chức năng <span class="muted small">(lưu trên trình duyệt này)</span>
-      <select data-vx-select aria-label="Hiệu ứng khi chuyển chức năng">
-        <option value="slide">Trượt ngang (trang cũ thu lại, trang mới chạy từ phải sang trái) — mặc định</option>
-        <option value="fade">Mượt, nhẹ nhàng (nội dung hiện lần lượt từng khối)</option>
-        <option value="suck">Hút vào – mở ra (nội dung co về chỗ bấm rồi bung ra)</option>
-        <option value="card">Thẻ trượt (trang thu thành thẻ nhỏ, thẻ mới trượt lên rồi mở ra)</option>
-        <option value="none">Tắt hiệu ứng</option>
       </select>
     </label>
     <label class="check"><input type="checkbox" name="compact" value="1"<?= $prefs['compact'] ? ' checked' : '' ?>> Bảng gọn hơn (giảm khoảng cách giữa các dòng)</label>

@@ -5,7 +5,6 @@ require_once __DIR__ . '/partials/icons.php';   // nội dung được render tr
 <header class="fv-head">
   <div>
     <h1>Orders</h1>
-    <p>Manage and track all customer orders</p>
   </div>
   <div class="fv-head-actions">
     <button class="fv-btn fv-btn-ghost" type="button" id="btn-export"><?= fi('download') ?>Export CSV</button>

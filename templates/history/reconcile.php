@@ -1,6 +1,6 @@
 <?php /** @var array $res */ $ok = $res['mismatches'] === 0; ?>
 <header class="page-head">
-  <div><h1>Đối chiếu tồn</h1><p class="muted">So sánh số dư với tổng sổ phát sinh theo từng (kho, hàng, lô), và kiểm tra mỗi dòng phiếu nhập xuất đã xác nhận đều có đúng một dòng sổ.</p></div>
+  <div><h1>Đối chiếu tồn</h1></div>
   <?php if ($auth->allows($user, \StockFlow\Domain\Permission::XemBaoCao)): ?><div class="actions"><a class="btn btn-ghost" href="/reports/reconcile.csv"><?= icon('download') ?>Xuất CSV</a></div><?php endif; ?>
 </header>
 <div class="verdict <?= $ok ? 'verdict-ok' : 'verdict-bad' ?>">

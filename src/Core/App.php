@@ -52,6 +52,7 @@ final class App
         $r->get('/vouchers/{id}', [C\VoucherController::class, 'show']);
         $r->post('/vouchers/{id}/confirm', [C\VoucherController::class, 'confirm']);
         $r->post('/vouchers/{id}/cancel', [C\VoucherController::class, 'cancel']);
+        $r->post('/vouchers/{id}/discrepancy', [C\VoucherController::class, 'discrepancy']);
         $r->post('/vouchers/{id}/correct', [C\VoucherController::class, 'correct']);
         $r->get('/transfers/new', [C\VoucherController::class, 'createTransfer']);
         $r->post('/transfers', [C\VoucherController::class, 'storeTransfer']);
@@ -88,6 +89,16 @@ final class App
         $r->post('/users/update', [C\AdminController::class, 'updateUser']);
         $r->post('/users/active', [C\AdminController::class, 'setUserActive']);
         $r->post('/users/password', [C\AdminController::class, 'resetUserPassword']);
+        $r->get('/fleet', [C\FleetController::class, 'index']);
+        $r->post('/fleet/vehicles', [C\FleetController::class, 'addVehicle']);
+        $r->post('/fleet/vehicles/update', [C\FleetController::class, 'updateVehicle']);
+        $r->post('/fleet/vehicles/delete', [C\FleetController::class, 'deleteVehicle']);
+        $r->post('/fleet/vehicles/active', [C\FleetController::class, 'vehicleActive']);
+        $r->post('/fleet/vehicles/move', [C\FleetController::class, 'vehicleMove']);
+        $r->post('/fleet/drivers', [C\FleetController::class, 'addDriver']);
+        $r->post('/fleet/drivers/update', [C\FleetController::class, 'updateDriver']);
+        $r->post('/fleet/drivers/delete', [C\FleetController::class, 'deleteDriver']);
+        $r->post('/fleet/drivers/active', [C\FleetController::class, 'driverActive']);
         $r->get('/roles', [C\AdminController::class, 'roles']);
         $r->post('/roles', [C\AdminController::class, 'saveRoles']);
         $r->post('/roles/reset', [C\AdminController::class, 'resetRoles']);

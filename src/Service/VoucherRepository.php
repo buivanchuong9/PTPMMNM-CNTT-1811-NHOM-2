@@ -108,7 +108,7 @@ final class VoucherRepository
         $params = $warehouseIds;
         if ($type) { $where[] = 'v.loai = ?'; $params[] = $type; }
         if ($status) { $where[] = 'v.trang_thai = ?'; $params[] = $status; }
-        if ($q !== '') { $where[] = '(v.ma LIKE ? OR v.doi_tac LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
+        if ($q !== '') { $where[] = '(LOWER(v.ma) LIKE ? OR LOWER(v.doi_tac) LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
         return [implode(' AND ', $where), $params];
     }
 

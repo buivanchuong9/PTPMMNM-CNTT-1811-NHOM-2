@@ -2,3 +2,4 @@
 *.png binary
 bin/stockflow text eol=lf
 docs/images/* linguist-documentation
+.githooks/* text eol=lf

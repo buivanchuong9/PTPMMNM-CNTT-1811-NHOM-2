@@ -1,6 +1,6 @@
 <?php /** @var array $warehouses @var array $shown @var array $rows @var array $items @var array $units */ ?>
 <header class="page-head">
-  <div><h1>Hàng hoá</h1><p class="muted">Danh mục mặt hàng, quy cách lô và tồn kho hiện có — tồn tính trực tiếp từ sổ phát sinh đã ghi nhận. <b>Quy cách</b>: 1 lô gồm bao nhiêu đơn vị tính.</p></div>
+  <div><h1>Hàng hoá</h1></div>
   <div class="actions">
     <?php if ($auth->allows($user, \StockFlow\Domain\Permission::XemBaoCao)): ?><a class="btn btn-ghost" href="/reports/stock.csv"><?= icon('download') ?>Xuất CSV</a><?php endif; ?>
     <?php if ($user->isAdmin): ?><button type="button" data-dialog-open="item-dlg"><?= icon('plus') ?>Thêm mặt hàng</button>
@@ -9,7 +9,7 @@
   </div>
 </header>
 <form class="filters" method="get">
-  <input type="search" name="q" value="<?= e($q) ?>" placeholder="Tìm SKU hoặc tên hàng…" aria-label="Tìm kiếm">
+  <input type="search" name="q" maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Tìm SKU hoặc tên hàng…" aria-label="Tìm kiếm">
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Tất cả kho') ?></select>
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>
   <select name="view" aria-label="Kiểu xem" data-live-reload><option value="">Theo mặt hàng</option><option value="batch"<?= $byBatch ? ' selected' : '' ?>>Theo lô (hạn dùng)</option></select>

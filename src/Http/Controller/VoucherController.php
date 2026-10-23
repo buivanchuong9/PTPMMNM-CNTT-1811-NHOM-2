@@ -17,6 +17,7 @@ use StockFlow\Domain\User;
 use StockFlow\Domain\VoucherType;
 use StockFlow\Service\AuditLog;
 use StockFlow\Service\Authorizer;
+use StockFlow\Service\FleetService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\TransferService;
 use StockFlow\Service\VoucherRepository;
@@ -25,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -36,7 +37,7 @@ final class VoucherController extends Controller
         $ids = $this->auth->visibleWarehouseIds($user);
         $type = VoucherType::tryFrom($r->str('type'))?->value;
         $status = in_array($r->str('status'), ['DRAFT', 'CONFIRMED', 'CANCELLED'], true) ? $r->str('status') : null;
-        $q = $r->str('q');
+        $q = $r->search('q');
         $wh = $r->int('warehouse');
         $scope = $wh && in_array($wh, $ids, true) ? [$wh] : $ids;
         $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q), $r->int('page'));
@@ -104,19 +105,37 @@ final class VoucherController extends Controller
             'canAdjust' => $isTransfer ? $user->isAdmin : $this->auth->can($user, (int)$v['kho_id'], Permission::DieuChinhPhieu),
             'canCorrect' => $v['trang_thai'] === 'CONFIRMED' && $v['loai'] !== 'ADJUSTMENT' || ($v['trang_thai'] === 'CONFIRMED' && $v['loai'] === 'ADJUSTMENT' && !$v['dieu_chinh_cho_id']),
             'isTransfer' => $isTransfer,
+            'trip' => $this->fleet->tripOf($v),
+            'vehicles' => $isTransfer && $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
         ], $v['ma']);
     }
 
     public function confirm(Request $r, array $p, ?User $user): Response
     {
         $id = (int)$p['id'];
-        return $this->act(function () use ($user, $id) {
-            $res = $this->vouchers->confirm($user, $id);
+        return $this->act(function () use ($r, $user, $id) {
+            $v = $this->repo->find($id);
+            if ($v['loai'] === 'TRANSFER_OUT') {   // xuất kho đi: bắt buộc xe + tài xế + tài xế xác nhận đủ hàng
+                $res = $this->transfers->dispatch($user, $id, (int)$r->int('vehicle_id'), $r->str('driver_ok') === '1');
+            } elseif ($v['loai'] === 'TRANSFER_IN') {   // nhận hàng: kho đến kiểm tra hàng đủ + đúng tài xế
+                $res = $this->transfers->receiveChecked($user, $id, $r->str('full_ok') === '1', $r->str('driver_match') === '1');
+            } else {
+                $res = $this->vouchers->confirm($user, $id);
+            }
             if ($res['already']) {
                 $this->session->flash('ok', 'Phiếu nhập xuất đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
             }
             return null;
         }, 'Đã xác nhận và ghi sổ phát sinh.', "/vouchers/$id");
+    }
+
+    /** Kho đến báo hàng thiếu / sai tài xế: chưa nhận hàng, ghi lý do để tài khoản cấp cao xử lý. */
+    public function discrepancy(Request $r, array $p, ?User $user): Response
+    {
+        $id = (int)$p['id'];
+        return $this->act(function () use ($r, $user, $id) {
+            $this->transfers->reportDiscrepancy($user, $id, $r->str('full_ok') === '1', $r->str('driver_match') === '1', $r->str('reason'));
+        }, 'Đã ghi nhận sai lệch. Hàng vẫn ở trạng thái đang vận chuyển — tài khoản cấp cao sẽ thấy ở trang Đội xe.', "/vouchers/$id");
     }
 
     public function cancel(Request $r, array $p, ?User $user): Response
