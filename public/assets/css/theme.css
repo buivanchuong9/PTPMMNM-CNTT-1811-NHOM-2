@@ -266,7 +266,7 @@ a.pg:hover { background: var(--brand-50); border-color: var(--brand-100); color:
 .pick-box > .icon { position: absolute; left: 13px; top: 12px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
 .pick-box > input { padding-left: 40px; min-height: 44px; border: 2px solid var(--brand); }
 .pick-box > input:focus { box-shadow: 0 0 0 3px rgba(209,47,63,.15); }
-#pick-list, .combo-list { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px 0; list-style: none; max-height: 340px; overflow-y: auto; background: var(--surface); border: 1px solid var(--field-line); border-radius: 4px; box-shadow: var(--shadow-lg); }
+#pick-list, .combo-list { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px 0; list-style: none; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); border: 1px solid var(--field-line); border-radius: 4px; box-shadow: var(--shadow-lg); }
 #pick-list li, .combo-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 14px; cursor: pointer; border-bottom: 1px solid var(--line-2); }
 #pick-list li:last-child, .combo-list li:last-child { border-bottom: 0; }
 #pick-list li:hover, #pick-list li.on, .combo-list li:hover, .combo-list li.on { background: var(--brand-50); }
@@ -291,6 +291,14 @@ a.pg:hover { background: var(--brand-50); border-color: var(--brand-100); color:
 .combo-native { position: absolute; left: 0; bottom: 0; width: 100%; height: 1px; opacity: 0; pointer-events: none; }
 .filters .combo { flex: 1 1 150px; } .combo-input { cursor: text; }
 .combo-list li { justify-content: flex-start; }
+/* Trong hộp thoại: danh sách nằm trong luồng form, hiện đủ mọi dòng (hộp thoại tự dài ra, không cuộn lồng nhau) */
+.dlg .combo-list:not(.addr-list) { position: static; max-height: none; overflow: visible; margin-top: 8px; padding: 8px; box-shadow: none; background: var(--panel); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dlg .combo-list:not(.addr-list) li { padding: 8px 12px; font-size: .88rem; line-height: 1.3; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); }
+.dlg .combo-list:not(.addr-list) li:last-child { border-bottom: 1px solid var(--line-2); }
+.dlg .combo-list:not(.addr-list) li:hover, .dlg .combo-list:not(.addr-list) li.on { background: var(--brand-50); border-color: var(--brand); }
+.dlg .combo-list:not(.addr-list) li.more, .dlg .combo-list:not(.addr-list) li.none, .dlg .combo-list:not(.addr-list) li[data-n="-1"] { grid-column: 1 / -1; }
+.dlg .combo-list:not(.addr-list) li.more, .dlg .combo-list:not(.addr-list) li.none { border-style: dashed; }
+@media (max-width: 560px) { .dlg .combo-list:not(.addr-list) { grid-template-columns: 1fr; } }
 
 .pick-box > input#pick-search { padding-left: 42px !important; }
 
@@ -308,7 +316,8 @@ a.pg:hover { background: var(--brand-50); border-color: var(--brand-100); color:
 .wh-fixed-label { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .wh-fixed b { font-size: 1.02rem; }
 .wh-fixed small { display: inline-flex; align-items: center; gap: 6px; }
-.wh-addr { min-height: 1.2em; font-weight: 500; }
+.wh-addr { min-height: 1.2em; font-weight: 500; display: flex; align-items: flex-start; gap: 6px; line-height: 1.35; }
+.wh-addr .icon { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--brand); }
 
 .person { display: inline-flex; flex-direction: column; }
 .perm.off { opacity: .55; text-decoration: line-through; }

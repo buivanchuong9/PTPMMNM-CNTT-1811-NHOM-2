@@ -67,7 +67,7 @@ final class AdminController extends Controller
     public function addItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, (int)($r->int('pack_size') ?? 1));
+            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0);
         }, 'Đã thêm mặt hàng.', '/inventory');
     }
 

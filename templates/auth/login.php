@@ -56,7 +56,7 @@
       <?php if ($error): ?><div class="flash flash-err" role="alert" id="login-error"><?= icon('alert') ?><span><?= e($error) ?></span></div><?php endif; ?>
       <form method="post" action="/login" class="form login-form">
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-        <label>Tên đăng nhập<input name="username" value="<?= e($username) ?>" required autofocus autocomplete="username" spellcheck="false" autocapitalize="none"<?= $error ? ' aria-invalid="true" aria-describedby="login-error"' : '' ?>></label>
+        <label>Tên đăng nhập<input name="username" value="<?= e($username) ?>" required maxlength="40" autofocus autocomplete="username" spellcheck="false" autocapitalize="none"<?= $error ? ' aria-invalid="true" aria-describedby="login-error"' : '' ?>></label>
         <label>Mật khẩu<input name="password" type="password" required autocomplete="current-password"<?= $error ? ' aria-invalid="true" aria-describedby="login-error"' : '' ?>></label>
         <button type="submit" class="btn-block">Đăng nhập</button>
       </form>

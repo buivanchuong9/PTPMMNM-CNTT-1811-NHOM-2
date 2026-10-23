@@ -138,7 +138,7 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const matches = (hay, q) => fold(q).split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
   const vn = new Intl.NumberFormat('vi-VN');
-  const SUGGEST = 8; // số gợi ý hiển thị mỗi lần
+  const SUGGEST = 100; // số gợi ý hiển thị mỗi lần (danh sách tự cuộn, bấm vào là thấy gần như đủ)
 
   const initPickers = () => {
   // Ô chọn hàng của phiếu: bấm vào là gợi ý vài mặt hàng đầu danh sách, gõ để tìm, chọn xong mới sinh dòng có +/−
@@ -315,7 +315,7 @@
     const draw = (filter) => {
       const q = filter ? input.value.trim() : '';
       const all = q ? opts.filter((o) => matches(o.hay, q)) : opts;
-      shown = all.slice(0, SUGGEST);
+      shown = all; // danh sách <select> vốn hữu hạn: hiện đủ, thanh cuộn của .combo-list lo phần dài
       ul.innerHTML = (hasBlank && !q ? `<li data-n="-1" class="${sel.value === '' ? 'on' : ''}"><span class="muted">${esc(first.textContent.trim())}</span></li>` : '')
         + (shown.length ? shown.map((o, n) => `<li data-n="${n}" class="${n === active ? 'on' : ''}">${esc(o.t)}</li>`).join('') : '<li class="none">Không tìm thấy</li>')
         + (all.length > shown.length ? `<li class="more">… còn ${all.length - shown.length} kết quả — gõ thêm để thu hẹp</li>` : '');
@@ -327,7 +327,10 @@
       ul.hidden = true;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    input.addEventListener('focus', () => { input.select(); draw(false); });
+    input.addEventListener('focus', () => {
+      if (input.dataset.quiet) { delete input.dataset.quiet; return; }
+      input.select(); draw(false);
+    });
     input.addEventListener('click', () => draw(false));
     input.addEventListener('input', () => { active = -1; draw(true); });
     input.addEventListener('keydown', (ev) => {
@@ -337,10 +340,13 @@
         ev.preventDefault(); active = (active + (ev.key === 'ArrowDown' ? 1 : -1) + shown.length) % Math.max(1, shown.length); draw(true);
       }
     });
-    ul.addEventListener('mousedown', (ev) => {
+    // Chọn ở «click» (không phải «mousedown»): danh sách nằm trong luồng form nên thu lại ngay khi chọn sẽ làm nội dung dịch lên dưới con trỏ,
+    // cú click lúc nhả chuột rơi vào chỗ khác — vào <label> (chuyển thành click vào ô nhập ⇒ danh sách mở lại, nháy lặp) hoặc vào nền hộp thoại (đóng cả hộp thoại).
+    ul.addEventListener('mousedown', (ev) => { if (ev.target.closest('li[data-n]')) ev.preventDefault(); });   // giữ focus ở ô nhập
+    ul.addEventListener('click', (ev) => {
       const li = ev.target.closest('li[data-n]');
       if (!li) return;
-      ev.preventDefault();
+      ev.preventDefault();    // chặn <label> chuyển cú click này vào ô nhập
       choose(+li.dataset.n < 0 ? null : shown[+li.dataset.n]);
     });
     input.addEventListener('blur', () => { ul.hidden = true; input.value = current()?.t ?? ''; });
@@ -410,7 +416,8 @@
   document.querySelectorAll('select[data-addr-for]').forEach((sel) => {
     const out = document.getElementById(sel.dataset.addrFor);
     if (!out) return;
-    const show = () => { const o = sel.selectedOptions[0]; out.textContent = o && o.dataset.addr ? '📍 ' + o.dataset.addr : ''; };
+    const PIN = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>';
+    const show = () => { const o = sel.selectedOptions[0]; out.innerHTML = o && o.dataset.addr ? PIN + '<span>' + esc(o.dataset.addr) + '</span>' : ''; };
     sel.addEventListener('change', show);
     show();
   });
@@ -448,7 +455,9 @@
         dlg.querySelectorAll('select[data-role-select]').forEach((s) => s.dispatchEvent(new Event('change')));
         try { const fd = JSON.parse(open.dataset.fill || '{}'); dlg.querySelectorAll('[data-fill-text]').forEach((el) => { if (fd[el.dataset.fillText] !== undefined) el.textContent = fd[el.dataset.fillText]; }); } catch (e) { /* bỏ qua */ }
         dlg.showModal();
-        dlg.querySelector('input:not([type=hidden])')?.focus();
+        const first = dlg.querySelector('input:not([type=hidden])');
+        if (first?.closest('.combo')) first.dataset.quiet = '1'; // focus tự động không xổ danh sách
+        first?.focus();
       }
       return;
     }
