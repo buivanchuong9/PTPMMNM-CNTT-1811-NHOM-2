@@ -70,7 +70,7 @@ final class InventoryController extends Controller
             'warehouses' => $warehouses,
             'shown' => array_values(array_filter($warehouses, fn($w) => in_array((int)$w['id'], $scope, true))),
             'rows' => $rows, 'pg' => $pg,
-            'byBatch' => $byBatch, 'q' => $q, 'wh' => $wh, 'stock' => $stock, 'cat' => $cat, 'supF' => $supF, 'suppliers' => $this->partners->suppliers(), 'uncategorized' => count(array_filter($items, fn($i) => $i['hoat_dong'] && !(int)$i['danh_muc_id'])), 'totalItems' => count(array_filter($items, fn($i) => $i['hoat_dong'])), 'categories' => $this->catalog->categories(),
+            'byBatch' => $byBatch, 'q' => $q, 'wh' => $wh, 'stock' => $stock, 'canAddCat' => $user->isAdmin || $user->role === \StockFlow\Domain\AccountRole::Manager, 'cat' => $cat, 'supF' => $supF, 'suppliers' => $this->partners->suppliers(), 'uncategorized' => count(array_filter($items, fn($i) => $i['hoat_dong'] && !(int)$i['danh_muc_id'])), 'totalItems' => count(array_filter($items, fn($i) => $i['hoat_dong'])), 'categories' => $this->catalog->categories(),
             'items' => $items, 'units' => $this->catalog->units(),
             'canAddBatch' => $this->auth->allows($user, Permission::ThemLo),
         ], 'Hàng hoá');

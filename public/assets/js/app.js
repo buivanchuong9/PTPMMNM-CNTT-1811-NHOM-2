@@ -309,6 +309,18 @@
     });
     if (supSel) search.placeholder = 'Hãy chọn nhà cung cấp trước…';
 
+    // Điền lại các dòng hàng đã chọn sau khi lưu phiếu bị từ chối
+    picker.restoreLines = (keys, qtys) => {
+      keys.forEach((k, n) => {
+        const it = items.find((x) => x.k === k);
+        if (!it) return;
+        add(it);
+        const tr = [...body.rows].find((r) => r.dataset.k === k);
+        if (tr) tr.querySelector('input[name="qty[]"]').value = qtys[n] ?? 1;
+      });
+      search.value = ''; open(false); refresh();
+    };
+
     // Phiếu không có dòng nào thì không gửi (bắt ở giai đoạn capture để chạy trước khoá chống bấm đúp)
     form.addEventListener('submit', (ev) => {
       refresh();
@@ -486,7 +498,8 @@
         }
         const fl = dlg.querySelector('[data-dlg-label]');
         if (fl) fl.textContent = open.dataset.fillLabel || '';
-        try { const ids = String(JSON.parse(open.dataset.fill || '{}').supplier_ids ?? '').split(','); dlg.querySelectorAll('[data-sup-check]').forEach((c) => { c.checked = ids.includes(c.value); }); } catch (e) { /* bỏ qua */ }
+        dlg.querySelectorAll('.newitem-row').forEach((x) => x.remove());   // hộp mở lại thì bỏ các dòng hàng mới nhập dở
+        try { const ids = String(JSON.parse(open.dataset.fill || '{}').supplier_ids ?? '').split(','); dlg.querySelectorAll('[data-sup-check]').forEach((c) => { c.checked = ids.includes(c.value); }); const its = String(JSON.parse(open.dataset.fill || '{}').item_ids ?? '').split(','); dlg.querySelectorAll('[data-item-check]').forEach((c) => { c.checked = its.includes(c.value); }); } catch (e) { /* bỏ qua */ }
         // sau khi điền: đồng bộ ô kho theo vai trò; [data-fill-text="khoá"] nhận chữ từ cùng JSON (VD: nhãn nút Khoá / Mở khoá)
         dlg.querySelectorAll('select[data-role-select]').forEach((s) => s.dispatchEvent(new Event('change')));
         try { const fd = JSON.parse(open.dataset.fill || '{}'); dlg.querySelectorAll('[data-fill-text]').forEach((el) => { if (fd[el.dataset.fillText] !== undefined) el.textContent = fd[el.dataset.fillText]; }); } catch (e) { /* bỏ qua */ }
@@ -828,4 +841,56 @@ document.addEventListener('change', (ev) => {
     bar.querySelectorAll('a').forEach((a) => { a.hidden = !!q && !a.classList.contains('active') && !fold(a.textContent).includes(q); });
     bar.scrollLeft = 0;
   });
+})();
+
+// Form đối tác: thêm / bỏ dòng «hàng mới do nhà cung cấp cung cấp»
+document.addEventListener('click', (ev) => {
+  const add = ev.target.closest('[data-add-newitem]'), del = ev.target.closest('[data-remove-newitem]');
+  if (del) { del.closest('.newitem-row').remove(); return; }
+  if (!add) return;
+  const box = add.closest('[data-newitems]'), tpl = box.querySelector('[data-newitem-tpl]');
+  const row = tpl.content.firstElementChild.cloneNode(true);
+  box.querySelector('.newitem-list').appendChild(row);
+  row.querySelector('input').focus();
+});
+
+// Form bị từ chối ⇒ điền lại đúng những gì đã nhập (và mở lại hộp thoại nếu form nằm trong hộp thoại) để khỏi nhập từ đầu
+(() => {
+  const holder = document.getElementById('old-input');
+  if (!holder) return;
+  let data, action = holder.dataset.action;
+  try { data = JSON.parse(holder.dataset.old || '{}'); } catch (e) { return; }
+  const forms = [...document.forms].filter((f) => f.method.toLowerCase() === 'post' && new URL(f.action, location.href).pathname === action);
+  if (!forms.length) return;
+  // nhiều form cùng đích (VD nút «Sửa» của từng dòng): chọn form có các ô ẩn định danh (partner_id, item_id…) khớp
+  const score = (f) => [...f.querySelectorAll('input[type=hidden]')].filter((h) => !['csrf', 'idem'].includes(h.name) && data[h.name] !== undefined && String(data[h.name]) === h.value).length;
+  const form = forms.reduce((a, b) => (score(b) > score(a) ? b : a));
+  const fire = (el) => { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+  const fields = (name) => [...form.elements].filter((el) => el.name === name);
+  // 1) hộp thoại trước, để thông báo lỗi (mở sau cùng) nằm trên cùng
+  const dlg = form.closest('dialog');
+  if (dlg && dlg.showModal && !dlg.open) dlg.showModal();
+  // 2) ô đơn
+  Object.entries(data).forEach(([k, v]) => {
+    if (Array.isArray(v) || k === 'line' || k === 'qty') return;
+    fields(k).forEach((el) => { if (el.type === 'checkbox' || el.type === 'radio') el.checked = el.value === String(v); else if (el.type !== 'file') el.value = v; fire(el); });
+  });
+  // 3) nhóm ô cùng tên (tick nhiều ô / các dòng hàng mới của nhà cung cấp)
+  Object.entries(data).forEach(([k, v]) => {
+    if (!Array.isArray(v) || k === 'line' || k === 'qty') return;
+    const els = fields(k + '[]');
+    if (els.length && els.every((el) => el.type === 'checkbox')) { els.forEach((el) => { el.checked = v.map(String).includes(el.value); }); return; }
+    const add = form.querySelector('[data-add-newitem]');
+    if (add && k.startsWith('new_')) {
+      const rows = () => form.querySelectorAll('.newitem-row').length;
+      while (rows() < v.length) add.click();
+    }
+    fields(k + '[]').forEach((el, i) => { if (v[i] !== undefined) el.value = v[i]; });
+  });
+  // 4) dòng hàng của phiếu
+  const picker = document.getElementById('picker');
+  if (picker && picker.restoreLines && Array.isArray(data.line)) picker.restoreLines(data.line, Array.isArray(data.qty) ? data.qty : []);
+  // 5) đưa thông báo lỗi lên trên hộp thoại vừa mở lại
+  const notice = document.getElementById('notice-dlg');
+  if (dlg && notice && notice.open) { notice.close(); notice.showModal(); }
 })();

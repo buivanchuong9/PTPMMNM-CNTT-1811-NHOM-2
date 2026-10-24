@@ -34,6 +34,7 @@ abstract class Controller
         try {
             $to = $fn();
         } catch (DomainError $e) {
+            $this->session->rememberInput((string)parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), $_POST);   // form được điền lại, không phải nhập từ đầu
             $this->session->flash('err', $e->getMessage());
             return Response::redirect($back);
         }

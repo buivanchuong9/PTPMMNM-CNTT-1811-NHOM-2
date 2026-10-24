@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace StockFlow\Service;
 
 use StockFlow\Core\Db;
+use StockFlow\Domain\AccountRole;
 use StockFlow\Domain\DomainError;
+use StockFlow\Domain\Forbidden;
 use StockFlow\Domain\User;
 
 /** Đối tác (nhà cung cấp / khách hàng) và quan hệ «mặt hàng ← nhà cung cấp». Chỉ tài khoản cấp cao được sửa. */
@@ -14,13 +16,26 @@ final class PartnerService
 
     public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit) {}
 
+    /** Quản trị hệ thống và quản lý kho được thêm / sửa đối tác; nhân viên kho chỉ xem. */
+    public function canEdit(User $user): bool
+    {
+        return $user->isAdmin || $user->role === AccountRole::Manager;
+    }
+
+    private function requireEditor(User $user): void
+    {
+        if (!$this->canEdit($user)) {
+            throw new Forbidden('Chỉ quản trị hệ thống hoặc quản lý kho mới được thao tác với đối tác');
+        }
+    }
+
     /** Đối tác kèm số mặt hàng cung cấp và danh sách SKU. @return list<array<string,mixed>> */
     public function all(): array
     {
         $rows = $this->db->all('SELECT p.*, (SELECT COUNT(*) FROM mat_hang_nha_cung_cap l WHERE l.doi_tac_id = p.id) AS item_count FROM doi_tac p ORDER BY p.ma');
         $skus = [];
-        foreach ($this->db->all('SELECT l.doi_tac_id, i.ma_hang, i.ten FROM mat_hang_nha_cung_cap l JOIN mat_hang i ON i.id = l.mat_hang_id ORDER BY i.ma_hang') as $l) {
-            $skus[(int)$l['doi_tac_id']][] = ['sku' => $l['ma_hang'], 'name' => $l['ten']];
+        foreach ($this->db->all('SELECT l.doi_tac_id, l.mat_hang_id, i.ma_hang, i.ten FROM mat_hang_nha_cung_cap l JOIN mat_hang i ON i.id = l.mat_hang_id ORDER BY i.ma_hang') as $l) {
+            $skus[(int)$l['doi_tac_id']][] = ['id' => (int)$l['mat_hang_id'], 'sku' => $l['ma_hang'], 'name' => $l['ten']];
         }
         foreach ($rows as &$r) {
             $r['items'] = $skus[(int)$r['id']] ?? [];
@@ -81,7 +96,7 @@ final class PartnerService
 
     public function add(User $actor, string $code, string $name, string $type, string $contact, string $phone, string $email, string $address, string $note): int
     {
-        $this->auth->requireAdmin($actor);
+        $this->requireEditor($actor);
         [$code, $name, $type, $contact, $phone, $email, $address, $note] = $this->clean($code, $name, $type, $contact, $phone, $email, $address, $note);
         if ($this->db->value('SELECT 1 FROM doi_tac WHERE ma = ?', [$code])) {
             throw new DomainError("Mã đối tác $code đã tồn tại");
@@ -94,7 +109,7 @@ final class PartnerService
 
     public function update(User $actor, int $id, string $code, string $name, string $type, string $contact, string $phone, string $email, string $address, string $note): void
     {
-        $this->auth->requireAdmin($actor);
+        $this->requireEditor($actor);
         [$code, $name, $type, $contact, $phone, $email, $address, $note] = $this->clean($code, $name, $type, $contact, $phone, $email, $address, $note);
         $old = $this->db->one('SELECT * FROM doi_tac WHERE id = ?', [$id]) ?? throw new DomainError('Đối tác không tồn tại');
         if ($this->db->value('SELECT 1 FROM doi_tac WHERE ma = ? AND id <> ?', [$code, $id])) {
@@ -110,7 +125,7 @@ final class PartnerService
 
     public function setActive(User $actor, int $id, bool $active): void
     {
-        $this->auth->requireAdmin($actor);
+        $this->requireEditor($actor);
         $p = $this->db->one('SELECT ma FROM doi_tac WHERE id = ?', [$id]) ?? throw new DomainError('Đối tác không tồn tại');
         $this->db->exec('UPDATE doi_tac SET hoat_dong = ? WHERE id = ?', [(int)$active, $id]);
         $this->audit->record($actor->id, $active ? 'partner.enable' : 'partner.disable', 'partner', $id, $p['ma']);
@@ -164,6 +179,29 @@ final class PartnerService
         $id = $this->db->insert("INSERT INTO doi_tac (ma, ten, loai, nguoi_lien_he, so_dien_thoai, dia_chi) VALUES (?,?,'CUSTOMER',?,?,?)", [$code, $name, trim($contact), trim($phone), trim($address)]);
         $this->audit->record($actor->id, 'partner.auto', 'partner', $id, "$code · $name (tự lưu từ phiếu xuất)");
         return $id;
+    }
+
+    /** Đặt lại danh sách mặt hàng mà một nhà cung cấp cung cấp (quản lý kho / quản trị). */
+    public function setPartnerItems(User $actor, int $partnerId, array $itemIds): void
+    {
+        $this->requireEditor($actor);
+        $p = $this->db->one('SELECT ma, loai FROM doi_tac WHERE id = ?', [$partnerId]) ?? throw new DomainError('Đối tác không tồn tại');
+        $ids = array_values(array_unique(array_filter(array_map('intval', $itemIds), fn($v) => $v > 0)));
+        if ($p['loai'] !== 'SUPPLIER' && $ids) {
+            throw new DomainError('Chỉ nhà cung cấp mới gắn được mặt hàng');
+        }
+        foreach ($ids as $iid) {
+            if (!$this->db->value('SELECT 1 FROM mat_hang WHERE id = ?', [$iid])) {
+                throw new DomainError('Mặt hàng không hợp lệ');
+            }
+        }
+        $this->db->transaction(function () use ($partnerId, $ids) {
+            $this->db->exec('DELETE FROM mat_hang_nha_cung_cap WHERE doi_tac_id = ?', [$partnerId]);
+            foreach ($ids as $iid) {
+                $this->db->exec('INSERT INTO mat_hang_nha_cung_cap (mat_hang_id, doi_tac_id) VALUES (?,?)', [$iid, $partnerId]);
+            }
+        });
+        $this->audit->record($actor->id, 'partner.items', 'partner', $partnerId, $p['ma'] . ' · ' . count($ids) . ' mặt hàng');
     }
 
     /** Đặt lại toàn bộ nhà cung cấp của một mặt hàng. Chỉ nhận đối tác loại nhà cung cấp. */

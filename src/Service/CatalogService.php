@@ -131,9 +131,12 @@ final class CatalogService
         return $this->db->insert('INSERT INTO don_vi_tinh (ma, ten) VALUES (?,?)', [$code, $name]);
     }
 
+    /** Quản trị hệ thống và quản lý kho được thêm danh mục hàng hoá. */
     public function addCategory(User $actor, string $code, string $name): int
     {
-        $this->auth->requireAdmin($actor);
+        if (!$actor->isAdmin && $actor->role !== AccountRole::Manager) {
+            $this->auth->requireAdmin($actor);
+        }
         $code = strtoupper(trim($code));
         $name = trim($name);
         if (!preg_match('/^[A-Z0-9._-]{2,30}$/', $code)) {
@@ -155,9 +158,12 @@ final class CatalogService
         }
     }
 
-    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null): int
+    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null, bool $viaSupplier = false): int
     {
-        $this->auth->requireAdmin($actor);
+        // Quản lý kho chỉ được thêm mặt hàng mới khi đang lập nhà cung cấp (hàng mới do nhà cung cấp đó cung cấp)
+        if (!($viaSupplier && $actor->role === AccountRole::Manager)) {
+            $this->auth->requireAdmin($actor);
+        }
         $sku = strtoupper(trim($sku));
         $name = trim($name);
         if (!preg_match('/^[A-Z0-9._-]{2,40}$/', $sku)) {
