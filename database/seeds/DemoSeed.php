@@ -12,6 +12,7 @@ use StockFlow\Domain\User;
 use StockFlow\Domain\VoucherType;
 use StockFlow\Service\AuthService;
 use StockFlow\Service\CatalogService;
+use StockFlow\Service\FleetService;
 use StockFlow\Service\StockCountService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\TransferService;
@@ -68,6 +69,20 @@ final class DemoSeed
                     $keeper[$code] = new User($sid, $sName, $sFull, AccountRole::Staff, $wh[$code]);
                 }
             }
+        }
+
+        // ── đội xe & tài xế: mỗi kho 2 xe tải, mỗi xe một tài xế phụ trách (tài xế đi theo xe) ──
+        $fleet = $c->get(FleetService::class);
+        $drivers = [['Nguyễn Văn Hùng', '001085012345', '0912345601'], ['Trần Quang Vinh', '048090023456', '0912345602'],
+                    ['Lê Hữu Nghĩa', '079088034567', '0912345603'], ['Phạm Đức Thắng', '001092045678', '0912345604'],
+                    ['Đỗ Minh Tuấn', '079091056789', '0912345605'], ['Hoàng Văn Sơn', '001087067890', '0912345606']];
+        $driverIds = array_map(fn($d) => $fleet->addDriver($admin, $d[0], $d[1], $d[2]), $drivers);
+        $i = 0;
+        foreach ([['HN01', ['29C-123.45', 'Xe tải 2 tấn'], ['30H-678.90', 'Xe tải 1,5 tấn']],
+                  ['DN01', ['43C-234.56', 'Xe tải 2 tấn'], ['43H-789.01', 'Xe tải 1 tấn']],
+                  ['HCM01', ['51C-345.67', 'Xe tải 2,5 tấn'], ['51D-890.12', 'Xe tải 1,5 tấn']]] as [$code, $a, $b]) {
+            $fleet->addVehicle($admin, $a[0], $a[1], $wh[$code], $driverIds[$i++]);
+            $fleet->addVehicle($admin, $b[0], $b[1], $wh[$code], $driverIds[$i++]);
         }
 
         // ── đơn vị + mặt hàng + lô ──

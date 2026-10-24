@@ -67,7 +67,13 @@ $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
     <section class="card">
       <h2>Thông tin</h2>
       <dl class="meta">
-        <div><dt>Đối tác / lý do</dt><dd><?= e($v['doi_tac'] ?: $v['ly_do'] ?: '—') ?></dd></div>
+        <?php if ($isXfer): ?>
+        <div><dt><?= $v['loai'] === 'TRANSFER_IN' ? 'Kho chuyển đi' : 'Kho chuyển đến' ?></dt><dd><?= $v['cp_code'] ? '<span class="wh-code">' . e($v['cp_code']) . '</span> ' . e($v['cp_name']) : '—' ?></dd></div>
+        <?php elseif ($v['loai'] === 'ADJUSTMENT'): ?>
+        <div><dt>Lý do</dt><dd><?= e($v['ly_do'] ?: '—') ?></dd></div>
+        <?php else: ?>
+        <div><dt>Đối tác</dt><dd><?= e($v['doi_tac'] ?: '—') ?></dd></div>
+        <?php endif; ?>
         <div><dt>Ghi chú</dt><dd><?= e($v['ghi_chu'] ?: '—') ?></dd></div>
         <div><dt>Người lập</dt><dd><?= e($v['creator_name']) ?></dd></div>
         <div><dt>Người xác nhận</dt><dd><?= e($v['approver_name'] ?: '—') ?></dd></div>
@@ -75,12 +81,46 @@ $allOk = $check === [] || !in_array(false, array_column($check, 'ok'), true);
       </dl>
     </section>
 
+    <?php if ($trip): ?>
+    <section class="card">
+      <h2>Vận chuyển</h2>
+      <dl class="meta">
+        <div><dt>Xe</dt><dd><b><?= e($trip['bien_so']) ?></b><?= $trip['loai_xe'] ? ' · ' . e($trip['loai_xe']) : '' ?></dd></div>
+        <div><dt>Tài xế</dt><dd><b><?= e($trip['tai_xe_ten']) ?></b><br><small class="muted">CCCD <?= e($trip['cccd']) ?><?= $trip['so_dien_thoai'] ? ' · ' . e($trip['so_dien_thoai']) : '' ?></small></dd></div>
+        <div><dt>Xuất kho đi</dt><dd><?= e(dt($trip['ngay_di'])) ?> · <?= e($trip['giao_ten']) ?><br><span class="tag tag-ok">Tài xế đã xác nhận nhận đủ hàng</span></dd></div>
+        <div><dt>Kho đến kiểm tra</dt><dd>
+          <?php if ($trip['trang_thai'] === 'DELIVERED'): ?><span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế, xe</span><br><small class="muted"><?= e(dt($trip['ngay_nhan'])) ?> · <?= e($trip['nhan_ten']) ?></small>
+          <?php elseif ($trip['sai_lech'] !== ''): ?><span class="tag tag-danger">Báo sai lệch</span><br><small><?= e($trip['sai_lech']) ?></small><br><small class="muted"><?= e($trip['nhan_ten'] ?? '') ?></small>
+          <?php else: ?><span class="muted">Chưa nhận hàng</span><?php endif; ?></dd></div>
+      </dl>
+    </section>
+    <?php endif; ?>
+
     <?php if ($v['trang_thai'] === 'DRAFT' && ($canApprove || $canDraft)): ?>
     <section class="card">
       <h2>Thao tác</h2>
       <?php if (!$allOk): ?><p class="flash flash-err small"><?= icon('alert') ?><span>Một số dòng không đủ tồn — không thể xác nhận cho đến khi tồn đủ.</span></p><?php endif; ?>
+      <?php $isOut = $v['loai'] === 'TRANSFER_OUT'; $recvTrip = $v['loai'] === 'TRANSFER_IN' && $trip && $trip['trang_thai'] === 'IN_TRANSIT';
+            $ready = array_values(array_filter($vehicles, fn($x) => $x['tai_xe_id'] && $x['tai_xe_hoat_dong'])); $noFleet = $isOut && $canApprove && !$ready; ?>
+      <?php if ($noFleet): ?><p class="flash flash-err small"><?= icon('alert') ?><span><?= $vehicles
+          ? 'Xe tại kho này chưa có tài xế phụ trách. Liên hệ quản trị hệ thống ở trang Đội xe &amp; tài xế.'
+          : 'Kho này chưa có xe sẵn sàng (xe đang chạy hoặc chưa được thêm). Liên hệ quản trị hệ thống ở trang Đội xe &amp; tài xế.' ?></span></p><?php endif; ?>
       <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/confirm" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-        <?php if ($canApprove): ?><button class="btn-block"<?= $allOk ? '' : ' disabled' ?>><?= icon('check') ?><?= $v['loai'] === 'TRANSFER_OUT' ? 'Xuất kho đi (trừ tồn kho đi)' : ($v['loai'] === 'TRANSFER_IN' ? 'Đã nhận hàng (cộng tồn kho đến)' : 'Xác nhận & ghi sổ') ?></button>
+        <?php if ($canApprove && $isOut && !$noFleet): ?>
+        <div class="form">
+          <label>Xe chở hàng (tài xế đi theo xe)<select name="vehicle_id" required><option value="">Chọn xe…</option><?php foreach ($ready as $x): ?><option value="<?= (int)$x['id'] ?>"><?= e($x['bien_so'] . ' — ' . $x['ho_ten'] . ' · CCCD ' . $x['cccd']) ?></option><?php endforeach; ?></select></label>
+          <label class="check"><input type="checkbox" name="driver_ok" value="1" required> Tài xế đã kiểm và xác nhận nhận đủ hàng</label>
+        </div>
+        <?php elseif ($canApprove && $recvTrip): ?>
+        <div class="form">
+          <p class="muted small">Đối chiếu với thông tin ở khung «Vận chuyển»: người giao có đúng tài xế <b><?= e($trip['tai_xe_ten']) ?></b>, xe <b><?= e($trip['bien_so']) ?></b> không?</p>
+          <label class="check"><input type="checkbox" name="full_ok" value="1"> Hàng nhận đủ, đúng số lượng</label>
+          <label class="check"><input type="checkbox" name="driver_match" value="1"> Đúng tài xế và đúng xe</label>
+          <label>Lý do sai lệch (chỉ điền khi báo sai lệch)<textarea name="reason" rows="2" maxlength="200" placeholder="VD: thiếu 5 thùng, tài xế khác người đã đăng ký"></textarea></label>
+        </div>
+        <?php endif; ?>
+        <?php if ($canApprove): ?><button class="btn-block"<?= ($allOk && !$noFleet) ? '' : ' disabled' ?>><?= icon('check') ?><?= $v['loai'] === 'TRANSFER_OUT' ? 'Xuất kho đi (trừ tồn kho đi)' : ($v['loai'] === 'TRANSFER_IN' ? ($recvTrip ? 'Xác nhận đã nhận hàng (cộng tồn kho đến)' : 'Đã nhận hàng (cộng tồn kho đến)') : 'Xác nhận & ghi sổ') ?></button>
+        <?php if ($recvTrip): ?><button type="submit" class="btn-danger btn-block mt" formaction="/vouchers/<?= (int)$v['id'] ?>/discrepancy" formnovalidate data-confirm="Báo sai lệch cho phiếu này? Hàng chưa được cộng vào tồn kho đến."><?= icon('alert') ?>Báo sai lệch (chưa nhận hàng)</button><?php endif; ?>
         <?php else: ?><p class="muted small">Chỉ tài khoản có quyền «<?= $v['loai'] === 'TRANSFER_IN' ? 'Nhận hàng' : 'Người duyệt' ?>» tại kho <?= e($v['wh_code']) ?> mới xác nhận được.</p><?php endif; ?></form>
       <?php if ($v['loai'] !== 'TRANSFER_IN'): ?><form method="post" action="/vouchers/<?= (int)$v['id'] ?>/cancel" class="mt"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="btn-danger btn-block" data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button></form><?php endif; ?>
     </section>

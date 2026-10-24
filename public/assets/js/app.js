@@ -2,11 +2,6 @@
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Kiểu hiệu ứng chuyển chức năng: 'slide' (trượt ngang, mặc định) | 'fade' (mượt) | 'suck' (hút vào – mở ra) | 'card' (thẻ trượt) | 'none'. Lưu theo trình duyệt.
-  const VX_KEY = 'sf-transition';
-  const readVx = () => { try { const v = localStorage.getItem(VX_KEY); return v === 'card' || v === 'none' || v === 'suck' || v === 'fade' ? v : 'slide'; } catch (e) { return 'slide'; } };
-  document.documentElement.dataset.vx = readVx();
-
   // Ảnh đại diện (Cài đặt): xem trước ngay, báo lỗi sớm (loại file, dung lượng). Máy chủ vẫn kiểm tra lại toàn bộ nội dung file.
   const initAvatar = () => {
     const form = document.querySelector('.avatar-form');
@@ -59,15 +54,6 @@
       }
     });
   };
-  const initVxSelect = () => {
-    const sel = document.querySelector('[data-vx-select]');
-    if (!sel) return;
-    sel.value = readVx();
-    sel.addEventListener('change', () => {
-      try { localStorage.setItem(VX_KEY, sel.value); } catch (e) { /* trình duyệt chặn lưu: chỉ áp dụng lần này */ }
-      document.documentElement.dataset.vx = sel.value;
-    });
-  };
 
   const initCounters = () => {
   // KPI đếm tăng dần
@@ -96,8 +82,9 @@
     document.querySelectorAll('canvas[data-chart]').forEach((cv) => {
       const labels = JSON.parse(cv.dataset.labels || '[]');
       if (cv.dataset.chart === 'doughnut') {
+        const fixed = JSON.parse(cv.dataset.colors || 'null');   // màu cố định theo từng phần (vd. trạng thái); không có thì dùng bảng màu chung
         new Chart(cv, { type: 'doughnut',
-          data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: (c) => (c.dataIndex === 1 && document.documentElement.dataset.theme === 'dark' ? '#8b95b3' : palette[c.dataIndex % palette.length]), borderWidth: 2, borderColor: () => css('--surface'), hoverOffset: 6 }] },
+          data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: (c) => (fixed ? fixed[c.dataIndex] : c.dataIndex === 1 && document.documentElement.dataset.theme === 'dark' ? '#8b95b3' : palette[c.dataIndex % palette.length]), borderWidth: 2, borderColor: () => css('--surface'), hoverOffset: 6 }] },
           options: { cutout: '66%', maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
       } else if (cv.dataset.chart === 'flowbar') {
@@ -128,6 +115,14 @@
     });
   };
   if (document.readyState === 'complete') initCharts(); else addEventListener('load', initCharts);
+
+  // Ô tìm kiếm có data-search-clean: chỉ nhận chữ, số, khoảng trắng và - . /; tự chuyển thành chữ thường (máy chủ cũng lọc lại)
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement) || !t.hasAttribute('data-search-clean')) return;
+    const v = t.value.toLowerCase().replace(/[^\p{L}\p{N}\s./-]/gu, '').slice(0, 50);
+    if (v !== t.value) t.value = v;
+  });
 
   // Menu trên mobile
   const toggle = document.querySelector('[data-menu-toggle]');
@@ -576,7 +571,7 @@
   // ── Điều hướng không tải lại trang ──
   // Thanh đầu và thanh chức năng đứng yên; bấm liên kết / gửi form chỉ đổi vùng nội dung bên phải (<main>).
   // Trang không thuộc khung này (đăng nhập, trang lỗi, tải CSV…) vẫn chuyển trang bình thường.
-  const initPage = (swapped) => { initRoles(); initAvatar(); initVxSelect(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
+  const initPage = (swapped) => { initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
@@ -616,7 +611,7 @@
       cur.scrollTop = 0;
       cur.classList.remove('vx-out');
       cur.style.visibility = '';
-      if (fx && !reducedMotion.matches && readVx() !== 'none') {                     // chỉ khi bấm ở thanh menu: bung ra từ điểm vừa bấm
+      if (fx && !reducedMotion.matches) {                     // chỉ khi bấm ở thanh menu: các khối hiện lần lượt
         [...cur.children].forEach((el, i) => el.style.setProperty('--i', Math.min(i, 8)));   // kiểu «Mượt»: hiện lần lượt, tối đa 9 nhịp
         void cur.offsetWidth;
         cur.classList.add('vx-in');
@@ -629,43 +624,17 @@
     };
 
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-    const originOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
 
-    // Kiểu «thẻ trượt»: chụp một BẢN SAO của trang cũ (.main-ghost) để nó vẫn hiện thành thẻ nhỏ rồi trượt lên, trong khi trang mới (đang tải) trượt từ dưới lên đẩy nó đi.
-    const dropGhosts = () => document.querySelectorAll('.main-ghost').forEach((g) => g.remove());
-    const playCardExit = () => new Promise((resolve) => {
-      const m = document.getElementById('main'), wrap = m.parentElement;
-      dropGhosts();
-      const g = m.cloneNode(true);
-      g.removeAttribute('id'); g.removeAttribute('tabindex'); g.className = 'main-ghost';
-      g.setAttribute('inert', ''); g.setAttribute('aria-hidden', 'true');
-      g.querySelectorAll('[id]').forEach((e) => e.removeAttribute('id'));
-      g.querySelectorAll('dialog').forEach((e) => e.remove());
-      const src = m.querySelectorAll('canvas'), dst = g.querySelectorAll('canvas');
-      src.forEach((c, i) => { try { dst[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { /* biểu đồ không chép được: bỏ qua */ } });
-      wrap.appendChild(g);
-      g.scrollTop = m.scrollTop;                                                    // thẻ cũ giữ đúng đoạn trang đang xem
-      m.style.visibility = 'hidden';                                                // nội dung thật ẩn đi cho tới khi trang mới sẵn sàng
-      const dur = (parseFloat(getComputedStyle(g).animationDuration) || 0.64) * 1000;
-      g.addEventListener('animationend', (e) => { if (e.target === g && e.animationName === 'card-ghost') g.remove(); });   // chỉ khi chính thẻ chạy xong (không phải khối con bên trong)
-      setTimeout(() => g.remove(), dur + 500);
-      setTimeout(resolve, dur * 0.3);                                               // tới lúc thẻ cũ bắt đầu trượt lên thì thẻ mới cũng được phép trượt lên
-    });
-
-    // Hiệu ứng «hút vào»: nội dung cũ co lại về phía chỗ vừa bấm (mục menu / nút) rồi tan. Chạy song song với việc tải trang mới.
-    const playExit = (origin) => new Promise((resolve) => {
+    // Hiệu ứng «mượt»: nội dung cũ mờ đi rất nhanh. Chạy song song với việc tải trang mới.
+    const playExit = () => new Promise((resolve) => {
       const m = document.getElementById('main');
-      if (reducedMotion.matches || readVx() === 'none') return resolve();
-      if (readVx() === 'card') return resolve(playCardExit());
-      const r = m.getBoundingClientRect(), o = origin || { x: r.left + r.width / 2, y: r.top + r.height / 3 };
-      m.style.setProperty('--vx-ox', ((o.x - r.left) / r.width * 100).toFixed(1) + '%');
-      m.style.setProperty('--vx-oy', ((o.y - r.top) / r.height * 100).toFixed(1) + '%');
+      if (reducedMotion.matches) return resolve();
       m.classList.remove('vx-in');
       void m.offsetWidth;
       m.classList.add('vx-out');
       let finished = false;
       const end = () => { if (finished) return; finished = true; m.removeEventListener('animationend', onEnd); resolve(); };
-      const onEnd = (e) => { if (e.target === m && /^(vx|card|fx|sl)-out$/.test(e.animationName)) end(); };
+      const onEnd = (e) => { if (e.target === m && /^fx-out$/.test(e.animationName)) end(); };
       m.addEventListener('animationend', onEnd);
       setTimeout(end, (parseFloat(getComputedStyle(m).animationDuration) || 0.3) * 1000 + 400);   // dự phòng nếu animationend không bắn
     });
@@ -673,10 +642,10 @@
     const load = async (url, opts = {}) => {
       const mine = ++seq, method = opts.method || 'GET';
       document.body.classList.add('spa-busy');
-      const exit = opts.fx ? playExit(opts.origin) : Promise.resolve();                // chỉ menu bên trái mới có hiệu ứng chuyển
+      const exit = opts.fx ? playExit() : Promise.resolve();                // chỉ menu bên trái mới có hiệu ứng chuyển
       if (!opts.fx) {                                                                  // bấm trong nội dung: đổi ngay, đồng thời dọn hiệu ứng còn dở (nếu có)
         const m0 = document.getElementById('main');
-        m0.classList.remove('vx-out', 'vx-in'); m0.style.visibility = ''; dropGhosts();
+        m0.classList.remove('vx-out', 'vx-in'); m0.style.visibility = '';
       }
       let leaving = false, swapped = false;
       try {
@@ -699,7 +668,7 @@
       } finally {
         if (mine === seq) {
           document.body.classList.remove('spa-busy');
-          if (!leaving && !swapped) { const mm = document.getElementById('main'); mm?.classList.remove('vx-out'); if (mm) mm.style.visibility = ''; dropGhosts(); }   // không đổi được trang (lỗi mạng…): trả nội dung về
+          if (!leaving && !swapped) { const mm = document.getElementById('main'); mm?.classList.remove('vx-out'); if (mm) mm.style.visibility = ''; }   // không đổi được trang (lỗi mạng…): trả nội dung về
         }
       }
     };
@@ -712,7 +681,7 @@
       const u = new URL(a.href, location.href);
       if (skipUrl(u) || (u.pathname + u.search === here && u.hash)) return;
       e.preventDefault();
-      load(u.pathname + u.search, { origin: originOf(a), fx: !!a.closest('.sidebar') });
+      load(u.pathname + u.search, { fx: !!a.closest('.sidebar') });
     });
 
     document.addEventListener('submit', (e) => {

@@ -2,7 +2,7 @@
 $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: [['units' => 1]]));
 ?>
 <header class="page-head">
-  <div><h1>Tổng quan kho</h1><p class="muted"><?= $user->isAdmin ? 'Toàn cảnh các kho: tồn bao nhiêu, nhập xuất ra sao — tính từ sổ phát sinh. Tài khoản quản trị chỉ xem và quản lý.' : 'Số liệu tính từ sổ phát sinh trên kho bạn được truy cập.' ?></p></div>
+  <div><h1>Tổng quan kho</h1></div>
   <div class="actions">
     <?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuDieuChuyen)): ?><a class="btn" href="/transfers/new"><?= icon('truck') ?>Điều chuyển kho</a><?php endif; ?>
     <?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuNhap)): ?><a class="btn btn-ghost" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Lập phiếu nhập</a><?php endif; ?>
@@ -15,6 +15,7 @@ $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: 
   <a class="kpi kpi-ok" href="/vouchers?status=CONFIRMED"><span class="kpi-ic"><?= icon('check') ?></span><b data-count="<?= (int)$d['confirmed_today'] ?>"><?= n($d['confirmed_today']) ?></b><span>Đã xác nhận hôm nay</span></a>
 </section>
 
+<?php if ($user->isAdmin): ?>
 <div class="grid-2">
   <section class="card chart-card">
     <div class="card-head"><h2>Cơ cấu tồn theo kho</h2><span class="muted small">đơn vị đang tồn</span></div>
@@ -60,13 +61,31 @@ $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: 
   <p class="muted small flow-note">Nhập kho / Xuất kho: phiếu nhập, phiếu xuất ngoài hệ thống · Chuyển đi / đến: điều chuyển giữa các kho · Tổng vào = nhập + chuyển đến · Tổng ra = xuất + chuyển đi.</p>
 </section>
 
+<?php else: $vs = $d['voucher_status']; $ss = $d['stock_status']; ?>
+<div class="grid-2">
+  <section class="card chart-card">
+    <div class="card-head"><h2>Trạng thái hàng hoá</h2><span class="muted small">số mặt hàng trong kho</span></div>
+    <?php if (!array_sum($ss)): ?><p class="chart-empty">Chưa có dữ liệu để vẽ biểu đồ.</p><?php else: ?>
+    <div class="chart-box donut"><canvas data-chart="doughnut" data-labels="<?= e(json_encode(['Còn hàng', 'Sắp hết', 'Hết hàng'])) ?>" data-values="<?= e(json_encode(array_values($ss))) ?>" data-colors="<?= e(json_encode(['#16a34a', '#f59e0b', '#d12f3f'])) ?>" role="img" aria-label="Biểu đồ tròn trạng thái hàng hoá trong kho"></canvas></div>
+    <?php endif; ?>
+  </section>
+  <section class="card chart-card">
+    <div class="card-head"><h2>Trạng thái phiếu nhập xuất</h2><span class="muted small">toàn bộ phiếu của kho</span></div>
+    <?php if (!array_sum($vs)): ?><p class="chart-empty">Chưa có phiếu nào để vẽ biểu đồ.</p><?php else: ?>
+    <div class="chart-box donut"><canvas data-chart="doughnut" data-labels="<?= e(json_encode(['Chờ xác nhận', 'Đã xác nhận', 'Đã huỷ'])) ?>" data-values="<?= e(json_encode([$vs['DRAFT'], $vs['CONFIRMED'], $vs['CANCELLED']])) ?>" data-colors="<?= e(json_encode(['#f59e0b', '#16a34a', '#7a8190'])) ?>" role="img" aria-label="Biểu đồ tròn trạng thái phiếu nhập xuất"></canvas></div>
+    <?php endif; ?>
+  </section>
+</div>
+<?php endif; ?>
+
 <section class="card chart-card">
-  <div class="card-head"><h2>Diễn biến 14 ngày</h2><span class="muted small">tổng vào / tổng ra mỗi ngày, mọi kho bạn xem</span></div>
+  <div class="card-head"><h2>Diễn biến 14 ngày</h2><span class="muted small">tổng vào / tổng ra mỗi ngày<?= $user->isAdmin ? ', mọi kho' : '' ?></span></div>
   <div class="chart-box"><canvas data-chart="dailyline" data-labels="<?= e(json_encode(array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['ngay'], 5, 2), $d['daily']))) ?>"
     data-vao="<?= e(json_encode(array_column($d['daily'], 'vao'))) ?>" data-ra="<?= e(json_encode(array_column($d['daily'], 'ra'))) ?>" role="img" aria-label="Biểu đồ đường tổng vào và ra theo ngày"></canvas></div>
 </section>
 
 <div class="grid-2">
+<?php if ($user->isAdmin): ?>
   <section class="card">
     <div class="card-head"><h2>Tồn theo kho</h2><a href="/warehouses">Tất cả kho →</a></div>
     <?php if (!$d['warehouses']): ?><p class="empty">Bạn chưa được cấp quyền ở kho nào. Liên hệ quản trị viên.</p><?php endif; ?>
@@ -81,8 +100,22 @@ $maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: 
     </ul>
   </section>
 
+<?php else: $topMax = max(1, ...array_map(fn($t) => (int)$t['so_luong'], $d['top'] ?: [['so_luong' => 1]])); ?>
   <section class="card">
-    <div class="card-head"><h2>Cảnh báo sắp hết hàng</h2><span class="muted small">tổng các kho bạn xem</span></div>
+    <div class="card-head"><h2>Tồn nhiều nhất</h2><a href="/inventory">Hàng hoá →</a></div>
+    <?php if (!$d['top']): ?><p class="empty">Kho chưa có hàng tồn.</p><?php endif; ?>
+    <ul class="wh-list">
+    <?php foreach ($d['top'] as $i => $t): ?>
+      <li style="--i:<?= $i ?>">
+        <div class="wh-top"><span><b><?= e($t['ma_hang']) ?></b> <?= e($t['ten']) ?></span><span class="muted"><?= n($t['so_luong']) ?> <?= e($t['unit']) ?></span></div>
+        <div class="bar"><i style="--w:<?= round($t['so_luong'] / $topMax * 100, 1) ?>%"></i></div>
+      </li>
+    <?php endforeach; ?>
+    </ul>
+  </section>
+<?php endif; ?>
+  <section class="card">
+    <div class="card-head"><h2>Cảnh báo sắp hết hàng</h2><span class="muted small"><?= $user->isAdmin ? 'tổng các kho bạn xem' : 'trong kho của bạn' ?></span></div>
     <?php if (!$d['low']): ?><p class="empty">Không có mặt hàng nào dưới định mức.</p><?php endif; ?>
     <ul class="rows">
     <?php foreach ($d['low'] as $r): ?>

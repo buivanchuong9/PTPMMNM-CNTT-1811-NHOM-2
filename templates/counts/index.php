@@ -4,7 +4,7 @@ $total = array_sum($statusCounts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['status' => $status, 'warehouse' => $wh], $over), fn($v) => $v !== null && $v !== ''));
 ?>
 <header class="page-head">
-  <div><h1>Kiểm kê</h1><p class="muted">Đếm thực tế → nộp kèm lý do chênh lệch → quản lý kho duyệt → hệ thống lập phiếu điều chỉnh và cập nhật tồn.<?= $user->isAdmin ? ' Tài khoản cấp cao xem lịch sử kiểm kê của từng kho.' : '' ?></p></div>
+  <div><h1>Kiểm kê</h1></div>
   <?php if ($warehouses): ?><div class="actions"><button type="button" data-dialog-open="count-dlg"><?= icon('clipboard') ?>Mở đợt kiểm kê</button></div><?php endif; ?>
 </header>
 

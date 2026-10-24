@@ -1,0 +1,9 @@
+#!/bin/sh
+# Chạy tự động sau mỗi `git pull` (bật bằng: php bin/stockflow update).
+# Đồng bộ database MySQL với mã nguồn mới: database cũ được sao lưu vào .local/ rồi sửa đúng chuẩn, không mất dữ liệu.
+cd "$(git rev-parse --show-toplevel)" || exit 0
+if git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD 2>/dev/null | grep -q '^database/'; then
+    echo "→ database/ có thay đổi: cập nhật database MySQL..."
+    php bin/stockflow db-sync || echo "⚠ Chưa cập nhật được database (đã bật MySQL trong XAMPP chưa?). Chạy lại: php bin/stockflow update"
+fi
+exit 0

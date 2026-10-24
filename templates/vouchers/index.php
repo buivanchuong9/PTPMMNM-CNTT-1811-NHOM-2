@@ -4,7 +4,7 @@ $total = array_sum($counts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh], $over), fn($v) => $v !== null && $v !== ''));
 ?>
 <header class="page-head">
-  <div><h1>Phiếu nhập xuất kho</h1><p class="muted">Phiếu nhập, xuất, điều chuyển và điều chỉnh. Phiếu đã xác nhận không bị sửa hay xoá — nếu sai thì lập phiếu điều chỉnh.</p></div>
+  <div><h1>Phiếu nhập xuất kho</h1></div>
   <div class="actions"><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuNhap)): ?><a class="btn" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Phiếu nhập</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuXuat)): ?><a class="btn btn-ghost" href="/vouchers/new?type=ISSUE"><?= icon('out') ?>Phiếu xuất</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuDieuChuyen)): ?><a class="btn btn-ghost" href="/transfers/new"><?= icon('truck') ?>Điều chuyển</a><?php endif; ?></div>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
@@ -14,7 +14,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
 </nav>
 <form class="filters" method="get">
   <input type="hidden" name="status" value="<?= e($status ?? '') ?>">
-  <input type="search" name="q" value="<?= e($q) ?>" placeholder="Mã phiếu nhập xuất hoặc đối tác…" aria-label="Tìm kiếm">
+  <input type="search" name="q" maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu nhập xuất hoặc đối tác…" aria-label="Tìm kiếm">
   <select name="type" aria-label="Loại"><option value="">Mọi loại</option><?php foreach (TYPE_LABELS as $k => [$l]): ?><option value="<?= $k ?>"<?= $k === $type ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Mọi kho') ?></select>
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>

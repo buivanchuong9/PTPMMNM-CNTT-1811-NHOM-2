@@ -30,7 +30,7 @@ final class InventoryController extends Controller
         $wh = $r->int('warehouse');
         $scope = $wh && in_array($wh, $visible, true) ? [$wh] : $visible;
         $byBatch = $r->str('view') === 'batch';
-        $q = $r->str('q');
+        $q = $r->search('q');
         $stock = $r->str('stock');   // '' = tất cả · 'low' = sắp hết · 'in' = còn hàng · 'out' = hết hàng
         $items = $this->catalog->items();
         $warehouses = $visible ? $this->db->all('SELECT id, ma, ten FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY ma') : [];

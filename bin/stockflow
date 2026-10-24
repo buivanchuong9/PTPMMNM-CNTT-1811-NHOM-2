@@ -14,14 +14,15 @@ use StockFlow\Core\SchemaSync;
 
 const USAGE = <<<TXT
 Cách dùng: bin/stockflow <lệnh>
-  demo        chạy NGAY bằng dữ liệu mẫu (SQLite, không cần MySQL): tự dựng + nạp dữ liệu + mở web
+  update      CẬP NHẬT sau khi git pull / máy mới: tự cấu hình MySQL (XAMPP), tạo/sửa database cho đúng chuẩn, nạp dữ liệu mẫu nếu database trống,
+              và bật tự cập nhật sau mỗi lần `git pull`
   db-config   nhập thông tin MySQL → .local/db.json (chmod 600)
   check       kiểm tra kết nối + phiên bản MySQL
   db-sync     KIỂM TRA database trên máy có đúng chuẩn dự án không, sai thì TỰ SỬA (sao lưu → dựng lại → nạp lại dữ liệu)
               --check chỉ báo cáo, không sửa · tự tạo database nếu chưa có
   migrate     tạo/cập nhật bảng (chạy lại an toàn)
   seed        nạp dữ liệu mẫu (3 kho, 30 mặt hàng, ≥200 dòng phát sinh); bỏ qua nếu đã có dữ liệu
-  setup       db-sync + seed
+  setup       db-sync + seed (như update nhưng không đụng cấu hình / git hook)
   serve       chạy web tại http://127.0.0.1:8080  (PORT=9000 để đổi cổng)
   test        chạy toàn bộ kiểm thử (cần CSDL cho integration/http)
 
@@ -87,29 +88,57 @@ function cmdSeed(array $argv): int
     return \StockFlow\Seeds\DemoSeed::run(connect(), in_array('--force', $argv, true));
 }
 
-function cmdDemo(array $argv): int
+/** Thông tin kết nối mặc định của XAMPP: root, không mật khẩu. Máy nào khác thì chạy `bin/stockflow db-config`. */
+function ensureDefaultConfig(): void
+{
+    $path = Config::root() . '/.local/db.json';
+    if (getenv('DB_HOST') !== false || is_file($path)) {
+        return;
+    }
+    $old = umask(0077);
+    @mkdir(dirname($path), 0700, true);
+    file_put_contents($path, json_encode(['host' => '127.0.0.1', 'port' => '3306', 'database' => 'stockflow', 'user' => 'root', 'password' => ''], JSON_PRETTY_PRINT));
+    umask($old);
+    echo "✔ Chưa có cấu hình nên dùng mặc định của XAMPP (root, không mật khẩu, database `stockflow`) → .local/db.json\n";
+}
+
+/** Bật hook .githooks/post-merge: sau mỗi `git pull` tự chạy db-sync để database khớp mã nguồn mới. */
+function installGitHook(): void
 {
     $root = Config::root();
-    $file = "$root/.local/demo.sqlite";
-    if (in_array('--reset', $argv, true)) {
-        foreach (['', '-wal', '-shm'] as $ext) {
-            @unlink($file . $ext);
-        }
+    if (!is_dir("$root/.git") || !is_file("$root/.githooks/post-merge")) {
+        return;
     }
-    putenv('STOCKFLOW_SQLITE=' . $file);
-    if (!extension_loaded('pdo_sqlite')) {
-        fwrite(STDERR, "✘ PHP chưa có extension pdo_sqlite. macOS: brew install php · Ubuntu: sudo apt install php-sqlite3\n");
+    @chmod("$root/.githooks/post-merge", 0755);
+    exec('git -C ' . escapeshellarg($root) . ' config core.hooksPath .githooks', $out, $rc);
+    echo $rc === 0
+        ? "✔ Đã bật tự cập nhật database sau mỗi lần `git pull` (.githooks/post-merge)\n"
+        : "⚠ Không bật được git hook — sau mỗi lần pull hãy chạy: php bin/stockflow update\n";
+}
+
+/** Một lệnh cho mọi máy: cấu hình → database đúng chuẩn (sao lưu trước khi sửa) → dữ liệu mẫu nếu trống → git hook. */
+function cmdUpdate(array $argv): int
+{
+    ensureDefaultConfig();
+    $config = Config::database();
+    if (($config['driver'] ?? 'mysql') === 'sqlite') {
+        fwrite(STDERR, "✘ Dự án dùng MySQL (XAMPP). Bỏ biến môi trường STOCKFLOW_SQLITE rồi chạy lại.\n");
         return 2;
     }
-    $db = connect();
-    foreach ((new Migrator($db))->migrate() as $line) {
-        echo $line, "\n";
+    $rc = cmdDbSync($argv);
+    if ($rc !== 0) {
+        return $rc;
     }
-    require_once "$root/database/seeds/DemoSeed.php";
-    if (\StockFlow\Seeds\DemoSeed::run($db, false) !== 0) {
-        return 1;
+    if ((int)connect()->value('SELECT COUNT(*) FROM kho') === 0) {
+        echo "→ Database trống: nạp dữ liệu mẫu.\n";
+        $rc = cmdSeed($argv);
+        if ($rc !== 0) {
+            return $rc;
+        }
     }
-    return cmdServe();
+    installGitHook();
+    echo "✔ Xong. Chạy web: php bin/stockflow serve  →  http://127.0.0.1:8080\n";
+    return 0;
 }
 
 /**
@@ -191,7 +220,7 @@ try {
         'seed' => cmdSeed($argv),
         'db-sync' => cmdDbSync($argv),
         'setup' => cmdDbSync($argv) ?: cmdSeed($argv),
-        'demo' => cmdDemo($argv),
+        'update' => cmdUpdate($argv),
         'serve' => cmdServe(),
         'test' => (function () { passthru('php ' . escapeshellarg(Config::root() . '/tests/run.php'), $rc); return $rc; })(),
         default => (function () { echo USAGE; return 0; })(),

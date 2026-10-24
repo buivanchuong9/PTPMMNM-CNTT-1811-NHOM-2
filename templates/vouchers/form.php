@@ -1,7 +1,7 @@
 <?php /** @var \StockFlow\Domain\VoucherType $type */
 $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
 ?>
-<header class="page-head"><div><h1><?= e($type->label()) ?> mới</h1><p class="muted"><?= $isIn ? 'Ghi nhận hàng vào kho (mua hàng, nhận từ nhà cung cấp). ' : 'Ghi nhận hàng ra khỏi kho (bán, tiêu hao). ' ?>Phiếu ở trạng thái nháp, chưa ảnh hưởng tồn đến khi người duyệt xác nhận.</p></div></header>
+<header class="page-head"><div><h1><?= e($type->label()) ?> mới</h1></div></header>
 <?php if (!$warehouses): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu.</p></section>
 <?php else: ?>

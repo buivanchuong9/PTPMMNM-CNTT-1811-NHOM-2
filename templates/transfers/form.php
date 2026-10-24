@@ -1,4 +1,4 @@
-<header class="page-head"><div><h1>Điều chuyển kho</h1><p class="muted">Một phiếu điều chuyển đi tại kho nguồn; khi xác nhận, hệ thống trừ kho đi và cộng kho đến trong <b>cùng một giao dịch</b> và lập đủ phiếu nhập xuất ở cả hai nơi.</p></div></header>
+<header class="page-head"><div><h1>Điều chuyển kho</h1></div></header>
 <?php if (!$from): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu điều chuyển.</p></section>
 <?php else: ?>

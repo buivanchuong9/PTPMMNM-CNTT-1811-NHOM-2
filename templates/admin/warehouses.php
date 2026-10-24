@@ -11,7 +11,7 @@ $canEditStaff = fn(array $w) => $user->role === \StockFlow\Domain\AccountRole::M
 $anyEdit = (bool)array_filter($rows, $canEditStaff);
 ?>
 <header class="page-head">
-  <div><h1>Kho &amp; nhân sự</h1><p class="muted">Mỗi kho có <b>một quản lý</b> và <b>nhiều nhân viên</b>. Tài khoản quản lý / nhân viên chỉ thao tác trong kho được gắn; tài khoản cấp cao thấy mọi kho.</p></div>
+  <div><h1>Kho &amp; nhân sự</h1></div>
   <?php if ($user->isAdmin): ?><div class="actions"><button type="button" data-dialog-open="wh-dlg"><?= icon('plus') ?>Thêm kho</button><a class="btn btn-ghost" href="/users"><?= icon('users') ?>Quản lý tài khoản</a></div><?php endif; ?>
 </header>
   <?php foreach ($rows as $w): $s = $stats[$w['id']] ?? null; $m = $w['quan_ly']; ?>

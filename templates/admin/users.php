@@ -1,7 +1,7 @@
 <?php /** @var array $users @var array $warehouses @var list<\StockFlow\Domain\AccountRole> $accountRoles */
 $whOptions = fn(?int $sel = null) => '<option value="">Chọn kho…</option>' . wh_options($warehouses, $sel);
 ?>
-<header class="page-head"><div><h1>Tài khoản</h1><p class="muted">Tài khoản cấp cao quản lý các tài khoản con: <b>quản lý kho</b> (mỗi kho đúng một) và <b>nhân viên kho</b> (nhiều). Mỗi tài khoản con gắn với một kho; chức năng được dùng quyết định ở <a href="/roles">Phân quyền chức năng</a>.</p></div>
+<header class="page-head"><div><h1>Tài khoản</h1></div>
   <div class="actions"><button type="button" data-dialog-open="user-dlg"><?= icon('plus') ?>Tạo tài khoản</button></div></header>
 <section class="card flush"><div class="table-wrap"><table class="dense">
     <thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Kho được gắn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>

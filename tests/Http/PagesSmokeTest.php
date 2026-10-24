@@ -13,6 +13,15 @@ $transfer = $f->c->get(\StockFlow\Service\TransferService::class)->createDraft($
 $f->c->get(\StockFlow\Service\TransferService::class)->confirm($f->approverA, (int)$transfer['id']);
 $f->arrive((int)$transfer['id']);
 $pair = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($transfer);
+// điều chuyển có xe: một phiếu nháp (chọn xe + tài xế), một phiếu đang vận chuyển (kho đến kiểm tra)
+$fleet = $f->c->get(\StockFlow\Service\FleetService::class);
+$driverId = $fleet->addDriver($f->admin, 'Tài xế thử', (string)random_int(100000000000, 999999999999), '0912345678');
+$fleet->addVehicle($f->admin, '30H-' . random_int(100, 999) . '.' . random_int(10, 99), 'Xe tải 2 tấn', $f->wa, $driverId);
+$ts = $f->c->get(\StockFlow\Service\TransferService::class);
+$xferDraft = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 1)], '', null)['voucher'];
+$xferGo = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 2)], '', null)['voucher'];
+$ts->dispatch($f->approverA, (int)$xferGo['id'], (int)$f->db->value('SELECT id FROM xe WHERE kho_goc_id = ?', [$f->wa]), true);
+$xferGoIn = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($xferGo);
 
 $port = random_int(19000, 19999);
 $sessions = sys_get_temp_dir() . '/sf-sess-' . bin2hex(random_bytes(4));
@@ -53,8 +62,8 @@ $noPhpError = fn(string $body) => !preg_match('/(Fatal error|Warning:|Notice:|De
 section('Chủ hệ thống (tài khoản cấp cao): xem thống kê mọi kho, quản lý — không có trang tác nghiệp');
 $login($f->both->username);
 $pages = ['/', '/inventory', '/inventory?view=batch', '/inventory?q=' . $f->it['x']['ma_hang'], '/vouchers', '/vouchers?status=DRAFT', '/vouchers?type=TRANSFER_OUT&q=DC',
-    "/vouchers/{$issue['id']}", "/vouchers/{$transfer['id']}", "/vouchers/{$pair['id']}",
-    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles'];
+    "/vouchers/{$issue['id']}", "/vouchers/{$transfer['id']}", "/vouchers/{$pair['id']}", "/vouchers/{$xferDraft['id']}", "/vouchers/{$xferGo['id']}", "/vouchers/{$xferGoIn['id']}",
+    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles', '/fleet'];
 foreach ($pages as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "admin GET $p ⇒ 200");
@@ -82,6 +91,15 @@ foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouche
     truthy($noPhpError($body), "quản lý GET $p: không lộ lỗi PHP");
 }
 same($get("/vouchers/{$pair['id']}")[0], 403, 'phiếu nhập xuất của kho B ⇒ 403');
+[, $draftPage] = $get("/vouchers/{$xferDraft['id']}");
+truthy(str_contains($draftPage, 'name="vehicle_id"') && str_contains($draftPage, 'name="driver_ok"') && !str_contains($draftPage, 'name="driver_id"'), 'phiếu điều chuyển nháp: chỉ chọn xe (tài xế đi theo xe) và tài xế xác nhận đủ hàng');
+same($get('/fleet')[0], 403, 'trang Đội xe chỉ dành cho admin ⇒ 403');
+section('Quản lý kho B: kiểm tra hàng khi nhận');
+$login($f->approverB->username);
+[$st, $inPage] = $get("/vouchers/{$xferGoIn['id']}");
+truthy($st === 200 && $noPhpError($inPage), 'quản lý kho đến mở được phiếu đang vận chuyển');
+truthy(str_contains($inPage, 'name="full_ok"') && str_contains($inPage, 'name="driver_match"') && str_contains($inPage, '/discrepancy') && str_contains($inPage, 'Tài xế thử'), 'phiếu đến: có ô kiểm tra hàng đủ, đúng tài xế, nút báo sai lệch và thông tin tài xế');
+$login($f->approverA->username);
 same($get('/users')[0], 403, 'trang tài khoản chỉ dành cho admin ⇒ 403');
 same($get('/roles')[0], 403, 'trang phân quyền chỉ dành cho admin ⇒ 403');
 finish();

@@ -220,46 +220,14 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 @media (prefers-reduced-motion: reduce) { .truck-bar.moving .truck-thumb svg, .truck-bar.moving .truck-wh { animation: none; } .truck-thumb svg { transition: none; } }
 @media (max-width: 1000px) { .truck-bar { right: 1px; width: 22px; } .truck-thumb { width: 22px; } }
 
-/* ── Hiệu ứng chuyển chức năng «hút vào – mở ra»: nội dung cũ co lại về chỗ vừa bấm rồi tan; nội dung mới bung ra từ chính điểm đó.
-      Điểm gốc (--vx-ox / --vx-oy) do JS đặt theo vị trí phần tử vừa bấm; thời lượng chỉnh bằng --vx-out / --vx-in. ── */
-@keyframes vx-out { from { opacity: 1; transform: none; filter: none; } to { opacity: 0; transform: scale(.62); filter: blur(5px); } }
-@keyframes vx-in { from { opacity: 0; transform: scale(.62); filter: blur(5px); } 55% { opacity: 1; } to { opacity: 1; transform: none; filter: none; } }
-.app-shell main { animation: none; transform-origin: var(--vx-ox, 50%) var(--vx-oy, 30%); }   /* bỏ hiệu ứng «rise» cũ: nếu không, nó chạy lại ngay sau khi bung ra và gây giật */
-.app-shell main.vx-out { animation: vx-out var(--vx-out, .26s) cubic-bezier(.6, 0, .9, .4) both; pointer-events: none; will-change: transform, opacity, filter; }
-.app-shell main.vx-in { animation: vx-in var(--vx-in, .46s) cubic-bezier(.16, .9, .25, 1) both; will-change: transform, opacity, filter; }
-
-/* ── Kiểu «thẻ trượt»: trang cũ thu thành thẻ nhỏ (bản sao .main-ghost), thẻ của chức năng sau trượt từ dưới lên ĐẨY thẻ cũ lên trên,
-      rồi mở rộng ra thành trang đầy đủ. Hai thẻ cách nhau đúng 82% chiều cao nên chạy sát nhau như một dải thẻ. ── */
-@keyframes card-ghost {
-  0% { transform: none; border-radius: 0; box-shadow: 0 0 0 1px transparent, 0 0 0 0 transparent; }
-  30% { transform: scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
-  100% { transform: translateY(-82%) scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
-}
-@keyframes card-in {
-  0% { transform: translateY(82%) scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
-  55% { transform: scale(.6); border-radius: 26px; box-shadow: 0 0 0 1px var(--line), 0 26px 60px -20px rgba(17, 24, 39, .5); }
-  100% { transform: none; border-radius: 0; box-shadow: 0 0 0 1px transparent, 0 0 0 0 transparent; }
-}
-.main-wrap { overflow: hidden; }
-.main-ghost { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: var(--bg); transform-origin: 50% 50%; }
-html[data-vx="card"] .app-shell main { transform-origin: 50% 50%; }
-html[data-vx="card"] .app-shell main.vx-in { background: var(--bg); filter: none; animation: card-in var(--vx-in, .8s) cubic-bezier(.45, 0, .25, 1) both; }
-html[data-vx="card"] .main-ghost { animation: card-ghost var(--vx-out, .64s) cubic-bezier(.45, 0, .25, 1) both; }   /* cùng đường cong với thẻ mới để hai thẻ chạy sát nhau */
-
-/* ── Kiểu «Mượt» (mặc định): không phóng to / xoay / làm mờ nét — nội dung cũ mờ đi rất nhanh, nội dung mới hiện lần lượt từng khối,
+/* ── Hiệu ứng chuyển chức năng «mượt»: không phóng to / xoay / làm mờ nét — nội dung cũ mờ đi rất nhanh, nội dung mới hiện lần lượt từng khối,
       mỗi khối trượt nhẹ từ dưới lên vài pixel. Thứ tự do JS gán qua biến --i (khối đầu tiên là 0). ── */
 @keyframes fx-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-6px); } }
 @keyframes fx-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-html[data-vx="fade"] .app-shell main.vx-out { animation: fx-out var(--vx-out, .14s) cubic-bezier(.4, 0, 1, 1) both; filter: none; }
-html[data-vx="fade"] .app-shell main.vx-in { animation: none; filter: none; }
-html[data-vx="fade"] .app-shell main.vx-in > *:not(dialog) { animation: fx-up var(--vx-in, .42s) cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 55ms); }
-
-/* ── Kiểu «Trượt ngang» (mặc định): trang cũ thu lại một chút rồi mờ đi, trang mới chạy từ mép phải sang trái. Vùng nội dung đã cắt ở mép (.main-wrap) nên không tràn ra menu. ── */
-@keyframes sl-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-5%) scale(.100); } }
-@keyframes sl-in { from { opacity: .35; transform: translateX(100%); } to { opacity: 1; transform: none; } }
-html[data-vx="slide"] .app-shell main { transform-origin: 50% 45%; }
-html[data-vx="slide"] .app-shell main.vx-out { animation: sl-out var(--vx-out, .22s) cubic-bezier(.4, 0, 1, 1) both; filter: none; }
-html[data-vx="slide"] .app-shell main.vx-in { animation: sl-in var(--vx-in, .48s) cubic-bezier(.22, .8, .22, 1) both; filter: none; }
+.app-shell main { animation: none; }   /* bỏ hiệu ứng «rise» cũ: nếu không, nó chạy lại ngay sau khi hiện và gây giật */
+.app-shell main.vx-out { animation: fx-out var(--vx-out, .14s) cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
+.app-shell main.vx-in > *:not(dialog) { animation: fx-up var(--vx-in, .42s) cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 55ms); }
+.main-wrap { overflow: hidden; }
 
 /* ── Logo Chương Đại Dương ── */
 .brand img { width: 40px; height: 40px; object-fit: cover; border-radius: 11px; box-shadow: 0 1px 4px rgba(120, 12, 24, .35); }
