@@ -26,15 +26,28 @@ final class PartnerController extends Controller
         $this->need($user, Permission::XemDanhMuc);
         $all = $this->partners->all();
         $type = isset(PartnerService::TYPES[$r->str('type')]) ? $r->str('type') : '';
-        $q = mb_strtolower($r->search('q'));
+        $q = fold_vn($r->search('q'));   // không phân biệt hoa thường và dấu
         $counts = ['' => count($all), 'SUPPLIER' => 0, 'CUSTOMER' => 0];
         foreach ($all as $x) {
             $counts[$x['loai']]++;
         }
+        // lọc thêm: trạng thái hợp tác · danh mục hàng cung cấp (id · 'none' = hàng chưa phân loại) · một mặt hàng cụ thể (chỉ nhà cung cấp có gắn hàng)
+        $status = in_array($r->str('status'), ['active', 'inactive'], true) ? $r->str('status') : '';
+        $catRaw = $r->str('category');
+        $category = $catRaw === 'none' ? -1 : (int)$catRaw;
+        $activeItems = array_values(array_filter($this->catalog->items(), fn($i) => $i['hoat_dong']));
+        $catOf = array_column($this->catalog->items(), 'danh_muc_id', 'id');
+        $itemOptions = array_values(array_filter($activeItems, fn($i) => $category === 0 || ($category === -1 ? !(int)$i['danh_muc_id'] : (int)$i['danh_muc_id'] === $category)));
+        $item = (int)$r->int('item');
+        $item = $item && in_array($item, array_map(fn($i) => (int)$i['id'], $itemOptions), true) ? $item : 0;   // đổi danh mục thì bỏ mặt hàng không còn thuộc danh mục
+        $supplies = fn(array $x) => ($item === 0 || in_array($item, array_column($x['items'], 'id'), true))
+            && ($category === 0 || array_filter($x['items'], fn($it) => $category === -1 ? !(int)($catOf[$it['id']] ?? 0) : (int)($catOf[$it['id']] ?? 0) === $category));
         $rows = array_values(array_filter($all, fn($x) => ($type === '' || $x['loai'] === $type)
-            && ($q === '' || str_contains(mb_strtolower($x['ma'] . ' ' . $x['ten'] . ' ' . $x['nguoi_lien_he'] . ' ' . $x['so_dien_thoai'] . ' ' . $x['email'] . ' ' . implode(' ', array_column($x['items'], 'sku'))), $q))));
+            && ($status === '' || ($status === 'active') === (bool)$x['hoat_dong'])
+            && ($item === 0 && $category === 0 || $supplies($x))
+            && ($q === '' || str_contains(fold_vn($x['ma'] . ' ' . $x['ten'] . ' ' . $x['nguoi_lien_he'] . ' ' . $x['so_dien_thoai'] . ' ' . $x['email'] . ' ' . implode(' ', array_column($x['items'], 'sku'))), $q))));
         [$rows, $pg] = Paginator::of($rows, $r);
-        return $this->render('partners/index', $user, 'partners', ['rows' => $rows, 'pg' => $pg, 'type' => $type, 'q' => $r->search('q'), 'counts' => $counts, 'types' => PartnerService::TYPES, 'canEdit' => $this->partners->canEdit($user), 'units' => $this->catalog->units(), 'categories' => $this->catalog->categories(), 'items' => array_values(array_filter($this->catalog->items(), fn($i) => $i['hoat_dong']))], 'Đối tác');
+        return $this->render('partners/index', $user, 'partners', ['rows' => $rows, 'pg' => $pg, 'type' => $type, 'q' => $r->search('q'), 'status' => $status, 'category' => $category, 'item' => $item, 'itemOptions' => $itemOptions, 'catOf' => $catOf, 'counts' => $counts, 'types' => PartnerService::TYPES, 'canEdit' => $this->partners->canEdit($user), 'units' => $this->catalog->units(), 'categories' => $this->catalog->categories(), 'items' => array_values(array_filter($this->catalog->items(), fn($i) => $i['hoat_dong']))], 'Đối tác');
     }
 
     private function fields(Request $r): array

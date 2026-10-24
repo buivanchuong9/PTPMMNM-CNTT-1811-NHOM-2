@@ -98,7 +98,7 @@ section('Quản lý kho B: kiểm tra hàng khi nhận');
 $login($f->approverB->username);
 [$st, $inPage] = $get("/vouchers/{$xferGoIn['id']}");
 truthy($st === 200 && $noPhpError($inPage), 'quản lý kho đến mở được phiếu đang vận chuyển');
-truthy(str_contains($inPage, 'name="full_ok"') && str_contains($inPage, 'name="driver_match"') && str_contains($inPage, '/discrepancy') && str_contains($inPage, 'Tài xế thử'), 'phiếu đến: có ô kiểm tra hàng đủ, đúng tài xế, nút báo sai lệch và thông tin tài xế');
+truthy(str_contains($inPage, 'name="received[') && str_contains($inPage, 'name="driver_match"') && str_contains($inPage, '/not-received') && !str_contains($inPage, 'name="full_ok"') && str_contains($inPage, 'Tài xế thử'), 'phiếu đến: có ô nhập số thực nhận, ô đúng tài xế, nút «Chưa nhận được hàng» và thông tin tài xế');
 $login($f->approverA->username);
 same($get('/users')[0], 403, 'trang tài khoản chỉ dành cho admin ⇒ 403');
 same($get('/roles')[0], 403, 'trang phân quyền chỉ dành cho admin ⇒ 403');

@@ -198,13 +198,19 @@ final class VoucherController extends Controller
             'pair' => $this->repo->pairOf($v), 'correction' => $this->repo->correctionOf((int)$v['id']),
             'original' => $v['dieu_chinh_cho_id'] ? $this->repo->find((int)$v['dieu_chinh_cho_id']) : null,
             'trail' => $this->audit->forEntity('voucher', (int)$v['id']),
+            'manager' => $this->db->one('SELECT ho_ten FROM nguoi_dung WHERE quan_ly_kho_id = ? AND hoat_dong', [(int)$v['kho_id']]),
             'canApprove' => $canApprove,
             'canDraft' => ($createPerm && $this->auth->can($user, (int)$v['kho_id'], $createPerm)) || $canApprove,
             // đảo điều chuyển cần quyền ở cả hai kho ⇒ chỉ tài khoản quản trị hệ thống
             'canAdjust' => $isTransfer ? $user->isAdmin : $this->auth->can($user, (int)$v['kho_id'], Permission::DieuChinhPhieu),
             'canCorrect' => $v['trang_thai'] === 'CONFIRMED' && $v['loai'] !== 'ADJUSTMENT' || ($v['trang_thai'] === 'CONFIRMED' && $v['loai'] === 'ADJUSTMENT' && !$v['dieu_chinh_cho_id']),
             'isTransfer' => $isTransfer,
-            'trip' => $this->fleet->tripOf($v),
+            'trip' => $trip = $this->fleet->tripOf($v),
+            'replies' => $trip ? $this->fleet->replies((int)$trip['phieu_den_id']) : [],
+            // phiếu đến đã nhận thiếu: phiếu điều chỉnh ghi phần thiếu ở kho đến ⇒ số thực nhận từng dòng = số trên phiếu − phần thiếu
+            'shortage' => $v['loai'] === 'TRANSFER_IN' && $v['trang_thai'] === 'CONFIRMED' ? $this->db->all(
+                "SELECT l.mat_hang_id, l.lo_hang_id, -l.so_luong AS thieu, p.id AS adj_id, p.ma AS adj_ma FROM phieu_nhap_xuat p JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = p.id
+                 WHERE p.phieu_nhap_xuat_lien_quan_id = ? AND p.loai = 'ADJUSTMENT'", [(int)$v['id']]) : [],
             'vehicles' => $isTransfer && $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
         ], $v['ma']);
     }
@@ -217,7 +223,22 @@ final class VoucherController extends Controller
             if ($v['loai'] === 'TRANSFER_OUT') {   // xuất kho đi: bắt buộc xe + tài xế + tài xế xác nhận đủ hàng
                 $res = $this->transfers->dispatch($user, $id, (int)$r->int('vehicle_id'), $r->str('driver_ok') === '1');
             } elseif ($v['loai'] === 'TRANSFER_IN') {   // nhận hàng: kho đến kiểm tra hàng đủ + đúng tài xế
-                $res = $this->transfers->receiveChecked($user, $id, $r->str('full_ok') === '1', $r->str('driver_match') === '1');
+                $received = null;   // nhập số thực nhận từng dòng: received[id dòng] = số lượng
+                if ($raw = $r->arr('received')) {
+                    $received = [];
+                    foreach ($raw as $lineId => $val) {
+                        $q = StockRules::parseQty($val);
+                        if ($q === null) {
+                            throw new DomainError('Số lượng thực nhận phải là số nguyên không âm');
+                        }
+                        $received[(int)$lineId] = $q;
+                    }
+                }
+                $res = $this->transfers->receiveChecked($user, $id, $received, $r->str('driver_match') === '1');
+                if (!$res['already'] && $res['short']) {
+                    $this->session->flash('ok', 'Đã nhận hàng — nhận thiếu ở ' . count($res['short']) . ' dòng, phần thiếu đã được ghi bằng phiếu điều chỉnh ' . ($res['adjustment']['ma'] ?? '') . ' và báo cho quản trị.');
+                    return null;
+                }
             } else {
                 $res = $this->vouchers->confirm($user, $id);
             }
@@ -228,13 +249,13 @@ final class VoucherController extends Controller
         }, 'Đã xác nhận và ghi sổ phát sinh.', "/vouchers/$id");
     }
 
-    /** Kho đến báo hàng thiếu / sai tài xế: chưa nhận hàng, ghi lý do để tài khoản cấp cao xử lý. */
-    public function discrepancy(Request $r, array $p, ?User $user): Response
+    /** Kho đến báo CHƯA NHẬN ĐƯỢC HÀNG: chọn lý do, không cộng tồn, báo cho tài khoản cấp cao ở trang Đội xe. */
+    public function notReceived(Request $r, array $p, ?User $user): Response
     {
         $id = (int)$p['id'];
         return $this->act(function () use ($r, $user, $id) {
-            $this->transfers->reportDiscrepancy($user, $id, $r->str('full_ok') === '1', $r->str('driver_match') === '1', $r->str('reason'));
-        }, 'Đã ghi nhận sai lệch. Hàng vẫn ở trạng thái đang vận chuyển — tài khoản cấp cao sẽ thấy ở trang Đội xe.', "/vouchers/$id");
+            $this->transfers->reportNotReceived($user, $id, $r->str('missing_reason'), $r->str('missing_note'));
+        }, 'Đã báo chưa nhận được hàng. Tồn kho chưa thay đổi — quản trị hệ thống sẽ thấy chuyến này ở trang Đội xe.', "/vouchers/$id");
     }
 
     public function cancel(Request $r, array $p, ?User $user): Response

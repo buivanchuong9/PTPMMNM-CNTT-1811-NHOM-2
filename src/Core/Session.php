@@ -45,6 +45,17 @@ final class Session
         $_SESSION['seen'] = time();
     }
 
+    /** Trạng thái nhỏ gắn với phiên (VD: khoảng «thay đổi mới» của lần mở chức năng gần nhất). */
+    public function remember(string $key, mixed $value): void
+    {
+        $_SESSION['mem'][$key] = $value;
+    }
+
+    public function recall(string $key): mixed
+    {
+        return $_SESSION['mem'][$key] ?? null;
+    }
+
     public function userId(): ?int
     {
         return isset($_SESSION['uid']) ? (int)$_SESSION['uid'] : null;

@@ -15,11 +15,11 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
   <?php if ($user->isAdmin): ?><div class="actions"><button type="button" data-dialog-open="wh-dlg"><?= icon('plus') ?>Thêm kho</button><a class="btn btn-ghost" href="/users"><?= icon('users') ?>Quản lý tài khoản</a></div><?php endif; ?>
 </header>
   <?php foreach ($rows as $w): $s = $stats[$w['id']] ?? null; $m = $w['quan_ly']; ?>
-    <section class="card wh-card">
+    <section class="card wh-card<?= is_new($changes, $w['id']) ? ' is-new' : '' ?>">
       <div class="wh-card-head">
         <div>
-          <h2><span class="wh-code"><?= e($w['ma']) ?></span> <?= e($w['ten']) ?> <?= $w['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-muted">Ngừng</span>' ?></h2>
-          <p class="muted"><?= icon('warehouse') ?> <?= e($w['dia_chi'] ?: 'Chưa có địa chỉ') ?><?= $s ? ' · <b>' . n($s['units']) . '</b> đơn vị đang tồn' : '' ?></p>
+          <h2><span class="wh-code"><?= e($w['ma']) ?></span> <?= e($w['ten']) ?><?= new_tag($changes, $w['id']) ?> <?= $w['hoat_dong'] ? '' : '<span class="tag tag-muted">Ngừng</span>' ?></h2>
+          <p class="muted"><?= icon('warehouse') ?> <?= e($w['dia_chi'] ?: 'Chưa có địa chỉ') ?><?= $s ? ' · <b>' . n($s['units']) . '</b> đơn vị tồn' : '' ?></p>
         </div>
         <div class="actions">
         <?php if ($canEditAddr($w)): ?>
@@ -34,28 +34,26 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
       <div class="wh-manager">
         <span class="wh-role">Quản lý kho</span>
         <?php if ($m): ?>
-          <?= avatar_html((int)$m['id'], $m['anh_dai_dien'] ?? null, $m['ho_ten'], 'sm') ?><b><?= e($m['ho_ten']) ?></b> <span class="muted">· tài khoản <code><?= e($m['ten_dang_nhap']) ?></code></span>
-          <?= $m['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?>
+          <?= avatar_html((int)$m['id'], $m['anh_dai_dien'] ?? null, $m['ho_ten'], 'sm') ?><b><?= e($m['ho_ten']) ?></b> <code><?= e($m['ten_dang_nhap']) ?></code>
+          <?= $m['hoat_dong'] ? '' : '<span class="tag tag-danger">Đã khoá</span>' ?>
         <?php else: ?><span class="tag tag-warn">Chưa có quản lý</span><?php endif; ?>
       </div>
 
       <div class="table-wrap"><table class="dense staff-table">
         <caption class="staff-cap">Nhân viên kho <span class="count"><?= count($w['nhan_vien']) ?></span></caption>
-        <thead><tr><th>#</th><th>Họ và tên</th><th>Tên đăng nhập</th><th>Trạng thái</th><th>Ngày tạo</th><?php if ($canEditStaff($w)): ?><th>Thao tác</th><?php endif; ?></tr></thead>
+        <thead><tr><th>Họ và tên</th><th>Tên đăng nhập</th><th>Ngày tạo</th><?php if ($canEditStaff($w)): ?><th>Thao tác</th><?php endif; ?></tr></thead>
         <tbody>
-        <?php foreach ($w['nhan_vien'] as $i => $nv): ?>
+        <?php foreach ($w['nhan_vien'] as $nv): ?>
           <tr class="<?= $nv['hoat_dong'] ? '' : 'row-off' ?>">
-            <td class="muted"><?= $i + 1 ?></td>
-            <td class="wrap"><?= avatar_html((int)$nv['id'], $nv['anh_dai_dien'] ?? null, $nv['ho_ten'], 'sm') ?><b><?= e($nv['ho_ten']) ?></b></td>
+            <td class="wrap"><?= avatar_html((int)$nv['id'], $nv['anh_dai_dien'] ?? null, $nv['ho_ten'], 'sm') ?><b><?= e($nv['ho_ten']) ?></b><?= $nv['hoat_dong'] ? '' : ' <span class="tag tag-danger">Đã khoá</span>' ?></td>
             <td class="wrap"><code><?= e($nv['ten_dang_nhap']) ?></code></td>
-            <td><?= $nv['hoat_dong'] ? '<span class="tag tag-ok">Hoạt động</span>' : '<span class="tag tag-danger">Đã khoá</span>' ?></td>
             <td class="muted"><?= e(dt_short($nv['ngay_tao'])) ?></td>
             <?php if ($canEditStaff($w)): ?><td>
               <button type="button" class="btn-ghost btn-sm" data-dialog-open="staff-edit-dlg" data-fill-label="<?= e($nv['ho_ten']) ?>"
                 data-fill="<?= e(json_encode(['user_id' => (int)$nv['id'], 'username' => $nv['ten_dang_nhap'], 'active' => $nv['hoat_dong'] ? '0' : '1', 'lock_label' => $nv['hoat_dong'] ? 'Khoá tài khoản' : 'Mở khoá'], JSON_UNESCAPED_UNICODE)) ?>"><?= icon('settings') ?>Sửa</button>
             </td><?php endif; ?>
           </tr>
-        <?php endforeach; if (!$w['nhan_vien']): ?><tr><td colspan="<?= $canEditStaff($w) ? 6 : 5 ?>" class="empty">Kho chưa có nhân viên<?= $canAddStaff($w) ? ' — bấm «Thêm nhân viên» để tạo tài khoản đầu tiên.' : '.' ?></td></tr><?php endif; ?>
+        <?php endforeach; if (!$w['nhan_vien']): ?><tr><td colspan="<?= $canEditStaff($w) ? 4 : 3 ?>" class="empty">Kho chưa có nhân viên<?= $canAddStaff($w) ? ' — bấm «Thêm nhân viên» để tạo tài khoản đầu tiên.' : '.' ?></td></tr><?php endif; ?>
         </tbody>
       </table></div>
     </section>
@@ -69,7 +67,10 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
     <label>Mã kho<input name="code" required minlength="2" maxlength="20" pattern="[A-Za-z0-9_\-]{2,20}" title="2–20 ký tự: chữ không dấu, số, _ hoặc -" placeholder="VD: HP01" autocomplete="off"></label>
     <label>Tên kho<input name="name" required maxlength="120"></label>
     <?php $addr = []; $addrRequired = false; include __DIR__ . '/../partials/address_fields.php'; ?>
-    <p class="muted small">Sau khi tạo kho, gắn quản lý ở trang <a href="/users">Tài khoản</a>; quản lý kho sẽ tự thêm nhân viên cho kho của mình tại đây.</p>
+    <p class="dlg-sub"><b>Tài khoản quản lý kho</b></p>
+    <label>Họ và tên<input name="manager_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
+    <label>Tên đăng nhập<input name="manager_username" required maxlength="40" autocomplete="off" placeholder="chữ thường, số, dấu . _ -" pattern="[A-Za-z0-9._\-]{3,40}"></label>
+    <label>Mật khẩu (≥ <?= (int)$minPassword ?> ký tự)<input type="password" name="manager_password" required minlength="<?= (int)$minPassword ?>" maxlength="72" autocomplete="new-password"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm kho</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>

@@ -38,8 +38,10 @@ final class AdminController extends Controller
     public function addWarehouse(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->addWarehouse($user, $r->str('code'), $r->str('name'), VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province'), false));
-        }, 'Đã thêm kho.', '/warehouses');
+            $this->catalog->addWarehouseWithManager($user, $r->str('code'), $r->str('name'), VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province'), false),
+                $r->str('manager_username'), $r->str('manager_name'), (string)($r->post['manager_password'] ?? ''));
+            $this->session->flash('ok', 'Đã thêm kho ' . strtoupper(trim($r->str('code'))) . ' và tài khoản quản lý «' . $r->str('manager_name') . '» (tên đăng nhập: ' . strtolower(trim($r->str('manager_username'))) . ').');
+        }, '', '/warehouses');
     }
 
     /** Đổi địa chỉ kho (tỉnh/thành, phường/xã chọn từ danh mục; máy chủ kiểm tra lại). */
@@ -106,8 +108,19 @@ final class AdminController extends Controller
     {
         $this->need($user, Permission::QuanLyTaiKhoan);
         // Không liệt kê chính tài khoản đang đăng nhập (đổi mật khẩu / họ tên ở Cài đặt; không tự đổi vai trò hay tự khoá được)
-        [$pageUsers, $pg] = Paginator::of(array_values(array_filter($this->catalog->users(), fn($u) => (int)$u['id'] !== $user->id)), $r);
+        $q = $r->search('q');
+        $needle = fold_vn($q);   // tìm không phân biệt hoa thường và dấu
+        $role = in_array($r->str('role'), [AccountRole::Manager->value, AccountRole::Staff->value], true) ? $r->str('role') : '';
+        $wh = (int)$r->int('warehouse');
+        $status = in_array($r->str('status'), ['active', 'locked'], true) ? $r->str('status') : '';
+        $mine = array_values(array_filter($this->catalog->users(), fn($u) => (int)$u['id'] !== $user->id));
+        $filtered = array_values(array_filter($mine, fn($u) => ($role === '' || $u['vai_tro'] === $role)
+            && ($wh === 0 || (int)$u['kho_id'] === $wh)
+            && ($status === '' || ($status === 'active') === (bool)$u['hoat_dong'])
+            && ($needle === '' || str_contains(fold_vn($u['ho_ten'] . ' ' . $u['ten_dang_nhap'] . ' ' . ($u['kho_ma'] ?? '') . ' ' . ($u['kho_ten'] ?? '')), $needle))));
+        [$pageUsers, $pg] = Paginator::of($filtered, $r);
         return $this->render('admin/users', $user, 'users', [
+            'q' => $q, 'role' => $role, 'wh' => $wh, 'status' => $status, 'total' => count($mine), 'matched' => count($filtered),
             'users' => $pageUsers, 'pg' => $pg, 'warehouses' => array_values(array_filter($this->catalog->warehouses(), fn($w) => $w['hoat_dong'])),
             'accountRoles' => AccountRole::cases(), 'minPassword' => $this->catalog->minPassword(),
         ], 'Tài khoản');

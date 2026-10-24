@@ -191,38 +191,82 @@ final class TransferService
         });
     }
 
+    /** Lý do kho đến báo «chưa nhận được hàng». */
+    public const MISSING_REASONS = ['Tài xế chưa đến kho', 'Không liên lạc được với tài xế', 'Xe đến nhưng không có hàng', 'Sai tài xế hoặc sai xe', 'Khác'];
+
     /**
-     * NHẬN HÀNG kèm kiểm tra: kho đến tick «hàng đủ» và «đúng tài xế, đúng xe». Phiếu không có chuyến (dữ liệu cũ) nhận như trước.
-     * Hai ô chưa cùng tick thì không nhận được — dùng reportDiscrepancy().
-     * @return array{voucher:array,already:bool}
+     * NHẬN HÀNG theo SỐ LƯỢNG THỰC TẾ: kho đến nhập số thực nhận của từng dòng (0 … số trên phiếu) và xác nhận «đúng tài xế, đúng xe».
+     * $received = [id dòng phiếu đến ⇒ số thực nhận]; null ⇒ nhận đủ như trên phiếu.
+     * Phiếu đến ghi sổ đủ số trên phiếu; dòng nhận thiếu được ghi tiếp bằng một PHIẾU ĐIỀU CHỈNH (−phần thiếu) tại kho đến trong cùng giao dịch,
+     * nên tồn kho đến chỉ tăng đúng số thực nhận, lịch sử không bị sửa và «Đối chiếu tồn» vẫn khớp. Phần thiếu được ghi vào chuyến để quản trị theo dõi.
+     * Phiếu không có chuyến (dữ liệu cũ) nhận như trước. Gọi lại khi đã nhận rồi thì không ghi thêm.
+     * @param ?array<int,int> $received
+     * @return array{voucher:array,already:bool,short:list<array{sku:string,expected:int,got:int}>,adjustment:?array}
      */
-    public function receiveChecked(User $user, int $inId, bool $full, bool $rightDriver): array
+    public function receiveChecked(User $user, int $inId, ?array $received, bool $rightDriver): array
     {
         $peek = $this->repo->find($inId);
         if ($peek['loai'] !== VoucherType::TransferIn->value) {
             throw new DomainError('Đây không phải phiếu điều chuyển đến');
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::NhanHangDieuChuyen);
-        return $this->db->transaction(function () use ($user, $inId, $full, $rightDriver) {
+        return $this->db->transaction(function () use ($user, $inId, $received, $rightDriver, $peek) {
+            $in = $this->repo->lock($inId);
+            if ($in['trang_thai'] === 'CONFIRMED') {
+                return ['voucher' => $in, 'already' => true, 'short' => [], 'adjustment' => null];
+            }
             $trip = $this->db->one('SELECT * FROM chuyen_van_chuyen WHERE phieu_den_id = ? FOR UPDATE', [$inId]);
             $open = $trip && $trip['trang_thai'] === 'IN_TRANSIT';
-            if ($open && (!$full || !$rightDriver)) {
-                throw new DomainError('Chỉ nhận hàng khi đã kiểm tra hàng đủ và đúng tài xế, đúng xe. Nếu có sai lệch, hãy bấm «Báo sai lệch».');
+            if ($open && !$rightDriver) {
+                throw new DomainError('Chỉ nhận hàng khi đúng tài xế và đúng xe. Nếu không, hãy bấm «Chưa nhận được hàng».');
             }
-            $res = $this->receive($user, $inId);
-            if ($open && !$res['already']) {
-                $this->db->exec("UPDATE chuyen_van_chuyen SET trang_thai = 'DELIVERED', nhan_du_hang = 1, nhan_dung_tai_xe = 1, nguoi_nhan_id = ?, ngay_nhan = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, (int)$trip['id']]);
+            $short = [];
+            $adjLines = [];
+            $gotTotal = 0;
+            foreach ($this->repo->lines($inId) as $l) {
+                $expected = (int)$l['so_luong'];
+                $got = $received === null ? $expected : ($received[(int)$l['id']] ?? null);
+                if ($got === null || $got < 0 || $got > $expected) {
+                    throw new DomainError('Nhập số thực nhận của ' . $l['ma_hang'] . ' (từ 0 đến ' . $expected . ')');
+                }
+                $gotTotal += $got;
+                if ($got < $expected) {
+                    $short[] = ['sku' => $l['ma_hang'], 'expected' => $expected, 'got' => $got];
+                    $adjLines[] = ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => $got - $expected, 'ghi_chu' => 'Nhận thiếu ' . ($expected - $got) . '/' . $expected];
+                }
+            }
+            if ($gotTotal === 0) {
+                throw new DomainError('Chưa nhận được hàng nào — hãy bấm «Chưa nhận được hàng» và chọn lý do.');
+            }
+            $res = $this->receive($user, $inId);   // ghi sổ đủ số trên phiếu (+)
+            $adj = null;
+            if ($adjLines !== []) {                 // rồi trừ phần thiếu bằng phiếu điều chỉnh tại kho đến
+                $desc = implode('; ', array_map(fn($s) => $s['sku'] . ' ' . $s['got'] . '/' . $s['expected'], $short));
+                $adjId = $this->repo->insert([
+                    'loai' => VoucherType::Adjustment->value, 'trang_thai' => 'CONFIRMED', 'kho_id' => (int)$in['kho_id'],
+                    'phieu_nhap_xuat_lien_quan_id' => $inId, 'ly_do' => 'Nhận thiếu hàng điều chuyển ' . $in['ma'] . ': ' . $desc, 'nguoi_lap_id' => $user->id,
+                ], $adjLines);
+                $adjRow = $this->repo->lock($adjId);
+                $ops = $this->repo->ops($adjRow, $this->repo->lines($adjId));
+                $this->ledger->lock($this->repo->lockKeys($ops));
+                $this->ledger->post($ops);
+                $adj = $this->repo->find($adjId);
+                $this->audit->record($user->id, 'transfer.short', 'voucher', $inId, $in['ma'] . ' · nhận thiếu: ' . $desc);
+            }
+            if ($open) {
+                $this->db->exec("UPDATE chuyen_van_chuyen SET trang_thai = 'DELIVERED', nhan_du_hang = ?, nhan_dung_tai_xe = 1, sai_lech = ?, nguoi_nhan_id = ?, ngay_nhan = CURRENT_TIMESTAMP WHERE id = ?",
+                    [$short ? 0 : 1, $short ? mb_substr('Nhận thiếu: ' . implode('; ', array_map(fn($s) => $s['sku'] . ' ' . $s['got'] . '/' . $s['expected'], $short)), 0, 255) : '', $user->id, (int)$trip['id']]);
                 $this->db->exec('UPDATE xe SET kho_hien_tai_id = ?, dang_den_kho_id = NULL WHERE id = ?', [(int)$trip['kho_den_id'], (int)$trip['xe_id']]);
             }
-            return $res;
+            return $res + ['short' => $short, 'adjustment' => $adj];
         });
     }
 
     /**
-     * Kho đến BÁO SAI LỆCH (hàng thiếu / hỏng, hoặc không đúng tài xế, xe): ghi lại lý do, chưa cộng tồn, hàng vẫn «đang vận chuyển».
-     * Tài khoản cấp cao thấy chuyến này ở trang Đội xe để xử lý; kho đến vẫn nhận được sau khi sai lệch được giải quyết.
+     * Kho đến báo CHƯA NHẬN ĐƯỢC HÀNG (tài xế chưa tới, không liên lạc được, xe không có hàng, sai tài xế/xe…): chọn lý do, KHÔNG cộng tồn,
+     * hàng vẫn «đang vận chuyển» và chuyến hiện ở mục riêng của trang Đội xe để tài khoản cấp cao theo dõi. Hàng về sau vẫn nhận được bình thường.
      */
-    public function reportDiscrepancy(User $user, int $inId, bool $full, bool $rightDriver, string $reason): void
+    public function reportNotReceived(User $user, int $inId, string $reason, string $note = ''): void
     {
         $peek = $this->repo->find($inId);
         if ($peek['loai'] !== VoucherType::TransferIn->value) {
@@ -230,29 +274,27 @@ final class TransferService
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::NhanHangDieuChuyen);
         $reason = trim($reason);
-        if ($reason === '' || mb_strlen($reason) > 200) {
-            throw new DomainError('Ghi rõ lý do sai lệch (tối đa 200 ký tự)');
+        $note = trim($note);
+        if (!in_array($reason, self::MISSING_REASONS, true)) {
+            throw new DomainError('Chọn lý do chưa nhận được hàng');
         }
-        if ($full && $rightDriver) {
-            throw new DomainError('Hàng đủ và đúng tài xế — hãy bấm «Xác nhận đã nhận hàng», không cần báo sai lệch');
+        if ($reason === 'Khác' && $note === '') {
+            throw new DomainError('Ghi rõ lý do khác');
         }
-        $this->db->transaction(function () use ($user, $inId, $full, $rightDriver, $reason) {
+        if (mb_strlen($note) > 120) {
+            throw new DomainError('Ghi chú tối đa 120 ký tự');
+        }
+        $this->db->transaction(function () use ($user, $inId, $reason, $note) {
             $in = $this->repo->lock($inId);
             if ($in['trang_thai'] !== 'DRAFT') {
                 throw new DomainError('Phiếu này không còn ở trạng thái chờ nhận hàng');
             }
             $trip = $this->db->one("SELECT * FROM chuyen_van_chuyen WHERE phieu_den_id = ? AND trang_thai = 'IN_TRANSIT' FOR UPDATE", [$inId])
-                ?? throw new DomainError('Phiếu này không có thông tin chuyến xe để báo sai lệch');
-            $what = [];
-            if (!$full) {
-                $what[] = 'hàng không đủ';
-            }
-            if (!$rightDriver) {
-                $what[] = 'sai tài xế/xe';
-            }
-            $this->db->exec('UPDATE chuyen_van_chuyen SET nhan_du_hang = ?, nhan_dung_tai_xe = ?, sai_lech = ?, nguoi_nhan_id = ? WHERE id = ?',
-                [$full ? 1 : 0, $rightDriver ? 1 : 0, implode(', ', $what) . ': ' . $reason, $user->id, (int)$trip['id']]);
-            $this->audit->record($user->id, 'transfer.discrepancy', 'voucher', $inId, $in['ma'] . ' · ' . implode(', ', $what));
+                ?? throw new DomainError('Phiếu này không có chuyến xe đang vận chuyển để báo');
+            $text = 'Chưa nhận được hàng: ' . $reason . ($note !== '' ? ' — ' . $note : '');
+            $this->db->exec('UPDATE chuyen_van_chuyen SET nhan_du_hang = 0, nhan_dung_tai_xe = ?, sai_lech = ?, nguoi_nhan_id = ? WHERE id = ?',
+                [$reason === 'Sai tài xế hoặc sai xe' ? 0 : null, mb_substr($text, 0, 255), $user->id, (int)$trip['id']]);
+            $this->audit->record($user->id, 'transfer.missing', 'voucher', $inId, $in['ma'] . ' · ' . $text);
         });
     }
 

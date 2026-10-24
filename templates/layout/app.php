@@ -89,7 +89,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
       <?php foreach ($groups as $label => $items): ?>
       <p class="nav-group"><?= e($label) ?></p>
         <?php foreach ($items as $key => [$href, $ic, $text]): ?>
-      <a href="<?= e($href) ?>"<?= $key === $active ? ' class="active" aria-current="page"' : '' ?>><?= icon($ic) ?><span><?= e($text) ?></span></a>
+      <a href="<?= e($href) ?>" data-nav="<?= e((string)$key) ?>"<?= $key === $active ? ' class="active" aria-current="page"' : '' ?>><?= icon($ic) ?><span><?= e($text) ?></span><?php $pa = (int)($navBadges[$key] ?? 0); $pn = (int)($navNew[$key] ?? 0); if ($pa || $pn): ?><span class="nav-pills"><?php if ($pn): ?><b class="nav-new" title="<?= n($pn) ?> thay đổi mới"><?= $pn > 99 ? '+99' : '+' . $pn ?></b><?php endif; ?><?php if ($pa): ?><b class="nav-badge" title="Cần xử lý"><?= n($pa) ?></b><?php endif; ?></span><?php endif; ?></a>
         <?php endforeach; ?>
       <?php endforeach; ?>
     </nav>
