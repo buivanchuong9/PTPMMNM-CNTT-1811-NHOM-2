@@ -101,8 +101,11 @@ final class VoucherRepository
     }
 
     /** @return array{0:string,1:list<mixed>} */
-    /** $from / $to: ngày YYYY-MM-DD theo giờ Việt Nam (UTC+7), ngày_tạo lưu theo UTC. */
-    private function searchFilter(array $warehouseIds, ?string $type, ?string $status, string $q, ?string $from = null, ?string $to = null): array
+    /**
+     * $from / $to: ngày YYYY-MM-DD theo giờ Việt Nam (UTC+7), ngày_tạo lưu theo UTC.
+     * $category: id danh mục (−1 = chưa phân loại) · $item: id mặt hàng — phiếu khớp nếu CÓ ÍT NHẤT MỘT dòng thoả, dù phiếu còn hàng khác.
+     */
+    private function searchFilter(array $warehouseIds, ?string $type, ?string $status, string $q, ?string $from = null, ?string $to = null, ?int $category = null, ?int $item = null): array
     {
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
         $where = ["v.kho_id IN ($in)"];
@@ -112,29 +115,39 @@ final class VoucherRepository
         if ($q !== '') { $where[] = '(LOWER(v.ma) LIKE ? OR LOWER(v.doi_tac) LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
         if ($from) { $where[] = 'v.ngay_tao >= ?'; $params[] = gmdate('Y-m-d H:i:s', strtotime("$from 00:00:00 UTC") - 7 * 3600); }
         if ($to) { $where[] = 'v.ngay_tao < ?'; $params[] = gmdate('Y-m-d H:i:s', strtotime("$to 00:00:00 UTC") + 17 * 3600); }
+        if ($item) { $where[] = 'EXISTS (SELECT 1 FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id AND l.mat_hang_id = ?)'; $params[] = $item; }
+        if ($category) {
+            $where[] = 'EXISTS (SELECT 1 FROM chi_tiet_phieu_nhap_xuat l JOIN mat_hang i ON i.id = l.mat_hang_id WHERE l.phieu_nhap_xuat_id = v.id AND ' . ($category === -1 ? 'i.danh_muc_id IS NULL' : 'i.danh_muc_id = ?') . ')';
+            if ($category !== -1) { $params[] = $category; }
+        }
         return [implode(' AND ', $where), $params];
     }
 
     /** Tổng số phiếu nhập xuất khớp bộ lọc (để phân trang). */
-    public function searchCount(array $warehouseIds, ?string $type, ?string $status, string $q, ?string $from = null, ?string $to = null): int
+    public function searchCount(array $warehouseIds, ?string $type, ?string $status, string $q, ?string $from = null, ?string $to = null, ?int $category = null, ?int $item = null): int
     {
         if ($warehouseIds === []) {
             return 0;
         }
-        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q, $from, $to);
+        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q, $from, $to, $category, $item);
         return (int)$this->db->value('SELECT COUNT(*) ' . self::FROM . ' WHERE ' . $where, $params);
     }
 
     /** Tìm danh sách phiếu nhập xuất theo bộ lọc, chỉ trong phạm vi kho cho phép. */
-    public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200, int $offset = 0, ?string $from = null, ?string $to = null, bool $oldestFirst = false): array
+    public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200, int $offset = 0, ?string $from = null, ?string $to = null, bool $oldestFirst = false, ?int $category = null, ?int $item = null): array
     {
         if ($warehouseIds === []) {
             return [];
         }
-        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q, $from, $to);
+        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q, $from, $to, $category, $item);
+        // cột «Hàng hoá» ưu tiên dòng khớp bộ lọc hàng hoá (id đã ép int nên nhúng thẳng an toàn)
+        $pref = $item ? '(l.mat_hang_id = ' . (int)$item . ') DESC, ' : ($category > 0 ? '(i.danh_muc_id = ' . (int)$category . ') DESC, ' : ($category === -1 ? '(i.danh_muc_id IS NULL) DESC, ' : ''));
         return $this->db->all(
             'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS line_count,
-                (SELECT COALESCE(SUM(ABS(l.so_luong)),0) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS total_qty ' . self::FROM . '
+                (SELECT COALESCE(SUM(ABS(l.so_luong)),0) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS total_qty,
+                (SELECT i.ten FROM chi_tiet_phieu_nhap_xuat l JOIN mat_hang i ON i.id = l.mat_hang_id WHERE l.phieu_nhap_xuat_id = v.id ORDER BY ' . $pref . 'l.id LIMIT 1) AS first_item,
+                (SELECT u.ma FROM chi_tiet_phieu_nhap_xuat l JOIN mat_hang i ON i.id = l.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id WHERE l.phieu_nhap_xuat_id = v.id ORDER BY ' . $pref . 'l.id LIMIT 1) AS first_unit,
+                (SELECT l.so_luong FROM chi_tiet_phieu_nhap_xuat l JOIN mat_hang i ON i.id = l.mat_hang_id WHERE l.phieu_nhap_xuat_id = v.id ORDER BY ' . $pref . 'l.id LIMIT 1) AS first_qty ' . self::FROM . '
              WHERE ' . $where . ' ORDER BY v.ngay_tao ' . ($oldestFirst ? 'ASC, v.id ASC' : 'DESC, v.id DESC') . ' LIMIT ' . max(1, min(500, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );

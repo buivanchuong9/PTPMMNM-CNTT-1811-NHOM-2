@@ -41,15 +41,34 @@ final class VoucherController extends Controller
         $wh = $r->int('warehouse');
         $scope = $wh && in_array($wh, $ids, true) ? [$wh] : $ids;
         $date = fn(string $k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $r->str($k)) && checkdate((int)substr($r->str($k), 5, 2), (int)substr($r->str($k), 8, 2), (int)substr($r->str($k), 0, 4)) ? $r->str($k) : null;
-        [$from, $to] = [$date('from'), $date('to')];
-        if ($from && $to && $from > $to) {
-            [$from, $to] = [$to, $from];
+        // mốc nhanh (range=today|yesterday|7d|1m|3m) thắng; 'custom' hoặc có from/to thì dùng ngày tự chọn
+        $rangeSel = '';
+        if ($preset = date_range($r->str('range'))) {
+            [$from, $to] = $preset;
+            $rangeSel = $r->str('range');
+        } else {
+            [$from, $to] = [$date('from'), $date('to')];
+            if ($from && $to && $from > $to) {
+                [$from, $to] = [$to, $from];
+            }
+            $rangeSel = ($r->str('range') === 'custom' || $from || $to) ? 'custom' : '';
         }
         $sort = $r->str('sort') === 'old' ? 'old' : 'new';
-        $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q, $from, $to), $r->int('page'));
+        // lọc theo hàng hoá: danh mục (id · 'none' = chưa phân loại) rồi mặt hàng; phiếu nào CÓ hàng đó là hiện, kể cả khi còn hàng khác
+        $catRaw = $r->str('category');
+        $category = $catRaw === 'none' ? -1 : ((int)$catRaw ?: null);
+        $itemOptions = array_values(array_filter(
+            $this->db->all('SELECT id, ma_hang, ten, danh_muc_id FROM mat_hang WHERE hoat_dong ORDER BY ma_hang'),
+            fn($i) => $category === null || ($category === -1 ? !(int)$i['danh_muc_id'] : (int)$i['danh_muc_id'] === $category)
+        ));
+        $item = $r->int('item');
+        $item = $item && in_array($item, array_map(fn($i) => (int)$i['id'], $itemOptions), true) ? $item : null;   // đổi danh mục thì bỏ mặt hàng không còn thuộc danh mục
+        $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q, $from, $to, $category, $item), $r->int('page'));
         return $this->render('vouchers/index', $user, 'vouchers', [
-            'rows' => $this->repo->search($scope, $type, $status, $q, $pg->per, $pg->offset, $from, $to, $sort === 'old'), 'pg' => $pg,
-            'from' => $from, 'to' => $to, 'sort' => $sort,
+            'rows' => $this->repo->search($scope, $type, $status, $q, $pg->per, $pg->offset, $from, $to, $sort === 'old', $category, $item), 'pg' => $pg,
+            'catSel' => $category === -1 ? 'none' : (string)($category ?? ''), 'item' => $item, 'itemOptions' => $itemOptions,
+            'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
+            'from' => $from, 'to' => $to, 'sort' => $sort, 'rangeSel' => $rangeSel,
             'counts' => $this->repo->statusCounts($scope),
             'type' => $type, 'status' => $status, 'q' => $q, 'wh' => $wh,
             'warehouses' => $this->warehouseRows($ids),

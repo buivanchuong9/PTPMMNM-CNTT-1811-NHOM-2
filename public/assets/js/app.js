@@ -2,7 +2,7 @@
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Màn chào sau đăng nhập (xe tải chạy ngang màn hình): gỡ khỏi trang khi chạy xong, hoặc khi bấm / nhấn phím để bỏ qua.
+  // Màn chào sau đăng nhập (thùng hàng xếp lên pallet): gỡ khỏi trang khi chạy xong, hoặc khi bấm / nhấn phím để bỏ qua.
   const welcome = document.getElementById('welcome');
   if (welcome) {
     const done = () => welcome.remove();

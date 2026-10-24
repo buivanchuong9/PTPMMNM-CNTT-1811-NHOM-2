@@ -24,7 +24,7 @@
 <form class="filters" method="get">
   <input type="search" name="q" maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Tìm SKU hoặc tên hàng…" aria-label="Tìm kiếm">
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Tất cả kho') ?></select>
-  <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>
+  <?php elseif ($mine): ?><span class="tag tag-info"><?= e($mine['ma'] . ' — ' . $mine['ten']) ?></span><?php endif; ?>
   <input type="hidden" name="category" value="<?= $cat === -1 ? 'none' : ($cat ?: '') ?>">
   <select name="supplier" aria-label="Nhà cung cấp"><option value="">Mọi nhà cung cấp</option><?php foreach ($suppliers as $s): ?><option value="<?= (int)$s['id'] ?>"<?= $supF === (int)$s['id'] ? ' selected' : '' ?>><?= e($s['ten']) ?></option><?php endforeach; ?></select>
   <select name="view" aria-label="Kiểu xem" data-live-reload><option value="">Theo mặt hàng</option><option value="batch"<?= $byBatch ? ' selected' : '' ?>>Theo lô (hạn dùng)</option></select>
@@ -32,6 +32,7 @@
     <?php foreach (['' => 'Mọi tình trạng', 'in' => 'Còn hàng', 'low' => 'Sắp hết', 'out' => 'Hết hàng'] as $k => $label): ?><option value="<?= e($k) ?>"<?= $stock === $k ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
   </select><?php endif; ?>
 </form>
+<?php if (!$byBatch && !$user->isAdmin && count($shown) > 1): ?><p class="muted small">Bảng hiển thị tồn của <b>tất cả các kho</b> (chỉ xem). Di chuột lên mã kho để biết quản lý kho cần liên hệ khi muốn nhờ chuyển hàng.</p><?php endif; ?>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
 <?php if ($byBatch): ?>
   <thead><tr><th>Kho</th><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Lô</th><th>Hạn dùng</th><th class="num">Tồn</th><th>Quy đổi</th><th>Cập nhật cuối</th></tr></thead>
@@ -43,13 +44,13 @@
   <?php endforeach; if (!$rows): ?><tr><td colspan="9" class="empty">Không có tồn phù hợp.</td></tr><?php endif; ?>
   </tbody>
 <?php else: ?>
-  <thead><tr><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Nhà cung cấp</th><th>ĐVT</th><th>Quy cách lô</th><?php foreach ($shown as $w): ?><th class="num" title="<?= e($w['ten']) ?>"><?= e($w['ma']) ?></th><?php endforeach; ?><th class="num">Tổng tồn</th><th>Quy đổi</th><th>Tình trạng</th><?php if ($user->isAdmin): ?><th></th><?php endif; ?></tr></thead>
+  <thead><tr><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Nhà cung cấp</th><th>ĐVT</th><th>Quy cách lô</th><?php foreach ($shown as $w): $own = $mine && (int)$mine['id'] === (int)$w['id']; ?><th class="num" title="<?= e($w['ten'] . ($own ? ' (kho của bạn)' : ($w['quan_ly'] ? ' · Quản lý: ' . $w['quan_ly'] : ''))) ?>"><?= e($w['ma']) ?><?= $own ? ' <small>(bạn)</small>' : '' ?></th><?php endforeach; ?><th class="num">Tổng tồn</th><th>Quy đổi</th><th>Tình trạng</th><?php if ($user->isAdmin): ?><th></th><?php endif; ?></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $pack = (int)$r['quy_cach_lo']; ?>
     <tr><td><b><?= e($r['ma_hang']) ?></b></td><td><?= e($r['ten']) ?><?= $r['quan_ly_lo'] ? ' <span class="tag tag-info">Theo dõi số lô · ' . n($r['lots']) . '</span>' : '' ?></td><td><?= $r['category'] ? '<span class="tag tag-info">' . e($r['category']) . '</span>' : '<span class="tag tag-warn">Chưa phân loại</span>' ?></td>
       <td class="wrap"><?php if ($r['suppliers']): foreach ($r['suppliers'] as $s): ?><a class="tag tag-muted" href="/partners?q=<?= e(urlencode($s['ma'])) ?>" title="<?= e($s['ten']) ?>"><?= e($s['ten']) ?></a> <?php endforeach; else: ?><span class="muted">—</span><?php endif; ?></td><td><?= e($r['unit']) ?></td>
       <td><?= $pack > 1 ? '1 lô = <b>' . n($pack) . '</b> ' . e($r['unit']) : '<span class="muted">Bán lẻ (1)</span>' ?></td>
-      <?php foreach ($shown as $w): $q1 = $r['by_wh'][(int)$w['id']] ?? 0; ?><td class="num <?= $q1 === 0 ? 'muted' : '' ?>"><?= n($q1) ?></td><?php endforeach; ?>
+      <?php foreach ($shown as $w): $q1 = $r['by_wh'][(int)$w['id']] ?? 0; ?><td class="num <?= $q1 === 0 ? 'muted' : '' ?>"<?= $mine && (int)$mine['id'] === (int)$w['id'] ? ' style="background:var(--accent-soft,rgba(238,77,45,.08));font-weight:600"' : '' ?>><?= n($q1) ?></td><?php endforeach; ?>
       <td class="num"><b><?= n($r['total']) ?></b> <small class="muted"><?= e($r['unit']) ?></small></td>
       <td class="muted"><?= e(pack_label($r['total'], $pack)) ?: '—' ?></td>
       <td><?= $r['total'] <= 0 ? '<span class="tag tag-warn">Hết hàng</span>' : ($r['low'] ? '<span class="tag tag-warn">Sắp hết</span>' : '<span class="tag tag-ok">Còn hàng</span>') ?></td>

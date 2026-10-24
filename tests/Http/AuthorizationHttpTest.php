@@ -94,7 +94,8 @@ same($a->req('POST', '/counts', ['csrf' => $csrf, 'warehouse_id' => $f->wb])['st
 same($a->req('GET', '/users')['status'], 403, 'trang quản trị tài khoản ⇒ 403');
 same($a->req('POST', '/warehouses', ['csrf' => $csrf, 'code' => 'HACK', 'name' => 'x'])['status'], 403, 'tạo kho mới ⇒ 403');
 same([$count('SELECT COUNT(*) FROM phieu_nhap_xuat WHERE kho_id = ?', [$f->wb]), $f->movements($f->wb), $f->stock($f->wb, 'x')], $before, 'kho B: phiếu nhập xuất, sổ, tồn đều nguyên vẹn');
-truthy(!str_contains($a->req('GET', '/inventory')['body'], "B{$f->tag}"), 'danh sách tồn không lộ tên kho B');
+truthy(str_contains($a->req('GET', '/inventory')['body'], "B{$f->tag}"), 'danh sách tồn (chỉ xem) có cột kho B để biết nhờ kho nào chuyển hàng');
+truthy(!str_contains($a->req('GET', '/inventory?view=batch')['body'], "B{$f->tag}"), 'tồn theo lô vẫn không lộ kho B');
 truthy(!str_contains($a->req('GET', '/history')['body'], $vb['ma']), 'lịch sử không lộ phiếu nhập xuất kho B');
 truthy(!str_contains($a->req('GET', '/reports/stock.csv')['body'], "B{$f->tag}"), 'báo cáo CSV không có dữ liệu kho B');
 

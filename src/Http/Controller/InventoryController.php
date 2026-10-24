@@ -44,7 +44,16 @@ final class InventoryController extends Controller
             $it['suppliers'] = $supBy[(int)$it['id']] ?? [];
         }
         unset($it);
-        $warehouses = $visible ? $this->db->all('SELECT id, ma, ten FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY ma') : [];
+        // Chế độ «Theo mặt hàng» cho mọi vai trò xem tồn của TẤT CẢ kho đang hoạt động (chỉ đọc) để biết nhờ kho nào chuyển hàng;
+        // quản lý kho kèm theo để liên hệ. Chế độ «Theo lô», phiếu, lịch sử, báo cáo vẫn giới hạn theo kho của tài khoản.
+        $warehouses = $this->db->all(
+            'SELECT k.id, k.ma, k.ten, (SELECT u.ho_ten FROM nguoi_dung u WHERE u.quan_ly_kho_id = k.id AND u.hoat_dong LIMIT 1) AS quan_ly FROM kho k WHERE k.hoat_dong ORDER BY k.ma'
+        );
+        if (!$byBatch && !$user->isAdmin) {
+            $scope = array_map(fn($w) => (int)$w['id'], $warehouses);
+        } else {
+            $warehouses = array_values(array_filter($warehouses, fn($w) => in_array((int)$w['id'], $visible, true)));
+        }
 
         if ($byBatch) {
             $all = $this->query->onHand($scope, $q, true);
@@ -67,7 +76,7 @@ final class InventoryController extends Controller
             [$rows, $pg] = Paginator::of($rows, $r);
         }
         return $this->render('inventory/index', $user, 'inventory', [
-            'warehouses' => $warehouses,
+            'warehouses' => $warehouses, 'mine' => $this->auth->warehouseOf($user),
             'shown' => array_values(array_filter($warehouses, fn($w) => in_array((int)$w['id'], $scope, true))),
             'rows' => $rows, 'pg' => $pg,
             'byBatch' => $byBatch, 'q' => $q, 'wh' => $wh, 'stock' => $stock, 'canAddCat' => $user->isAdmin || $user->role === \StockFlow\Domain\AccountRole::Manager, 'cat' => $cat, 'supF' => $supF, 'suppliers' => $this->partners->suppliers(), 'uncategorized' => count(array_filter($items, fn($i) => $i['hoat_dong'] && !(int)$i['danh_muc_id'])), 'totalItems' => count(array_filter($items, fn($i) => $i['hoat_dong'])), 'categories' => $this->catalog->categories(),

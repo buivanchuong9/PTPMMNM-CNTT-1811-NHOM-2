@@ -24,8 +24,11 @@ final class HistoryController extends Controller
 
     private function filters(Request $r): array
     {
+        $preset = date_range($r->str('range'));   // mốc nhanh (hôm nay, hôm qua, 7 ngày…) thắng ngày tự chọn
+        [$from, $to] = $preset ?? [$r->str('from'), $r->str('to')];
+        $rangeSel = $preset ? $r->str('range') : (($r->str('range') === 'custom' || $from || $to) ? 'custom' : '');
         return ['warehouse' => $r->int('warehouse'), 'item' => $r->int('item'), 'type' => VoucherType::tryFrom($r->str('type'))?->value,
-                'q' => $r->search('q'), 'from' => $r->str('from'), 'to' => $r->str('to'), 'sort' => $r->str('sort') === 'old' ? 'old' : ''];
+                'q' => $r->search('q'), 'from' => $from, 'to' => $to, 'sort' => $r->str('sort') === 'old' ? 'old' : '', 'rangeSel' => $rangeSel];
     }
 
     public function index(Request $r, array $p, ?User $user): Response
@@ -54,7 +57,8 @@ final class HistoryController extends Controller
     public function reports(Request $r, array $p, ?User $user): Response
     {
         $this->need($user, Permission::XemBaoCao);
-        return $this->render('history/reports', $user, 'reports', [], 'Báo cáo');
+        $d = $this->query->dashboard($user);
+        return $this->render('history/reports', $user, 'reports', ['warehouses' => $d['warehouses'], 'flow' => $d['flow']], 'Báo cáo');
     }
 
     public function exportStock(Request $r, array $p, ?User $user): Response
