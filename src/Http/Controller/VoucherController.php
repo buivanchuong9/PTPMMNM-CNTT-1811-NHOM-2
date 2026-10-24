@@ -68,24 +68,97 @@ final class VoucherController extends Controller
         return $this->render('vouchers/form', $user, 'new-' . strtolower($type->value), [
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($ids),
             'idem' => bin2hex(random_bytes(16)), 'selected' => $r->int('warehouse'),
-        ], $type->label() . ' mới');
+            'partnerNames' => array_column($this->db->all('SELECT ten FROM doi_tac WHERE loai = ? AND hoat_dong ORDER BY ten', [$type === VoucherType::Receipt ? 'SUPPLIER' : 'CUSTOMER']), 'ten'),
+            'suppliers' => $type === VoucherType::Receipt ? $this->db->all("SELECT id, ma, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten") : [],
+        ] + $this->pickFilterData(), $type->label() . ' mới');
+    }
+
+    /** Dữ liệu cho các ô lọc «Danh mục» / «Nhà cung cấp» phía trên ô tìm hàng của form phiếu. */
+    private function pickFilterData(): array
+    {
+        $by = (new \StockFlow\Service\PartnerService($this->db, $this->auth, $this->audit))->suppliersByItem();
+        return [
+            'itemSuppliers' => array_map(fn($l) => array_column($l, 'id'), $by),
+            'pickCats' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
+            'pickSups' => $this->db->all("SELECT id, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten"),
+        ];
     }
 
     public function store(Request $r, array $p, ?User $user): Response
     {
         $type = VoucherType::tryFrom($r->str('type')) ?? VoucherType::Receipt;
         $this->need($user, $type === VoucherType::Receipt ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);
+        if ($type === VoucherType::Issue && ($step = $this->customerStep($r, $user)) !== null) {
+            return $step;
+        }
         return $this->act(function () use ($r, $user, $type) {
             $lines = StockRules::normalizeLines($r->arr('line'), $r->arr('qty'));
             if ($type === VoucherType::Issue) {
                 $this->assertInStock((int)$r->int('warehouse_id'), $lines);
             }
+            if ($type === VoucherType::Receipt) {
+                $this->assertSupplierItems($r->str('partner'), $lines);
+            }
+            $partnerSvc = new \StockFlow\Service\PartnerService($this->db, $this->auth, $this->audit);
+            if ($type === VoucherType::Issue) {
+                $partnerSvc->requireNewCustomerInfo($r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'));
+            }
             $res = $this->vouchers->createDraft($user, $type, (int)$r->int('warehouse_id'), $lines, $r->str('partner'), $r->str('note'), $this->idemKey($r));
+            if ($type === VoucherType::Issue && $res['created'] && $partnerSvc->ensureCustomer($user, $r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'))) {
+                $this->session->flash('ok', 'Đã lưu «' . $r->str('partner') . '» vào danh sách khách hàng.');
+            }
             if (!$res['created']) {
                 $this->session->flash('ok', 'Yêu cầu này đã được ghi nhận trước đó — không tạo thêm phiếu nhập xuất.');
             }
             return '/vouchers/' . $res['voucher']['id'];
         }, 'Đã lập phiếu nháp. Kiểm tra rồi bấm Xác nhận để ghi sổ.', '/vouchers/new?type=' . $type->value);
+    }
+
+    /**
+     * Phiếu xuất cho khách chưa có trong danh sách ⇒ chuyển sang «bước 2» nhập thông tin khách (giữ nguyên các dòng hàng đã chọn).
+     * @return ?Response null nếu không cần bước 2
+     */
+    private function customerStep(Request $r, User $user): ?Response
+    {
+        $svc = new \StockFlow\Service\PartnerService($this->db, $this->auth, $this->audit);
+        $name = $r->str('partner');
+        if ($name === '' || $svc->known($name)) {
+            return null;
+        }
+        try {   // kiểm tra dòng hàng / tồn trước: phiếu sai thì báo ngay ở bước 1, không bắt nhập khách
+            $lines = StockRules::normalizeLines($r->arr('line'), $r->arr('qty'));
+            $this->assertInStock((int)$r->int('warehouse_id'), $lines);
+        } catch (DomainError $e) {
+            $this->session->flash('err', $e->getMessage());
+            return Response::redirect('/vouchers/new?type=ISSUE');
+        }
+        try {
+            $svc->requireNewCustomerInfo($name, $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'));
+            return null;   // đã đủ thông tin khách mới ⇒ cho lập phiếu
+        } catch (DomainError $e) {
+            if ($r->str('cust_contact') . $r->str('cust_phone') . $r->str('cust_address') !== '') {
+                $this->session->flash('err', $e->getMessage());
+            }
+            return $this->render('vouchers/customer_step', $user, 'new-issue', [
+                'post' => $r->post, 'partner' => (string)preg_replace('/\s+/u', ' ', $name), 'lineCount' => count($lines), 'totalQty' => array_sum(array_column($lines, 'so_luong')),
+            ], 'Phiếu xuất mới — bước 2');
+        }
+    }
+
+    /** Phiếu nhập từ một nhà cung cấp đã khai báo thì chỉ được chứa mặt hàng của nhà cung cấp đó. */
+    private function assertSupplierItems(string $partner, array $lines): void
+    {
+        $sup = $this->db->one("SELECT id, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND ten = ?", [trim($partner)]);
+        if (!$sup) {
+            return;
+        }
+        $ok = array_map('intval', array_column($this->db->all('SELECT mat_hang_id FROM mat_hang_nha_cung_cap WHERE doi_tac_id = ?', [$sup['id']]), 'mat_hang_id'));
+        foreach ($lines as $l) {
+            if (!in_array((int)$l['mat_hang_id'], $ok, true)) {
+                $name = $this->db->value('SELECT ma_hang FROM mat_hang WHERE id = ?', [(int)$l['mat_hang_id']]);
+                throw new DomainError("Mặt hàng $name không thuộc nhà cung cấp «{$sup['ten']}»");
+            }
+        }
     }
 
     public function show(Request $r, array $p, ?User $user): Response
@@ -167,7 +240,7 @@ final class VoucherController extends Controller
         return $this->render('transfers/form', $user, 'new-transfer', [
             'from' => $this->warehouseRows($from), 'to' => $this->warehouseRows($this->allActiveIds()),
             'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($from), 'idem' => bin2hex(random_bytes(16)),
-        ], 'Điều chuyển mới');
+        ] + $this->pickFilterData(), 'Điều chuyển mới');
     }
 
     public function storeTransfer(Request $r, array $p, ?User $user): Response

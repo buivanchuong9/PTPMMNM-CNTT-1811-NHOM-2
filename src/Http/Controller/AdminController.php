@@ -16,11 +16,12 @@ use StockFlow\Domain\User;
 use StockFlow\Domain\VnAddress;
 use StockFlow\Service\Authorizer;
 use StockFlow\Service\CatalogService;
+use StockFlow\Service\PartnerService;
 use StockFlow\Service\StockQuery;
 
 final class AdminController extends Controller
 {
-    public function __construct(View $view, Session $session, Authorizer $auth, private CatalogService $catalog, private StockQuery $query)
+    public function __construct(View $view, Session $session, Authorizer $auth, private CatalogService $catalog, private StockQuery $query, private PartnerService $partners)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -67,7 +68,8 @@ final class AdminController extends Controller
     public function addItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
+            $id = $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
+            $this->partners->setItemSuppliers($user, $id, $r->arr('supplier_ids'));
         }, 'Đã thêm mặt hàng.', '/inventory');
     }
 
@@ -75,6 +77,7 @@ final class AdminController extends Controller
     {
         return $this->act(function () use ($r, $user) {
             $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
+            $this->partners->setItemSuppliers($user, (int)$r->int('item_id'), $r->arr('supplier_ids'));
         }, 'Đã cập nhật mặt hàng.', '/inventory');
     }
 

@@ -63,6 +63,9 @@ final class StockRules
                 throw new DomainError('Chưa chọn mặt hàng/lô ở một dòng phiếu');
             }
             $qty = self::parseQty($rawQty);
+            if ($qty === null && is_scalar($rawQty) && ctype_digit(trim((string)$rawQty)) && (int)trim((string)$rawQty) > 1_000_000) {
+                throw new DomainError('Số lượng mỗi dòng tối đa 1.000.000');
+            }
             if ($qty === null || $qty < 1) {
                 throw new DomainError('Số lượng phải là số nguyên dương');
             }

@@ -19,6 +19,7 @@ $groups = [
     ],
     'Danh mục' => [
         'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],
+        'partners' => ['/partners', 'users', 'Đối tác & nhà cung cấp', [P::XemDanhMuc]],
     ],
     'Quản trị hệ thống' => [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],

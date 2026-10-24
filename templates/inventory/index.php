@@ -1,4 +1,4 @@
-<?php /** @var array $warehouses @var array $shown @var array $rows @var array $items @var array $units @var array $categories @var int $cat @var int $uncategorized @var int $totalItems */ ?>
+<?php /** @var array $warehouses @var array $shown @var array $rows @var array $items @var array $units @var array $categories @var int $supF @var list<array> $suppliers @var int $cat @var int $uncategorized @var int $totalItems */ ?>
 <header class="page-head">
   <div><h1>Hàng hoá</h1></div>
   <div class="actions">
@@ -9,7 +9,7 @@
     <?php if ($canAddBatch): ?><button type="button" class="btn-ghost" data-dialog-open="batch-dlg"><?= icon('plus') ?>Thêm lô</button><?php endif; ?>
   </div>
 </header>
-<?php $catQs = fn($v) => http_build_query(array_filter(['category' => $v, 'q' => $q, 'warehouse' => $wh, 'view' => $byBatch ? 'batch' : '', 'stock' => $stock], fn($x) => $x !== null && $x !== '' && $x !== 0)); ?>
+<?php $catQs = fn($v) => http_build_query(array_filter(['category' => $v, 'q' => $q, 'warehouse' => $wh, 'view' => $byBatch ? 'batch' : '', 'stock' => $stock, 'supplier' => $supF], fn($x) => $x !== null && $x !== '' && $x !== 0)); ?>
 <div class="cat-bar">
   <input type="search" id="cat-search" class="cat-search" placeholder="Tìm danh mục…" aria-label="Tìm danh mục" autocomplete="off">
   <nav class="tabs cat-tabs" id="cat-tabs" aria-label="Danh mục hàng hoá" data-live="tabs">
@@ -25,6 +25,7 @@
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Tất cả kho') ?></select>
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>
   <input type="hidden" name="category" value="<?= $cat === -1 ? 'none' : ($cat ?: '') ?>">
+  <select name="supplier" aria-label="Nhà cung cấp"><option value="">Mọi nhà cung cấp</option><?php foreach ($suppliers as $s): ?><option value="<?= (int)$s['id'] ?>"<?= $supF === (int)$s['id'] ? ' selected' : '' ?>><?= e($s['ten']) ?></option><?php endforeach; ?></select>
   <select name="view" aria-label="Kiểu xem" data-live-reload><option value="">Theo mặt hàng</option><option value="batch"<?= $byBatch ? ' selected' : '' ?>>Theo lô (hạn dùng)</option></select>
   <?php if (!$byBatch): ?><select name="stock" aria-label="Tình trạng tồn">
     <?php foreach (['' => 'Mọi tình trạng', 'in' => 'Còn hàng', 'low' => 'Sắp hết', 'out' => 'Hết hàng'] as $k => $label): ?><option value="<?= e($k) ?>"<?= $stock === $k ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
@@ -41,17 +42,18 @@
   <?php endforeach; if (!$rows): ?><tr><td colspan="9" class="empty">Không có tồn phù hợp.</td></tr><?php endif; ?>
   </tbody>
 <?php else: ?>
-  <thead><tr><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>ĐVT</th><th>Quy cách lô</th><?php foreach ($shown as $w): ?><th class="num" title="<?= e($w['ten']) ?>"><?= e($w['ma']) ?></th><?php endforeach; ?><th class="num">Tổng tồn</th><th>Quy đổi</th><th>Tình trạng</th><?php if ($user->isAdmin): ?><th></th><?php endif; ?></tr></thead>
+  <thead><tr><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Nhà cung cấp</th><th>ĐVT</th><th>Quy cách lô</th><?php foreach ($shown as $w): ?><th class="num" title="<?= e($w['ten']) ?>"><?= e($w['ma']) ?></th><?php endforeach; ?><th class="num">Tổng tồn</th><th>Quy đổi</th><th>Tình trạng</th><?php if ($user->isAdmin): ?><th></th><?php endif; ?></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $pack = (int)$r['quy_cach_lo']; ?>
-    <tr><td><b><?= e($r['ma_hang']) ?></b></td><td><?= e($r['ten']) ?><?= $r['quan_ly_lo'] ? ' <span class="tag tag-info">Theo dõi số lô · ' . n($r['lots']) . '</span>' : '' ?></td><td><?= $r['category'] ? '<span class="tag tag-info">' . e($r['category']) . '</span>' : '<span class="tag tag-warn">Chưa phân loại</span>' ?></td><td><?= e($r['unit']) ?></td>
+    <tr><td><b><?= e($r['ma_hang']) ?></b></td><td><?= e($r['ten']) ?><?= $r['quan_ly_lo'] ? ' <span class="tag tag-info">Theo dõi số lô · ' . n($r['lots']) . '</span>' : '' ?></td><td><?= $r['category'] ? '<span class="tag tag-info">' . e($r['category']) . '</span>' : '<span class="tag tag-warn">Chưa phân loại</span>' ?></td>
+      <td class="wrap"><?php if ($r['suppliers']): foreach ($r['suppliers'] as $s): ?><a class="tag tag-muted" href="/partners?q=<?= e(urlencode($s['ma'])) ?>" title="<?= e($s['ten']) ?>"><?= e($s['ten']) ?></a> <?php endforeach; else: ?><span class="muted">—</span><?php endif; ?></td><td><?= e($r['unit']) ?></td>
       <td><?= $pack > 1 ? '1 lô = <b>' . n($pack) . '</b> ' . e($r['unit']) : '<span class="muted">Bán lẻ (1)</span>' ?></td>
       <?php foreach ($shown as $w): $q1 = $r['by_wh'][(int)$w['id']] ?? 0; ?><td class="num <?= $q1 === 0 ? 'muted' : '' ?>"><?= n($q1) ?></td><?php endforeach; ?>
       <td class="num"><b><?= n($r['total']) ?></b> <small class="muted"><?= e($r['unit']) ?></small></td>
       <td class="muted"><?= e(pack_label($r['total'], $pack)) ?: '—' ?></td>
       <td><?= $r['total'] <= 0 ? '<span class="tag tag-warn">Hết hàng</span>' : ($r['low'] ? '<span class="tag tag-warn">Sắp hết</span>' : '<span class="tag tag-ok">Còn hàng</span>') ?></td>
-      <?php if ($user->isAdmin): ?><td><button type="button" class="btn-ghost" data-dialog-open="edit-dlg" data-fill-label="<?= e($r['ma_hang'] . ' — ' . $r['ten'] . ' (ĐVT: ' . $r['unit'] . ')') ?>" data-fill="<?= e(json_encode(['item_id' => (string)$r['id'], 'category_id' => (string)(int)$r['danh_muc_id'], 'pack_size' => (string)$pack, 'reorder_level' => (string)(int)$r['dinh_muc_toi_thieu']])) ?>">Sửa</button></td><?php endif; ?></tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="<?= count($shown) + 8 + ($user->isAdmin ? 1 : 0) ?>" class="empty">Không có mặt hàng phù hợp.</td></tr><?php endif; ?>
+      <?php if ($user->isAdmin): ?><td><button type="button" class="btn-ghost" data-dialog-open="edit-dlg" data-fill-label="<?= e($r['ma_hang'] . ' — ' . $r['ten'] . ' (ĐVT: ' . $r['unit'] . ')') ?>" data-fill="<?= e(json_encode(['item_id' => (string)$r['id'], 'category_id' => (string)(int)$r['danh_muc_id'], 'supplier_ids' => implode(',', array_column($r['suppliers'], 'id')), 'pack_size' => (string)$pack, 'reorder_level' => (string)(int)$r['dinh_muc_toi_thieu']])) ?>">Sửa</button></td><?php endif; ?></tr>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="<?= count($shown) + 9 + ($user->isAdmin ? 1 : 0) ?>" class="empty">Không có mặt hàng phù hợp.</td></tr><?php endif; ?>
   </tbody>
 <?php endif; ?>
 </table></div><?= pager($pg) ?></section>
@@ -76,6 +78,10 @@
     <label>Tên hàng<input name="name" required maxlength="160"></label>
     <label>Loại hàng hoá (danh mục)<select name="category_id" required><option value="">Chọn danh mục…</option><?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['ten']) ?></option><?php endforeach; ?></select></label>
     <label>Đơn vị tính<select name="unit_id" required><?php foreach ($units as $u): ?><option value="<?= (int)$u['id'] ?>"><?= e($u['ma']) ?></option><?php endforeach; ?></select></label>
+    <fieldset class="sup-pick"><legend>Nhà cung cấp của mặt hàng</legend>
+      <?php foreach ($suppliers as $s): ?><label class="check"><input type="checkbox" name="supplier_ids[]" value="<?= (int)$s['id'] ?>" data-sup-check> <?= e($s['ten']) ?> <small class="muted"><?= e($s['ma']) ?></small></label>
+      <?php endforeach; if (!$suppliers): ?><p class="muted small">Chưa có nhà cung cấp — thêm ở trang <a href="/partners">Đối tác</a>.</p><?php endif; ?>
+    </fieldset>
     <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" value="1" required></label>
     <label class="check"><input type="checkbox" name="track_batch" value="1"> Quản lý theo lô / hạn dùng</label>
     <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" max="1000000" step="1" value="0"></label>
@@ -87,6 +93,10 @@
     <div class="dlg-head"><h2 id="edit-dlg-t">Sửa mặt hàng</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted" data-dlg-label></p>
     <label>Loại hàng hoá (danh mục)<select name="category_id" required><option value="">Chọn danh mục…</option><?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['ten']) ?></option><?php endforeach; ?></select></label>
+    <fieldset class="sup-pick"><legend>Nhà cung cấp của mặt hàng</legend>
+      <?php foreach ($suppliers as $s): ?><label class="check"><input type="checkbox" name="supplier_ids[]" value="<?= (int)$s['id'] ?>" data-sup-check> <?= e($s['ten']) ?> <small class="muted"><?= e($s['ma']) ?></small></label>
+      <?php endforeach; if (!$suppliers): ?><p class="muted small">Chưa có nhà cung cấp — thêm ở trang <a href="/partners">Đối tác</a>.</p><?php endif; ?>
+    </fieldset>
     <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" required></label>
     <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" max="1000000" step="1" required></label>
     <p class="muted small">Số lượng tồn không sửa tay được — tồn chỉ thay đổi qua phiếu nhập/xuất, điều chuyển hoặc kiểm kê.</p>

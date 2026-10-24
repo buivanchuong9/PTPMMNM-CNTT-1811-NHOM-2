@@ -79,6 +79,10 @@ final class App
         $r->post('/warehouses/staff', [C\AdminController::class, 'addStaff']);
         $r->post('/warehouses/staff/update', [C\SettingsController::class, 'staffUpdate']);
         $r->post('/warehouses/staff/active', [C\SettingsController::class, 'staffActive']);
+        $r->get('/partners', [C\PartnerController::class, 'index']);
+        $r->post('/partners', [C\PartnerController::class, 'add']);
+        $r->post('/partners/update', [C\PartnerController::class, 'update']);
+        $r->post('/partners/active', [C\PartnerController::class, 'active']);
         $r->get('/items', [C\AdminController::class, 'items']);
         $r->post('/items', [C\AdminController::class, 'addItem']);
         $r->post('/items/update', [C\AdminController::class, 'updateItem']);

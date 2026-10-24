@@ -13,6 +13,7 @@ use StockFlow\Domain\VoucherType;
 use StockFlow\Service\AuthService;
 use StockFlow\Service\CatalogService;
 use StockFlow\Service\FleetService;
+use StockFlow\Service\PartnerService;
 use StockFlow\Service\StockCountService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\TransferService;
@@ -134,6 +135,31 @@ final class DemoSeed
             }
             $item[$sku] = ['id' => $id, 'batches' => $batches, 'hub' => end($defs[array_search($sku, array_column($defs, 0))])];
         }
+
+        // ── đối tác: nhà cung cấp theo danh mục hàng + khách hàng ──
+        $partners = $c->get(PartnerService::class);
+        $suppliers = [['NCC-BAOBI', 'Công ty Bao bì Sài Gòn', 'Nguyễn Thị Lan', '0281234567', 'kinhdoanh@baobisg.example', 'KCN Tân Bình, TP.HCM', ['PKG']],
+            ['NCC-GIAYHN', 'Công ty Giấy & Bao bì Hà Nội', 'Trần Văn Bình', '0241234568', 'banhang@giayhn.example', 'KCN Quang Minh, Hà Nội', ['PKG']],
+            ['NCC-DIENTU', 'Công ty Điện tử Viễn Thông Việt', 'Lê Quốc Huy', '0241234569', 'sales@dientuviet.example', 'Cầu Giấy, Hà Nội', ['ELEC']],
+            ['NCC-THUCPHAM', 'Công ty Thực phẩm Việt Hương', 'Phạm Thị Mai', '0281234570', 'dathang@vthuong.example', 'KCN Vĩnh Lộc, TP.HCM', ['FOOD']],
+            ['NCC-HOAMY', 'Công ty Hoá mỹ phẩm Hoa Sen', 'Đỗ Thanh Tùng', '0231234571', 'lienhe@hoasen.example', 'Hải Châu, Đà Nẵng', ['HOME']],
+            ['NCC-DUOC', 'Công ty Dược phẩm An Khang', 'Võ Minh Châu', '0281234572', 'cskh@ankhang.example', 'Quận 7, TP.HCM', ['MED']],
+            ['NCC-BAOHO', 'Công ty Thiết bị bảo hộ Minh Phát', 'Hoàng Đức Anh', '0241234573', 'info@minhphat.example', 'Thanh Xuân, Hà Nội', ['TOOL', 'PKG']]];
+        $itemsOf = fn(array $cats) => array_values(array_filter(array_keys($catOf + array_fill_keys(array_column($defs, 0), 'PKG')), fn($sku) => in_array($catOf[$sku] ?? 'PKG', $cats, true)));
+        $bySupplier = [];
+        foreach ($suppliers as [$code, $name, $contact, $phone, $email, $addr, $cats]) {
+            $partners->add($admin, $code, $name, 'SUPPLIER', $contact, $phone, $email, $addr, '');
+            foreach ($itemsOf($cats) as $sku) {
+                if (isset($item[$sku])) {
+                    $bySupplier[$sku][] = (int)$db->value('SELECT id FROM doi_tac WHERE ma = ?', [$code]);
+                }
+            }
+        }
+        foreach ($bySupplier as $sku => $ids) {
+            $partners->setItemSuppliers($admin, $item[$sku]['id'], $ids);
+        }
+        $partners->add($admin, 'KH-TIENLOI', 'Chuỗi cửa hàng Tiện Lợi 24h', 'CUSTOMER', 'Ngô Thu Hà', '0901234574', 'muahang@tienloi24.example', 'Quận 1, TP.HCM', 'Khách mua sỉ');
+        $partners->add($admin, 'KH-BINHAN', 'Siêu thị mini Bình An', 'CUSTOMER', 'Đặng Văn Khoa', '0901234575', '', 'Hải Châu, Đà Nẵng', '');
 
         // ── tiện ích ──
         $post = function (string $code, VoucherType $type, array $lines, string $partner, string $note = '') use ($vouchers, $keeper, $approver, $wh): array {
