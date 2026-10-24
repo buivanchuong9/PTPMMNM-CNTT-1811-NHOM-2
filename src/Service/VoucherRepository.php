@@ -101,7 +101,8 @@ final class VoucherRepository
     }
 
     /** @return array{0:string,1:list<mixed>} */
-    private function searchFilter(array $warehouseIds, ?string $type, ?string $status, string $q): array
+    /** $from / $to: ngày YYYY-MM-DD theo giờ Việt Nam (UTC+7), ngày_tạo lưu theo UTC. */
+    private function searchFilter(array $warehouseIds, ?string $type, ?string $status, string $q, ?string $from = null, ?string $to = null): array
     {
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
         $where = ["v.kho_id IN ($in)"];
@@ -109,30 +110,32 @@ final class VoucherRepository
         if ($type) { $where[] = 'v.loai = ?'; $params[] = $type; }
         if ($status) { $where[] = 'v.trang_thai = ?'; $params[] = $status; }
         if ($q !== '') { $where[] = '(LOWER(v.ma) LIKE ? OR LOWER(v.doi_tac) LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
+        if ($from) { $where[] = 'v.ngay_tao >= ?'; $params[] = gmdate('Y-m-d H:i:s', strtotime("$from 00:00:00 UTC") - 7 * 3600); }
+        if ($to) { $where[] = 'v.ngay_tao < ?'; $params[] = gmdate('Y-m-d H:i:s', strtotime("$to 00:00:00 UTC") + 17 * 3600); }
         return [implode(' AND ', $where), $params];
     }
 
     /** Tổng số phiếu nhập xuất khớp bộ lọc (để phân trang). */
-    public function searchCount(array $warehouseIds, ?string $type, ?string $status, string $q): int
+    public function searchCount(array $warehouseIds, ?string $type, ?string $status, string $q, ?string $from = null, ?string $to = null): int
     {
         if ($warehouseIds === []) {
             return 0;
         }
-        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q);
+        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q, $from, $to);
         return (int)$this->db->value('SELECT COUNT(*) ' . self::FROM . ' WHERE ' . $where, $params);
     }
 
     /** Tìm danh sách phiếu nhập xuất theo bộ lọc, chỉ trong phạm vi kho cho phép. */
-    public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200, int $offset = 0): array
+    public function search(array $warehouseIds, ?string $type, ?string $status, string $q, int $limit = 200, int $offset = 0, ?string $from = null, ?string $to = null, bool $oldestFirst = false): array
     {
         if ($warehouseIds === []) {
             return [];
         }
-        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q);
+        [$where, $params] = $this->searchFilter($warehouseIds, $type, $status, $q, $from, $to);
         return $this->db->all(
             'SELECT ' . self::FIELDS . ', (SELECT COUNT(*) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS line_count,
                 (SELECT COALESCE(SUM(ABS(l.so_luong)),0) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS total_qty ' . self::FROM . '
-             WHERE ' . $where . ' ORDER BY v.id DESC LIMIT ' . max(1, min(500, $limit)) . ' OFFSET ' . max(0, $offset),
+             WHERE ' . $where . ' ORDER BY v.ngay_tao ' . ($oldestFirst ? 'ASC, v.id ASC' : 'DESC, v.id DESC') . ' LIMIT ' . max(1, min(500, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
     }

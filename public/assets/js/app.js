@@ -768,3 +768,33 @@
     place();
   }
 })();
+
+// Thêm lô: chọn loại hàng hoá trước thì danh sách mặt hàng chỉ còn hàng thuộc loại đó
+document.addEventListener('change', (ev) => {
+  if (!ev.target || ev.target.id !== 'batch-cat') return;
+  const item = document.getElementById('batch-item');
+  if (!item) return;
+  [...item.options].forEach((o) => { if (o.value) { const off = ev.target.value && o.dataset.cat !== ev.target.value; o.hidden = off; o.disabled = off; } });
+  item.value = '';
+});
+
+// Thanh danh mục: lăn chuột = trượt ngang, cuộn tab đang chọn vào giữa, ô tìm lọc danh mục theo tên (không phân biệt hoa/thường, dấu)
+(() => {
+  const bar = document.getElementById('cat-tabs'), box = document.getElementById('cat-search');
+  if (!bar) return;
+  const fold = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
+  const act = bar.querySelector('a.active');
+  if (act) bar.scrollLeft = Math.max(0, act.offsetLeft - bar.clientWidth / 2 + act.clientWidth / 2);
+  bar.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // cuộn ngang sẵn (touchpad) thì để trình duyệt tự xử lý
+    const max = bar.scrollWidth - bar.clientWidth;
+    if (max <= 0 || (e.deltaY < 0 && bar.scrollLeft <= 0) || (e.deltaY > 0 && bar.scrollLeft >= max - 1)) return;   // hết đầu/cuối thì cho trang cuộn dọc
+    e.preventDefault();
+    bar.scrollLeft += e.deltaY;
+  }, { passive: false });
+  if (box) box.addEventListener('input', () => {
+    const q = fold(box.value.trim());
+    bar.querySelectorAll('a').forEach((a) => { a.hidden = !!q && !a.classList.contains('active') && !fold(a.textContent).includes(q); });
+    bar.scrollLeft = 0;
+  });
+})();

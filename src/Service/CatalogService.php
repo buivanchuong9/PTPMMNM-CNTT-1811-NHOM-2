@@ -27,10 +27,15 @@ final class CatalogService
         return $this->db->all('SELECT * FROM don_vi_tinh ORDER BY ma');
     }
 
+    public function categories(): array
+    {
+        return $this->db->all('SELECT c.*, (SELECT COUNT(*) FROM mat_hang i WHERE i.danh_muc_id = c.id) AS items FROM danh_muc c WHERE c.hoat_dong ORDER BY c.ten');
+    }
+
     public function items(): array
     {
-        return $this->db->all('SELECT i.*, u.ma AS unit, (SELECT COUNT(*) FROM lo_hang b WHERE b.mat_hang_id = i.id AND b.so_lo <> ?) AS lots
-                               FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id ORDER BY i.ma_hang', [self::NO_LOT]);
+        return $this->db->all('SELECT i.*, u.ma AS unit, c.ten AS category, (SELECT COUNT(*) FROM lo_hang b WHERE b.mat_hang_id = i.id AND b.so_lo <> ?) AS lots
+                               FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id ORDER BY i.ma_hang', [self::NO_LOT]);
     }
 
     public function batches(): array
@@ -126,7 +131,31 @@ final class CatalogService
         return $this->db->insert('INSERT INTO don_vi_tinh (ma, ten) VALUES (?,?)', [$code, $name]);
     }
 
-    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1): int
+    public function addCategory(User $actor, string $code, string $name): int
+    {
+        $this->auth->requireAdmin($actor);
+        $code = strtoupper(trim($code));
+        $name = trim($name);
+        if (!preg_match('/^[A-Z0-9._-]{2,30}$/', $code)) {
+            throw new DomainError('Mã danh mục gồm 2–30 ký tự A-Z, 0-9, ., _ hoặc -');
+        }
+        if ($name === '' || mb_strlen($name) > 100) {
+            throw new DomainError('Tên danh mục không hợp lệ');
+        }
+        $this->requireUnique('danh_muc', 'ma', $code, "Danh mục $code đã tồn tại");
+        $id = $this->db->insert('INSERT INTO danh_muc (ma, ten) VALUES (?,?)', [$code, $name]);
+        $this->audit->record($actor->id, 'category.create', 'category', $id, "$code · $name");
+        return $id;
+    }
+
+    private function requireCategory(?int $categoryId): void
+    {
+        if ($categoryId !== null && !$this->db->value('SELECT 1 FROM danh_muc WHERE id = ? AND hoat_dong', [$categoryId])) {
+            throw new DomainError('Danh mục hàng hoá không hợp lệ');
+        }
+    }
+
+    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null): int
     {
         $this->auth->requireAdmin($actor);
         $sku = strtoupper(trim($sku));
@@ -146,10 +175,11 @@ final class CatalogService
         if (!$this->db->value('SELECT 1 FROM don_vi_tinh WHERE id = ?', [$unitId])) {
             throw new DomainError('Đơn vị tính không hợp lệ');
         }
+        $this->requireCategory($categoryId);
         $this->requireUnique('mat_hang', 'ma_hang', $sku, "SKU $sku đã tồn tại");
-        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize) {
-            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo) VALUES (?,?,?,?,?,?)',
-                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize]);
+        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize, $categoryId) {
+            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo, danh_muc_id) VALUES (?,?,?,?,?,?,?)',
+                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize, $categoryId]);
             if (!$trackBatch) {
                 $this->db->exec('INSERT INTO lo_hang (mat_hang_id, so_lo) VALUES (?,?)', [$id, self::NO_LOT]);
             }
@@ -158,8 +188,8 @@ final class CatalogService
         });
     }
 
-    /** Sửa quy cách lô (1 lô = bao nhiêu đơn vị tính) và định mức tồn tối thiểu của mặt hàng. */
-    public function updateItem(User $actor, int $itemId, int $packSize, int $reorder): void
+    /** Sửa danh mục, quy cách lô (1 lô = bao nhiêu đơn vị tính) và định mức tồn tối thiểu. Không có cách sửa số lượng tồn: tồn chỉ đổi qua phiếu / kiểm kê. */
+    public function updateItem(User $actor, int $itemId, int $packSize, int $reorder, ?int $categoryId = null): void
     {
         $this->auth->requireAdmin($actor);
         if ($packSize < 1 || $packSize > 1000000) {
@@ -168,9 +198,10 @@ final class CatalogService
         if ($reorder < 0 || $reorder > 1000000) {
             throw new DomainError('Định mức tồn tối thiểu phải từ 0 đến 1.000.000');
         }
+        $this->requireCategory($categoryId);
         $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
-        $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ? WHERE id = ?', [$packSize, $reorder, $itemId]);
-        $this->audit->record($actor->id, 'item.update', 'item', $itemId, "{$item['ma_hang']} · quy cách $packSize · định mức $reorder");
+        $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ?, danh_muc_id = ? WHERE id = ?', [$packSize, $reorder, $categoryId, $itemId]);
+        $this->audit->record($actor->id, 'item.update', 'item', $itemId, "{$item['ma_hang']} · quy cách $packSize · định mức $reorder · danh mục #" . ($categoryId ?? '—'));
     }
 
     /** Thêm lô cho mặt hàng quản lý theo lô — tài khoản được giao chức năng «Thêm lô hàng». */

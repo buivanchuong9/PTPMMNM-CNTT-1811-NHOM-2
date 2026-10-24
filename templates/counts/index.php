@@ -1,4 +1,5 @@
 <?php /** @var array $rows @var array $statusCounts @var array $summary @var array $allWarehouses */
+$tones = ['' => 'all', 'OPEN' => 'info', 'REVIEW' => 'warn', 'CLOSED' => 'ok', 'CANCELLED' => 'bad'];
 $tabs = ['' => 'Tất cả', 'OPEN' => 'Đang kiểm đếm', 'REVIEW' => 'Chờ duyệt', 'CLOSED' => 'Đã đóng', 'CANCELLED' => 'Đã huỷ'];
 $total = array_sum($statusCounts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['status' => $status, 'warehouse' => $wh], $over), fn($v) => $v !== null && $v !== ''));
@@ -22,7 +23,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['status' => 
 
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => $label): $c = $k === '' ? $total : ($statusCounts[$k] ?? 0); ?>
-  <a href="/counts?<?= e($qs(['status' => $k])) ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($c) ?></span></a>
+  <a href="/counts?<?= e($qs(['status' => $k])) ?>" data-tone="<?= $tones[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($c) ?></span></a>
   <?php endforeach; ?>
 </nav>
 <?php if ($user->isAdmin): ?>
@@ -35,7 +36,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['status' => 
   <thead><tr><th>Mã đợt</th><th>Kho</th><th>Trạng thái</th><th>Tiến độ đếm</th><th class="num">Dòng lệch</th><th class="num">Lệch ròng</th><th>Người lập / duyệt</th><th>Phiếu điều chỉnh</th><th>Mở lúc</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $c): $pct = $c['line_total'] ? round($c['counted'] / $c['line_total'] * 100) : 0; $net = (int)$c['net_variance']; ?>
-    <tr><td><a href="/counts/<?= (int)$c['id'] ?>"><b><?= e($c['ma']) ?></b></a></td><td><span class="wh-code"><?= e($c['wh_code']) ?></span></td><td><?= status_tag($c['trang_thai']) ?></td>
+    <tr data-tone="<?= status_tone($c['trang_thai']) ?>"><td><a href="/counts/<?= (int)$c['id'] ?>"><b><?= e($c['ma']) ?></b></a></td><td><span class="wh-code"><?= e($c['wh_code']) ?></span></td><td><?= status_tag($c['trang_thai']) ?></td>
       <td><div class="bar sm"><i style="--w:<?= $pct ?>%"></i></div><small class="muted"><?= n($c['counted']) ?>/<?= n($c['line_total']) ?></small></td>
       <td class="num"><?= (int)$c['variances'] > 0 ? '<span class="tag tag-warn">' . n($c['variances']) . '</span>' : '<span class="muted">0</span>' ?></td>
       <td class="num <?= $net > 0 ? 'pos' : ($net < 0 ? 'neg' : '') ?>"><?= $c['counted'] ? signed($net) : '—' ?></td>

@@ -82,6 +82,7 @@ final class App
         $r->get('/items', [C\AdminController::class, 'items']);
         $r->post('/items', [C\AdminController::class, 'addItem']);
         $r->post('/items/update', [C\AdminController::class, 'updateItem']);
+        $r->post('/categories', [C\AdminController::class, 'addCategory']);
         $r->post('/units', [C\AdminController::class, 'addUnit']);
         $r->post('/batches', [C\AdminController::class, 'addBatch']);
         $r->get('/users', [C\AdminController::class, 'users']);
