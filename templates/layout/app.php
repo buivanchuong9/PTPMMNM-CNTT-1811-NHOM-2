@@ -79,7 +79,6 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
         <?php endforeach; ?>
       <?php endforeach; ?>
     </nav>
-    <p class="side-foot"><?= e(APP_NAME) ?> · MIT<br>Dữ liệu demo — không dùng thông tin thật.</p>
   </aside>
   <div class="main-wrap">
   <main id="main" tabindex="-1">
