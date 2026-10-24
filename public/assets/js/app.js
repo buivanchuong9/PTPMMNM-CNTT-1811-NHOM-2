@@ -157,6 +157,16 @@
     const wrap = picker.querySelector('#pick-wrap'), empty = picker.querySelector('#pick-empty'), sum = picker.querySelector('#pick-sum');
     const whSelect = form.querySelector('[name=warehouse_id], [name=from_wh]'); // ô chọn (quản trị) hoặc kho cố định của tài khoản
     let shown = [], active = -1;
+    // Phiếu nhập: chỉ hiện mặt hàng của nhà cung cấp đã chọn
+    const supSel = form.querySelector('#supplier-select');
+    const supId = () => (supSel && supSel.selectedOptions[0] ? supSel.selectedOptions[0].dataset.sup || '' : '');
+    const catSel = picker.querySelector('#pick-cat'), supFilter = picker.querySelector('#pick-sup');   // ô lọc danh mục / nhà cung cấp (phiếu xuất, điều chuyển…)
+    const pool = () => {
+      let base = supSel ? (supId() ? items.filter((i) => (i.sup || []).map(String).includes(supId())) : []) : items;
+      if (catSel && catSel.value) base = base.filter((i) => String(i.cat) === catSel.value);
+      if (supFilter && supFilter.value) base = base.filter((i) => (i.sup || []).map(String).includes(supFilter.value));
+      return base;
+    };
 
     const stockOf = (k) => {
       const wh = whSelect ? whSelect.value : '';
@@ -168,15 +178,26 @@
     const open = (on) => { list.hidden = !on; search.setAttribute('aria-expanded', on ? 'true' : 'false'); };
     const render = () => {
       const q = search.value.trim();
-      const all = q ? items.filter((i) => matches(i.hay, q)) : items;
+      const base = pool();
+      const all = q ? base.filter((i) => matches(i.hay, q)) : base;
       shown = all.slice(0, SUGGEST);
       if (active >= shown.length) active = shown.length - 1;
       list.innerHTML = shown.length
         ? shown.map((i, n) => `<li role="option" data-n="${n}" class="${n === active ? 'on' : ''}"><span><b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}</span><small class="muted">${stockText(i)}</small></li>`).join('')
           + (all.length > shown.length ? `<li class="more">… còn ${all.length - shown.length} kết quả nữa — gõ thêm để thu hẹp</li>` : '')
-        : '<li class="none">Không tìm thấy mặt hàng phù hợp</li>';
+        : `<li class="none">${supSel && !supId() ? 'Hãy chọn nhà cung cấp trước' : supSel && !base.length ? 'Nhà cung cấp này chưa được gắn mặt hàng nào' : 'Không tìm thấy mặt hàng phù hợp'}</li>`;
       open(true);
+      fit();
     };
+
+    // Danh sách gợi ý luôn nằm gọn trong màn hình và tự cuộn: nếu ô tìm sát đáy thì cuộn trang lên một chút, rồi giới hạn chiều cao theo chỗ còn trống
+    const fit = () => {
+      const box = search.getBoundingClientRect();
+      if (window.innerHeight - box.bottom < 260) window.scrollBy({ top: Math.min(box.top - 90, 260 - (window.innerHeight - box.bottom)), behavior: 'auto' });
+      const room = window.innerHeight - search.getBoundingClientRect().bottom - 20;
+      list.style.maxHeight = Math.max(180, Math.min(340, room)) + 'px';
+    };
+    window.addEventListener('resize', () => { if (!list.hidden) fit(); });
 
     const refresh = () => {
       const trs = [...body.rows];
@@ -189,6 +210,7 @@
         cell.textContent = s === null ? '—' : vn.format(s);
         let msg = '';
         if (!/^\d+$/.test(raw) || qty < 1) msg = raw.startsWith('-') ? 'Không được nhập số âm' : 'Số lượng phải là số nguyên dương';
+        else if (qty > 1000000) msg = 'Tối đa 1.000.000 mỗi dòng';
         else if (check && s !== null && qty > s) msg = s === 0 ? 'Kho đã hết hàng, không thể xuất' : `Vượt tồn kho — chỉ còn ${vn.format(s)}`;
         tr.classList.toggle('over', !!msg);
         tr.dataset.err = msg;
@@ -278,6 +300,14 @@
       }
     });
     if (whSelect) whSelect.addEventListener('change', () => { refresh(); if (!list.hidden) render(); });
+    [catSel, supFilter].forEach((sel) => { if (sel) sel.addEventListener('change', () => { render(); search.focus(); }); });
+    if (supSel) supSel.addEventListener('change', () => {
+      const ok = new Set(pool().map((i) => i.k));
+      [...body.rows].forEach((tr) => { if (!ok.has(tr.dataset.k)) tr.remove(); });   // dòng của nhà cung cấp trước bị bỏ
+      refresh(); if (!list.hidden) render();
+      search.placeholder = supId() ? 'Bấm để chọn, hoặc gõ tên / SKU để tìm trong hàng của nhà cung cấp…' : 'Hãy chọn nhà cung cấp trước…';
+    });
+    if (supSel) search.placeholder = 'Hãy chọn nhà cung cấp trước…';
 
     // Phiếu không có dòng nào thì không gửi (bắt ở giai đoạn capture để chạy trước khoá chống bấm đúp)
     form.addEventListener('submit', (ev) => {
@@ -456,6 +486,7 @@
         }
         const fl = dlg.querySelector('[data-dlg-label]');
         if (fl) fl.textContent = open.dataset.fillLabel || '';
+        try { const ids = String(JSON.parse(open.dataset.fill || '{}').supplier_ids ?? '').split(','); dlg.querySelectorAll('[data-sup-check]').forEach((c) => { c.checked = ids.includes(c.value); }); } catch (e) { /* bỏ qua */ }
         // sau khi điền: đồng bộ ô kho theo vai trò; [data-fill-text="khoá"] nhận chữ từ cùng JSON (VD: nhãn nút Khoá / Mở khoá)
         dlg.querySelectorAll('select[data-role-select]').forEach((s) => s.dispatchEvent(new Event('change')));
         try { const fd = JSON.parse(open.dataset.fill || '{}'); dlg.querySelectorAll('[data-fill-text]').forEach((el) => { if (fd[el.dataset.fillText] !== undefined) el.textContent = fd[el.dataset.fillText]; }); } catch (e) { /* bỏ qua */ }

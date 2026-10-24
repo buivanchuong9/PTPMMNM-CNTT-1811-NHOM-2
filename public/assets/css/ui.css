@@ -352,3 +352,14 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 .cat-bar .cat-tabs a[hidden] { display: none !important; }
 .filters .date-f { display: inline-flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; font-weight: 600; color: var(--ink-2); }
 .filters .date-f input { width: auto; }
+.sup-pick { display: grid; gap: 4px; max-height: 170px; overflow-y: auto; margin: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.sup-pick legend { padding: 0 6px; font-weight: 600; color: var(--ink-2); }
+.sup-pick .check { margin: 0; }
+.form .row-3 { align-items: start; }
+.pick-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.pick-filters label { display: grid; gap: 4px; margin: 0; font-weight: 600; color: var(--ink-2); }
+#pick-list { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#pick-list::-webkit-scrollbar { width: 8px; } #pick-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+.new-customer { margin: 0 0 14px; padding: 12px 16px 14px; border: 1px dashed var(--brand); border-radius: 12px; background: var(--brand-50); }
+.new-customer[hidden] { display: none; }
+.new-customer legend { padding: 0 8px; font-weight: 700; color: var(--brand-600); }
