@@ -324,3 +324,31 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 .welcome-progress { position: absolute; left: 50%; top: calc(50% + 54px + 176px); width: min(280px, 62vw); height: 7px; margin-left: calc(min(280px, 62vw) / -2); border-radius: 7px; background: rgba(255, 255, 255, .22); overflow: hidden; }
 .welcome-progress i { display: block; height: 100%; border-radius: 7px; background: var(--brand); box-shadow: 0 0 10px var(--brand); transform-origin: left center; animation: welcome-fill 1.9s linear both; }
 @media (prefers-reduced-motion: reduce) { .welcome { display: none; } }
+
+/* Tab trạng thái theo màu: tất cả = trắng, chờ = vàng, xác nhận/đóng = xanh, huỷ = đỏ, đang kiểm = xanh dương */
+.tabs a[data-tone] { --tone: var(--ink-2); --tone-bg: var(--bg); }
+.tabs a[data-tone="warn"] { --tone: #b45309; --tone-bg: #fef3c7; --tone-solid: #f59e0b; }
+.tabs a[data-tone="ok"] { --tone: #15803d; --tone-bg: #dcfce7; --tone-solid: #16a34a; }
+.tabs a[data-tone="bad"] { --tone: #b91c1c; --tone-bg: #fee2e2; --tone-solid: #dc2626; }
+.tabs a[data-tone="info"] { --tone: #0369a1; --tone-bg: #e0f2fe; --tone-solid: #0ea5e9; }
+.tabs a[data-tone]:not([data-tone="all"]) { color: var(--tone); }
+.tabs a[data-tone]:not([data-tone="all"]) .count { background: var(--tone-bg); color: var(--tone); }
+.tabs a[data-tone]:not([data-tone="all"]):hover { background: var(--tone-bg); color: var(--tone); }
+.tabs a.active[data-tone]:not([data-tone="all"]) { background: var(--tone-solid); color: #fff; }
+.tabs a.active[data-tone]:not([data-tone="all"]) .count { background: rgba(255,255,255,.28); color: #fff; }
+.tabs a.active[data-tone="all"] { background: #fff; color: #111827; box-shadow: inset 0 0 0 1.5px #cbd5e1, 0 1px 3px rgba(0,0,0,.08); }
+.tabs a.active[data-tone="all"] .count { background: #eef0f4; color: #111827; }
+:root[data-theme="dark"] .tabs a[data-tone="warn"] { --tone: #fbbf24; --tone-bg: rgba(245,158,11,.18); }
+:root[data-theme="dark"] .tabs a[data-tone="ok"] { --tone: #4ade80; --tone-bg: rgba(34,197,94,.18); }
+:root[data-theme="dark"] .tabs a[data-tone="bad"] { --tone: #f87171; --tone-bg: rgba(239,68,68,.18); }
+:root[data-theme="dark"] .tabs a[data-tone="info"] { --tone: #7cc4f5; --tone-bg: rgba(14,165,233,.18); }
+
+/* Thanh danh mục hàng hoá: một hàng, trượt ngang + ô tìm danh mục */
+.cat-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 5px 8px 5px 5px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.cat-bar .cat-search { flex: 0 0 190px; min-height: 36px; margin: 0; padding: 4px 14px; border-radius: var(--r-pill); }
+.cat-bar .cat-tabs { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; padding: 0; border: 0; background: transparent; border-radius: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.cat-bar .cat-tabs a { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 700px) { .cat-bar { flex-direction: column; align-items: stretch; border-radius: 16px; } .cat-bar .cat-search { flex-basis: auto; } }
+.cat-bar .cat-tabs a[hidden] { display: none !important; }
+.filters .date-f { display: inline-flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; font-weight: 600; color: var(--ink-2); }
+.filters .date-f input { width: auto; }

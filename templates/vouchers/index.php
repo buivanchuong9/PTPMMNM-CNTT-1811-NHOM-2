@@ -1,7 +1,8 @@
 <?php /** @var array $rows @var array $counts */
+$tones = ['' => 'all', 'DRAFT' => 'warn', 'CONFIRMED' => 'ok', 'CANCELLED' => 'bad'];
 $tabs = ['' => 'Tất cả', 'DRAFT' => 'Chờ xác nhận', 'CONFIRMED' => 'Đã xác nhận', 'CANCELLED' => 'Đã huỷ'];
 $total = array_sum($counts);
-$qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh], $over), fn($v) => $v !== null && $v !== ''));
+$qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh, 'from' => $from, 'to' => $to, 'sort' => $sort === 'old' ? 'old' : null], $over), fn($v) => $v !== null && $v !== ''));
 ?>
 <header class="page-head">
   <div><h1>Phiếu nhập xuất kho</h1></div>
@@ -9,7 +10,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => $label): $n = $k === '' ? $total : ($counts[$k] ?? 0); ?>
-  <a href="/vouchers?<?= e($qs(['status' => $k])) ?>"<?= ($status ?? '') === $k || ($k === '' && !$status) ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($n) ?></span></a>
+  <a href="/vouchers?<?= e($qs(['status' => $k])) ?>" data-tone="<?= $tones[$k] ?>"<?= ($status ?? '') === $k || ($k === '' && !$status) ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($n) ?></span></a>
   <?php endforeach; ?>
 </nav>
 <form class="filters" method="get">
@@ -18,12 +19,16 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
   <select name="type" aria-label="Loại"><option value="">Mọi loại</option><?php foreach (TYPE_LABELS as $k => [$l]): ?><option value="<?= $k ?>"<?= $k === $type ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
   <?php if ($user->isAdmin): ?><select name="warehouse" aria-label="Kho"><?= wh_options($warehouses, $wh, 'Mọi kho') ?></select>
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma'] . ' — ' . $warehouses[0]['ten']) ?></span><?php endif; ?>
+  <label class="date-f">Từ ngày <input type="date" name="from" value="<?= e((string)$from) ?>" aria-label="Từ ngày"></label>
+  <label class="date-f">Đến ngày <input type="date" name="to" value="<?= e((string)$to) ?>" aria-label="Đến ngày"></label>
+  <select name="sort" aria-label="Sắp xếp theo thời gian"><option value="new"<?= $sort === 'new' ? ' selected' : '' ?>>Mới nhất trước</option><option value="old"<?= $sort === 'old' ? ' selected' : '' ?>>Cũ nhất trước</option></select>
+  <?php if ($from || $to || $sort === 'old'): ?><a class="btn btn-ghost" href="/vouchers?<?= e($qs(['from' => null, 'to' => null, 'sort' => null])) ?>">Xoá lọc thời gian</a><?php endif; ?>
 </form>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>Mã phiếu nhập xuất</th><th>Loại</th><th>Kho</th><th>Đối tác / lý do</th><th class="num">Số lượng</th><th>Trạng thái</th><th>Người lập</th><th>Thời gian</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $v): ?>
-    <tr><td><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= e($v['ma']) ?></b></a></td><td><?= type_chip($v['loai']) ?></td><td class="nw"><span class="wh-code"><?= e($v['wh_code']) ?></span><?= $v['cp_code'] ? ' <span class="arrow">' . ($v['loai'] === 'TRANSFER_IN' ? '←' : '→') . '</span> <span class="wh-code">' . e($v['cp_code']) . '</span>' : '' ?></td>
+    <tr data-tone="<?= status_tone($v['trang_thai']) ?>"><td><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= e($v['ma']) ?></b></a></td><td><?= type_chip($v['loai']) ?></td><td class="nw"><span class="wh-code"><?= e($v['wh_code']) ?></span><?= $v['cp_code'] ? ' <span class="arrow">' . ($v['loai'] === 'TRANSFER_IN' ? '←' : '→') . '</span> <span class="wh-code">' . e($v['cp_code']) . '</span>' : '' ?></td>
       <td class="muted wrap"><?= e($v['doi_tac'] ?: ($v['ly_do'] ?: '—')) ?></td><td class="num"><b><?= n($v['total_qty']) ?></b> <small class="muted"><?= n($v['line_count']) ?> dòng</small></td><td><?= voucher_status_tag($v) ?></td>
       <td class="nw"><?= e($v['creator_name']) ?></td><td class="muted"><?= e(dt_short($v['ngay_tao'])) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="8" class="empty">Không có phiếu nhập xuất phù hợp.</td></tr><?php endif; ?>

@@ -113,9 +113,17 @@ final class DemoSeed
             'STRAP' => 4, 'GLOVE' => 12, 'CUTTER' => 24, 'PHN-A15' => 10, 'PHN-A25' => 10, 'EARBUD' => 20, 'CHG-65W' => 20, 'CAB-USBC' => 50, 'PWR-20K' => 10,
             'SPK-BT' => 10, 'WATCH-S' => 10, 'MLK-1L' => 12, 'NDL-PK' => 10, 'CFE-3IN1' => 24, 'TEA-GRN' => 24, 'SOAP-500' => 24, 'DET-3KG' => 6,
             'VIT-C' => 20, 'MASK-50' => 40, 'OIL-1L' => 12, 'SGR-1KG' => 20];
+        $catDefs = ['PKG' => 'Vật tư đóng gói', 'TOOL' => 'Dụng cụ & bảo hộ', 'ELEC' => 'Điện tử', 'FOOD' => 'Thực phẩm & đồ uống', 'HOME' => 'Hoá mỹ phẩm & gia dụng', 'MED' => 'Y tế & sức khoẻ'];
+        $cat = [];
+        foreach ($catDefs as $code => $name) {
+            $cat[$code] = $catalog->addCategory($admin, $code, $name);
+        }
+        $catOf = ['GLOVE' => 'TOOL', 'CUTTER' => 'TOOL', 'PHN-A15' => 'ELEC', 'PHN-A25' => 'ELEC', 'EARBUD' => 'ELEC', 'CHG-65W' => 'ELEC', 'CAB-USBC' => 'ELEC',
+            'PWR-20K' => 'ELEC', 'SPK-BT' => 'ELEC', 'WATCH-S' => 'ELEC', 'MLK-1L' => 'FOOD', 'NDL-PK' => 'FOOD', 'CFE-3IN1' => 'FOOD', 'TEA-GRN' => 'FOOD',
+            'OIL-1L' => 'FOOD', 'SGR-1KG' => 'FOOD', 'SOAP-500' => 'HOME', 'DET-3KG' => 'HOME', 'VIT-C' => 'MED', 'MASK-50' => 'MED'];
         $item = [];   // sku => ['id'=>, 'batches'=>[batchId,…]]
         foreach ($defs as [$sku, $name, $un, $lot, $reorder]) {
-            $id = $catalog->addItem($admin, $sku, $name, $unit[$un], (bool)$lot, $reorder, $pack[$sku] ?? 1);
+            $id = $catalog->addItem($admin, $sku, $name, $unit[$un], (bool)$lot, $reorder, $pack[$sku] ?? 1, $cat[$catOf[$sku] ?? 'PKG']);
             $batches = [];
             if ($lot) {
                 foreach ([['L2601A', '+5 months'], ['L2602B', '+11 months']] as [$no, $rel]) {

@@ -98,6 +98,7 @@ final class Migrator
     /** Cột thêm ở các phiên bản sau: [bảng, cột, định nghĩa]. Bảng mới dựng từ 001_schema.sql đã có sẵn cột này. */
     private const ADDED_COLUMNS = [
         ['nguoi_dung', 'anh_dai_dien', 'varchar(255) NULL'],
+        ['mat_hang', 'danh_muc_id', 'integer NULL'],
     ];
 
     private function addColumnIfMissing(string $table, string $column, string $definition): bool

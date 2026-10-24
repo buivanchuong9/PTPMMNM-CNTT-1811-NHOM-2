@@ -54,7 +54,7 @@ function dt(?string $v, bool $time = true): string
 }
 
 const STATUS_LABELS = [
-    'DRAFT' => ['Chờ xác nhận', 'warn'], 'CONFIRMED' => ['Đã xác nhận', 'ok'], 'CANCELLED' => ['Đã huỷ', 'muted'],
+    'DRAFT' => ['Chờ xác nhận', 'warn'], 'CONFIRMED' => ['Đã xác nhận', 'ok'], 'CANCELLED' => ['Đã huỷ', 'danger'],
     'OPEN' => ['Đang kiểm đếm', 'info'], 'REVIEW' => ['Chờ duyệt chênh lệch', 'warn'], 'CLOSED' => ['Đã đóng', 'ok'],
 ];
 
@@ -62,6 +62,12 @@ const TYPE_LABELS = [
     'RECEIPT' => ['Phiếu nhập', 'in'], 'ISSUE' => ['Phiếu xuất', 'out'], 'TRANSFER_OUT' => ['Điều chuyển đi', 'xfer'],
     'TRANSFER_IN' => ['Điều chuyển đến', 'xfer'], 'ADJUSTMENT' => ['Điều chỉnh', 'adj'],
 ];
+
+/** Tông màu hàng danh sách theo trạng thái (dùng cho thuộc tính data-tone). */
+function status_tone(string $status): string
+{
+    return ['DRAFT' => 'warn', 'REVIEW' => 'warn', 'CONFIRMED' => 'ok', 'CLOSED' => 'ok', 'CANCELLED' => 'bad', 'OPEN' => 'info'][$status] ?? 'all';
+}
 
 /** Nhãn trạng thái dạng "tag" kiểu cổng vận đơn. */
 function status_tag(string $status): string

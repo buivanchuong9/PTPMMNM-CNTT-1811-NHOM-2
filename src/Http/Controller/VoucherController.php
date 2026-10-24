@@ -40,9 +40,16 @@ final class VoucherController extends Controller
         $q = $r->search('q');
         $wh = $r->int('warehouse');
         $scope = $wh && in_array($wh, $ids, true) ? [$wh] : $ids;
-        $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q), $r->int('page'));
+        $date = fn(string $k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $r->str($k)) && checkdate((int)substr($r->str($k), 5, 2), (int)substr($r->str($k), 8, 2), (int)substr($r->str($k), 0, 4)) ? $r->str($k) : null;
+        [$from, $to] = [$date('from'), $date('to')];
+        if ($from && $to && $from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+        $sort = $r->str('sort') === 'old' ? 'old' : 'new';
+        $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q, $from, $to), $r->int('page'));
         return $this->render('vouchers/index', $user, 'vouchers', [
-            'rows' => $this->repo->search($scope, $type, $status, $q, $pg->per, $pg->offset), 'pg' => $pg,
+            'rows' => $this->repo->search($scope, $type, $status, $q, $pg->per, $pg->offset, $from, $to, $sort === 'old'), 'pg' => $pg,
+            'from' => $from, 'to' => $to, 'sort' => $sort,
             'counts' => $this->repo->statusCounts($scope),
             'type' => $type, 'status' => $status, 'q' => $q, 'wh' => $wh,
             'warehouses' => $this->warehouseRows($ids),

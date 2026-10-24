@@ -75,12 +75,12 @@ final class StockQuery
         $batchCols = $byBatch ? ', b.id AS lo_hang_id, b.so_lo, b.han_dung' : '';
         $group = $byBatch ? ', b.id, b.so_lo, b.han_dung' : '';
         $rows = $this->db->all(
-            "SELECT w.id AS kho_id, w.ma AS wh_code, i.id AS mat_hang_id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, u.ma AS unit $batchCols,
+            "SELECT w.id AS kho_id, w.ma AS wh_code, i.id AS mat_hang_id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, i.danh_muc_id, c.ten AS category, u.ma AS unit $batchCols,
                     SUM(m.bien_dong) AS so_luong, MAX(m.ngay_ghi_so) AS last_move
              FROM so_phat_sinh m JOIN kho w ON w.id = m.kho_id JOIN mat_hang i ON i.id = m.mat_hang_id
-             JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = m.lo_hang_id
+             JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = m.lo_hang_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
              WHERE m.kho_id IN ({$this->in($warehouseIds)}) AND (LOWER(i.ma_hang) LIKE ? OR LOWER(i.ten) LIKE ?)
-             GROUP BY w.id, w.ma, i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, u.ma $group
+             GROUP BY w.id, w.ma, i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, i.danh_muc_id, c.ten, u.ma $group
              " . ($includeZero ? '' : 'HAVING SUM(m.bien_dong) <> 0 ') . 'ORDER BY i.ma_hang, w.ma' . ($byBatch ? ', b.so_lo' : ''),
             [...$warehouseIds, "%$search%", "%$search%"]
         );
@@ -112,8 +112,8 @@ final class StockQuery
         if (!empty($f['item'])) { $where[] = 'm.mat_hang_id = ?'; $params[] = (int)$f['item']; }
         if (!empty($f['type'])) { $where[] = 'v.loai = ?'; $params[] = $f['type']; }
         if (!empty($f['q'])) { $where[] = '(LOWER(v.ma) LIKE ? OR LOWER(i.ma_hang) LIKE ? OR LOWER(i.ten) LIKE ? OR LOWER(b.so_lo) LIKE ?)'; array_push($params, ...array_fill(0, 4, '%' . $f['q'] . '%')); }
-        if (!empty($f['from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['from'])) { $where[] = 'm.ngay_ghi_so >= ?'; $params[] = $f['from'] . ' 00:00:00'; }
-        if (!empty($f['to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['to'])) { $where[] = 'm.ngay_ghi_so < DATE_ADD(?, INTERVAL 1 DAY)'; $params[] = $f['to'] . ' 00:00:00'; }
+        if (!empty($f['from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['from'])) { $where[] = 'm.ngay_ghi_so >= ?'; $params[] = gmdate('Y-m-d H:i:s', strtotime($f['from'] . ' 00:00:00 UTC') - 7 * 3600); }   // ngày theo giờ VN (UTC+7), sổ lưu UTC
+        if (!empty($f['to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $f['to'])) { $where[] = 'm.ngay_ghi_so < ?'; $params[] = gmdate('Y-m-d H:i:s', strtotime($f['to'] . ' 00:00:00 UTC') + 17 * 3600); }
         return [implode(' AND ', $where), $params];
     }
 
@@ -139,7 +139,7 @@ final class StockQuery
         [$where, $params] = $this->historyFilter($warehouseIds, $f);
         return $this->db->all(
             'SELECT m.*, w.ma AS wh_code, i.ma_hang, i.ten, u.ma AS unit, b.so_lo, v.ma AS voucher_code, v.loai, v.ly_do, v.ghi_chu '
-            . self::HISTORY_FROM . ' WHERE ' . $where . ' ORDER BY m.id DESC LIMIT ' . max(1, min(5000, $limit)) . ' OFFSET ' . max(0, $offset),
+            . self::HISTORY_FROM . ' WHERE ' . $where . ' ORDER BY m.id ' . (($f['sort'] ?? '') === 'old' ? 'ASC' : 'DESC') . ' LIMIT ' . max(1, min(5000, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
     }

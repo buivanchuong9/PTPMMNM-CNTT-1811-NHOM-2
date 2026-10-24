@@ -67,15 +67,22 @@ final class AdminController extends Controller
     public function addItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0);
+            $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
         }, 'Đã thêm mặt hàng.', '/inventory');
     }
 
     public function updateItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1);
-        }, 'Đã cập nhật quy cách lô.', '/inventory');
+            $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
+        }, 'Đã cập nhật mặt hàng.', '/inventory');
+    }
+
+    public function addCategory(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(function () use ($r, $user) {
+            $this->catalog->addCategory($user, $r->str('code'), $r->str('name'));
+        }, 'Đã thêm danh mục hàng hoá.', '/inventory');
     }
 
     public function addUnit(Request $r, array $p, ?User $user): Response
