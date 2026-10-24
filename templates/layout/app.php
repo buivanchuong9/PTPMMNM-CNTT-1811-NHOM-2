@@ -203,6 +203,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
   <?php if (!$hasErr): ?><i class="nt-bar" aria-hidden="true"></i><?php endif; ?>
 </dialog>
 <?php endif; ?>
+<?php if (!empty($old)): ?><div id="old-input" hidden data-action="<?= e($old['action']) ?>" data-old="<?= e(json_encode($old['data'], JSON_UNESCAPED_UNICODE)) ?>"></div><?php endif; ?>
 <script src="/assets/vendor/chart.umd.min.js" defer></script>
 <script src="/assets/js/dialog-fx.js" defer></script>
 <script src="/assets/js/app.js" defer></script>

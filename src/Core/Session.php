@@ -95,6 +95,22 @@ final class Session
         return $f;
     }
 
+    /** Lưu lại dữ liệu form vừa gửi (trừ mật khẩu / token) để điền lại khi bị từ chối — chỉ dùng cho lần hiển thị kế tiếp. */
+    public function rememberInput(string $action, array $post): void
+    {
+        $skip = fn(string $k) => $k === 'csrf' || $k === 'idem' || stripos($k, 'pass') !== false || stripos($k, 'mat_khau') !== false;
+        $data = array_filter($post, fn($v, $k) => !$skip((string)$k) && (is_string($v) || is_array($v)), ARRAY_FILTER_USE_BOTH);
+        $_SESSION['old'] = ['action' => $action, 'data' => $data];
+    }
+
+    /** @return ?array{action:string,data:array} */
+    public function takeOld(): ?array
+    {
+        $o = $_SESSION['old'] ?? null;
+        unset($_SESSION['old']);
+        return is_array($o) ? $o : null;
+    }
+
     /** Số lần nhập sai mật khẩu (đúng tên đăng nhập) trước khi tạm khoá. */
     public const LOGIN_MAX_FAILS = 5;
     /** Thời gian tạm khoá (giây) theo từng đợt khoá liên tiếp; đợt cuối lặp lại cho các lần sau. */

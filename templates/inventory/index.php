@@ -1,11 +1,12 @@
-<?php /** @var array $warehouses @var array $shown @var array $rows @var array $items @var array $units @var array $categories @var int $supF @var list<array> $suppliers @var int $cat @var int $uncategorized @var int $totalItems */ ?>
+<?php /** @var array $warehouses @var array $shown @var array $rows @var array $items @var array $units @var array $categories @var bool $canAddCat @var int $supF @var list<array> $suppliers @var int $cat @var int $uncategorized @var int $totalItems */ ?>
 <header class="page-head">
   <div><h1>Hàng hoá</h1></div>
   <div class="actions">
     <?php if ($auth->allows($user, \StockFlow\Domain\Permission::XemBaoCao)): ?><a class="btn btn-ghost" href="/reports/stock.csv"><?= icon('download') ?>Xuất CSV</a><?php endif; ?>
     <?php if ($user->isAdmin): ?><button type="button" data-dialog-open="item-dlg"><?= icon('plus') ?>Thêm mặt hàng</button>
       <button type="button" class="btn-ghost" data-dialog-open="unit-dlg"><?= icon('plus') ?>Thêm đơn vị tính</button>
-      <button type="button" class="btn-ghost" data-dialog-open="cat-dlg"><?= icon('plus') ?>Thêm danh mục</button><?php endif; ?>
+<?php endif; ?>
+    <?php if ($canAddCat): ?><button type="button" class="btn-ghost" data-dialog-open="cat-dlg"><?= icon('plus') ?>Thêm danh mục</button><?php endif; ?>
     <?php if ($canAddBatch): ?><button type="button" class="btn-ghost" data-dialog-open="batch-dlg"><?= icon('plus') ?>Thêm lô</button><?php endif; ?>
   </div>
 </header>
@@ -103,19 +104,21 @@
     <div class="actions"><button type="submit">Lưu</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
-<dialog id="cat-dlg" class="dlg" aria-labelledby="cat-dlg-t">
-  <form method="post" action="/categories" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-    <div class="dlg-head"><h2 id="cat-dlg-t">Thêm danh mục hàng hoá</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
-    <label>Mã danh mục<input name="code" required minlength="2" maxlength="30" pattern="[A-Za-z0-9._\-]{2,30}" title="2–30 ký tự: chữ không dấu, số, . _ -" placeholder="FOOD" autocomplete="off"></label>
-    <label>Tên danh mục<input name="name" required maxlength="100" placeholder="Thực phẩm & đồ uống"></label>
-    <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
-  </form>
-</dialog>
 <dialog id="unit-dlg" class="dlg" aria-labelledby="unit-dlg-t">
   <form method="post" action="/units" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="unit-dlg-t">Thêm đơn vị tính</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Ký hiệu<input name="code" required maxlength="20" placeholder="pallet" autocomplete="off"></label>
     <label>Tên đầy đủ<input name="name" required maxlength="60"></label>
+    <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+<?php endif; ?>
+<?php if ($canAddCat): ?>
+<dialog id="cat-dlg" class="dlg" aria-labelledby="cat-dlg-t">
+  <form method="post" action="/categories" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+    <div class="dlg-head"><h2 id="cat-dlg-t">Thêm danh mục hàng hoá</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <label>Mã danh mục<input name="code" required minlength="2" maxlength="30" pattern="[A-Za-z0-9._\-]{2,30}" title="2–30 ký tự: chữ không dấu, số, . _ -" placeholder="FOOD" autocomplete="off"></label>
+    <label>Tên danh mục<input name="name" required maxlength="100" placeholder="Thực phẩm & đồ uống"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
