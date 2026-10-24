@@ -54,6 +54,15 @@ final class Session
     {
         session_regenerate_id(true);
         $_SESSION['uid'] = $userId;
+        $_SESSION['welcome'] = true;   // trang đầu tiên sau đăng nhập có màn chào «xe tải chạy ngang màn hình»
+    }
+
+    /** Có màn chào sau đăng nhập không (chỉ hiện đúng một lần cho mỗi lần đăng nhập). */
+    public function takeWelcome(): bool
+    {
+        $on = !empty($_SESSION['welcome']);
+        unset($_SESSION['welcome']);
+        return $on;
     }
 
     public function logout(): void
