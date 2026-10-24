@@ -249,7 +249,7 @@ final class StockQuery
     {
         $ids = $this->auth->visibleWarehouseIds($user);
         if ($ids === []) {
-            return ['warehouses' => [], 'units' => 0, 'drafts' => 0, 'confirmed_today' => 0, 'low' => [], 'recent' => [], 'pending' => [], 'flow' => [], 'daily' => [], 'voucher_status' => [], 'stock_status' => [], 'top' => []];
+            return ['warehouses' => [], 'units' => 0, 'drafts' => 0, 'confirmed_today' => 0, 'low' => [], 'low_count' => 0, 'recent' => [], 'pending' => [], 'flow' => [], 'daily' => [], 'voucher_status' => [], 'stock_status' => [], 'top' => []];
         }
         $in = $this->in($ids);
         $perWh = $this->db->all(
@@ -261,7 +261,7 @@ final class StockQuery
             "SELECT i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma AS unit, SUM(m.bien_dong) AS so_luong FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
              LEFT JOIN so_phat_sinh m ON m.mat_hang_id = i.id AND m.kho_id IN ($in)
              WHERE i.hoat_dong AND i.dinh_muc_toi_thieu > 0 GROUP BY i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma
-             HAVING COALESCE(SUM(m.bien_dong),0) <= i.dinh_muc_toi_thieu ORDER BY COALESCE(SUM(m.bien_dong),0) - i.dinh_muc_toi_thieu LIMIT 6", $ids);
+             HAVING COALESCE(SUM(m.bien_dong),0) <= i.dinh_muc_toi_thieu ORDER BY COALESCE(SUM(m.bien_dong),0) - i.dinh_muc_toi_thieu", $ids);
         $pending = $this->db->all(
             "SELECT v.id, v.ma, v.loai, v.ngay_tao, w.ma AS wh_code, cu.ho_ten AS creator_name,
                     (SELECT COUNT(*) FROM chi_tiet_phieu_nhap_xuat l WHERE l.phieu_nhap_xuat_id = v.id) AS line_count
@@ -290,7 +290,8 @@ final class StockQuery
             'units' => array_sum(array_column($perWh, 'units')),
             'drafts' => array_sum(array_column($perWh, 'drafts')),
             'confirmed_today' => (int)$this->db->value("SELECT COUNT(*) FROM phieu_nhap_xuat WHERE trang_thai = 'CONFIRMED' AND kho_id IN ($in) AND ngay_xac_nhan >= CURRENT_DATE", $ids),
-            'low' => $low,
+            'low' => array_slice($low, 0, 6),
+            'low_count' => count($low),
             'pending' => $pending,
             'recent' => $this->history($ids, [], 8),
             'flow' => $this->flowByWarehouse($ids, 30),

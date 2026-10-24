@@ -60,8 +60,15 @@ final class StockCountService
         return $c;
     }
 
-    /** @return array<int,array> các đợt kiểm kê (mới nhất trước), tuỳ chọn lọc theo trạng thái. */
-    public function list(array $warehouseIds, ?string $status = null): array
+    /** Quá ngần này ngày chưa chốt đợt kiểm kê nào thì kho bị cảnh báo «quá hạn kiểm kê». */
+    public const DUE_DAYS = 30;
+
+    /**
+     * @param ?string $from / $to ngày YYYY-MM-DD theo giờ Việt Nam (UTC+7), lọc theo ngày mở đợt
+     * @param bool $withCancelled false ⇒ bỏ các đợt đã huỷ (trừ khi đang lọc đúng trạng thái CANCELLED)
+     * @return array<int,array> các đợt kiểm kê (mới nhất trước), tuỳ chọn lọc theo trạng thái.
+     */
+    public function list(array $warehouseIds, ?string $status = null, ?string $from = null, ?string $to = null, bool $withCancelled = true): array
     {
         if ($warehouseIds === []) {
             return [];
@@ -72,9 +79,23 @@ final class StockCountService
         if ($status !== null && $status !== '') {
             $where .= ' AND c.trang_thai = ?';
             $args[] = $status;
+        } elseif (!$withCancelled) {
+            $where .= " AND c.trang_thai <> 'CANCELLED'";
+        }
+        if ($from) {
+            $where .= ' AND c.ngay_tao >= ?';
+            $args[] = gmdate('Y-m-d H:i:s', strtotime("$from 00:00:00 UTC") - 7 * 3600);
+        }
+        if ($to) {
+            $where .= ' AND c.ngay_tao < ?';
+            $args[] = gmdate('Y-m-d H:i:s', strtotime("$to 00:00:00 UTC") + 17 * 3600);
         }
         return $this->db->all(
             "SELECT c.*, w.ma AS wh_code, w.ten AS wh_name, cu.ho_ten AS creator_name, au.ho_ten AS approver_name,
+                    (SELECT m.ho_ten FROM nguoi_dung m WHERE m.quan_ly_kho_id = c.kho_id AND m.hoat_dong LIMIT 1) AS manager_name,
+                    (SELECT u.ho_ten FROM nhat_ky a JOIN nguoi_dung u ON u.id = a.nguoi_dung_id WHERE a.doi_tuong = 'count' AND a.doi_tuong_id = c.id AND a.hanh_dong = 'count.cancel' ORDER BY a.id DESC LIMIT 1) AS cancel_by,
+                    (SELECT a.ngay_tao FROM nhat_ky a WHERE a.doi_tuong = 'count' AND a.doi_tuong_id = c.id AND a.hanh_dong = 'count.cancel' ORDER BY a.id DESC LIMIT 1) AS cancel_at,
+                    (SELECT a.chi_tiet FROM nhat_ky a WHERE a.doi_tuong = 'count' AND a.doi_tuong_id = c.id AND a.hanh_dong = 'count.cancel' ORDER BY a.id DESC LIMIT 1) AS cancel_reason,
                     (SELECT COUNT(*) FROM chi_tiet_kiem_ke l WHERE l.dot_kiem_ke_id = c.id) AS line_total,
                     (SELECT COUNT(*) FROM chi_tiet_kiem_ke l WHERE l.dot_kiem_ke_id = c.id AND l.so_luong_thuc_dem IS NOT NULL) AS counted,
                     (SELECT COUNT(*) FROM chi_tiet_kiem_ke l WHERE l.dot_kiem_ke_id = c.id AND l.so_luong_thuc_dem IS NOT NULL AND l.so_luong_thuc_dem <> l.so_luong_so_sach) AS variances,
@@ -106,13 +127,60 @@ final class StockCountService
             return [];
         }
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
-        return $this->db->all(
-            "SELECT w.id, w.ma, w.ten, COUNT(c.id) AS total,
+        $rows = $this->db->all(
+            "SELECT w.id, w.ma, w.ten, COUNT(CASE WHEN c.trang_thai <> 'CANCELLED' THEN c.id END) AS total,
                     COALESCE(SUM(c.trang_thai = 'OPEN'), 0) AS open_n, COALESCE(SUM(c.trang_thai = 'REVIEW'), 0) AS review_n,
                     COALESCE(SUM(c.trang_thai = 'CLOSED'), 0) AS closed_n, MAX(c.ngay_dong) AS last_closed
              FROM kho w LEFT JOIN dot_kiem_ke c ON c.kho_id = w.id WHERE w.id IN ($in) GROUP BY w.id, w.ma, w.ten ORDER BY w.ma",
             $warehouseIds
         );
+        foreach ($rows as &$r) {
+            $r['days_since'] = $r['last_closed'] ? (int)floor((time() - strtotime($r['last_closed'] . ' UTC')) / 86400) : null;
+            // quá hạn = chưa chốt lần nào hoặc đã lâu, và hiện không có đợt nào đang đếm / chờ duyệt
+            $r['due'] = !(int)$r['open_n'] && !(int)$r['review_n'] && ($r['days_since'] === null || $r['days_since'] > self::DUE_DAYS);
+        }
+        return $rows;
+    }
+
+    /**
+     * Lý do chênh lệch theo kho (các đợt chờ duyệt và đã đóng, không tính đợt huỷ): nhóm theo loại lý do (phần trước «: »).
+     * @return array<string,array<int,array{n:int,net:int}>> lý do ⇒ [kho_id ⇒ số dòng lệch + lệch ròng]
+     */
+    public function varianceReasons(array $warehouseIds, ?string $from = null, ?string $to = null): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($warehouseIds), '?'));
+        $args = $warehouseIds;
+        $when = '';
+        if ($from) {
+            $when .= ' AND c.ngay_tao >= ?';
+            $args[] = gmdate('Y-m-d H:i:s', strtotime("$from 00:00:00 UTC") - 7 * 3600);
+        }
+        if ($to) {
+            $when .= ' AND c.ngay_tao < ?';
+            $args[] = gmdate('Y-m-d H:i:s', strtotime("$to 00:00:00 UTC") + 17 * 3600);
+        }
+        $out = [];
+        foreach ($this->db->all(
+            "SELECT c.kho_id, COALESCE(NULLIF(SUBSTRING_INDEX(l.ly_do, ': ', 1), ''), 'Chưa ghi lý do') AS reason, COUNT(*) AS n,
+                    SUM(l.so_luong_thuc_dem - l.so_luong_so_sach) AS net
+             FROM chi_tiet_kiem_ke l JOIN dot_kiem_ke c ON c.id = l.dot_kiem_ke_id
+             WHERE c.kho_id IN ($in) AND c.trang_thai IN ('REVIEW','CLOSED') AND l.so_luong_thuc_dem IS NOT NULL AND l.so_luong_thuc_dem <> l.so_luong_so_sach $when
+             GROUP BY c.kho_id, reason", $args) as $r) {
+            $out[$r['reason']][(int)$r['kho_id']] = ['n' => (int)$r['n'], 'net' => (int)$r['net']];
+        }
+        uasort($out, fn($a, $b) => array_sum(array_column($b, 'n')) <=> array_sum(array_column($a, 'n')));
+        return $out;
+    }
+
+    /** Ai huỷ đợt, lúc nào, vì sao (từ nhật ký thao tác); null nếu đợt chưa bị huỷ. @return ?array{by:?string,at:string,reason:string} */
+    public function cancelInfo(int $id): ?array
+    {
+        $r = $this->db->one("SELECT u.ho_ten AS by_name, a.ngay_tao AS at, a.chi_tiet AS reason FROM nhat_ky a LEFT JOIN nguoi_dung u ON u.id = a.nguoi_dung_id
+                             WHERE a.doi_tuong = 'count' AND a.doi_tuong_id = ? AND a.hanh_dong = 'count.cancel' ORDER BY a.id DESC LIMIT 1", [$id]);
+        return $r ? ['by' => $r['by_name'], 'at' => $r['at'], 'reason' => (string)$r['reason']] : null;
     }
 
     /**
@@ -220,7 +288,7 @@ final class StockCountService
                 'adjusted' => $out['adjusted'], 'net' => $out['net']];
     }
 
-    public function cancel(User $user, int $id): void
+    public function cancel(User $user, int $id, string $reason = ''): void
     {
         $peek = $this->find($id);
         if (!$this->auth->can($user, (int)$peek['kho_id'], Permission::KiemKeDuyet)) {
@@ -230,6 +298,6 @@ final class StockCountService
         if ($n !== 1) {
             throw new DomainError('Không thể huỷ đợt kiểm kê này');
         }
-        $this->audit->record($user->id, 'count.cancel', 'count', $id, '');
+        $this->audit->record($user->id, 'count.cancel', 'count', $id, mb_substr(trim($reason), 0, 200));
     }
 }

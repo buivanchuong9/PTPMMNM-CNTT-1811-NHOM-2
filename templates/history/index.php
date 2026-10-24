@@ -8,10 +8,9 @@
   <?php elseif ($warehouses): ?><span class="tag tag-info"><?= e($warehouses[0]['ma']) ?></span><?php endif; ?>
   <select name="item" aria-label="Mặt hàng" data-combo><option value="">Mọi mặt hàng</option><?php foreach ($items as $i): ?><option value="<?= (int)$i['id'] ?>"<?= (int)$i['id'] === $f['item'] ? ' selected' : '' ?>><?= e($i['ma_hang'] . ' — ' . $i['ten']) ?></option><?php endforeach; ?></select>
   <select name="type" aria-label="Loại"><option value="">Mọi loại</option><?php foreach (TYPE_LABELS as $k => [$l]): ?><option value="<?= $k ?>"<?= $k === $f['type'] ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>
-  <label class="date-f">Từ ngày <input type="date" name="from" value="<?= e($f['from']) ?>" aria-label="Từ ngày"></label>
-  <label class="date-f">Đến ngày <input type="date" name="to" value="<?= e($f['to']) ?>" aria-label="Đến ngày"></label>
+  <?php $rangeSel = $f['rangeSel']; $from = $f['from']; $to = $f['to']; include __DIR__ . '/../partials/range_filter.php'; ?>
   <select name="sort" aria-label="Sắp xếp theo thời gian"><option value="">Mới nhất trước</option><option value="old"<?= $f['sort'] === 'old' ? ' selected' : '' ?>>Cũ nhất trước</option></select>
-  <?php if ($f['from'] || $f['to'] || $f['sort']): ?><a class="btn btn-ghost" href="/history?<?= e(http_build_query(array_filter(['q' => $f['q'], 'warehouse' => $f['warehouse'], 'item' => $f['item'], 'type' => $f['type']]))) ?>">Xoá lọc thời gian</a><?php endif; ?>
+  <?php if ($f['rangeSel'] || $f['sort']): ?><a class="btn btn-ghost" href="/history?<?= e(http_build_query(array_filter(['q' => $f['q'], 'warehouse' => $f['warehouse'], 'item' => $f['item'], 'type' => $f['type']]))) ?>">Xoá lọc thời gian</a><?php endif; ?>
 </form>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>#</th><th>Thời gian</th><th>Phiếu nhập xuất</th><th>Loại</th><th>Kho</th><th>Hàng / lô</th><th class="num">Biến động</th><th class="num">Tồn sau</th><th>Lý do / ghi chú</th></tr></thead>

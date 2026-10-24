@@ -10,6 +10,7 @@ foreach ($c['lines'] as $l) { if ($l['so_luong_thuc_dem'] !== null) { $d = (int)
     <p class="muted"><span class="wh-code"><?= e($c['wh_code']) ?></span> <?= e($c['wh_name']) ?> · mở <?= e(dt($c['ngay_tao'])) ?> bởi <?= e($c['creator_name']) ?><?= $c['ghi_chu'] !== '' ? ' · ' . e($c['ghi_chu']) : '' ?>
     <?php if ($c['adj_code']): ?> · <a href="/vouchers/<?= (int)$c['phieu_nhap_xuat_dieu_chinh_id'] ?>">Phiếu điều chỉnh <b><?= e($c['adj_code']) ?></b></a><?php endif; ?></p></div>
 </header>
+<?php if (!empty($cancel)): ?><div class="flash flash-muted"><?= icon('alert') ?><span>Đợt đã bị huỷ bởi <b><?= e($cancel['by'] ?? '—') ?></b> lúc <?= e(dt($cancel['at'])) ?>. Lý do: <?= e($cancel['reason'] !== '' ? $cancel['reason'] : 'không ghi') ?>.</span></div><?php endif; ?>
 <form method="post" class="card flush" data-count-form data-once>
   <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
   <div class="summary-strip"><span><b data-var-lines><?= n($varN) ?></b> dòng lệch</span><span>Chênh lệch ròng <b data-var-net class="<?= $net > 0 ? 'pos' : ($net < 0 ? 'neg' : '') ?>"><?= signed($net) ?></b></span><span class="muted small">Chỉ nhập những dòng <b>có thay đổi</b> so với sổ sách — dòng để trống coi như khớp. Điều chỉnh = thực đếm − sổ sách lúc mở đợt, cộng vào tồn hiện tại.</span></div>
@@ -40,6 +41,6 @@ foreach ($c['lines'] as $l) { if ($l['so_luong_thuc_dem'] !== null) { $d = (int)
       <button formaction="/counts/<?= (int)$c['id'] ?>/approve" data-confirm="Xác nhận chênh lệch và lập phiếu điều chỉnh để cập nhật lại tồn kho? Phiếu đã ghi sổ không thể xoá, chỉ sửa sai bằng một phiếu điều chỉnh khác.">Xác nhận chênh lệch & lập phiếu điều chỉnh</button>
       <button formaction="/counts/<?= (int)$c['id'] ?>/reject" class="btn-ghost">Trả lại để đếm lại</button>
     <?php elseif ($review): ?><span class="muted">Đang chờ người duyệt kho <?= e($c['wh_code']) ?> xác nhận.</span><?php endif; ?>
-    <?php if (($open || $review) && ($canCount || $canApprove)): ?><button formaction="/counts/<?= (int)$c['id'] ?>/cancel" class="btn-danger" data-confirm="Huỷ đợt kiểm kê này?">Huỷ đợt</button><?php endif; ?>
+    <?php if (($open || $review) && ($canCount || $canApprove)): ?><input type="text" name="cancel_reason" maxlength="200" class="cancel-reason" placeholder="Lý do huỷ (bắt buộc khi huỷ)" aria-label="Lý do huỷ đợt"><button formaction="/counts/<?= (int)$c['id'] ?>/cancel" class="btn-danger" data-confirm="Huỷ đợt kiểm kê này?" formnovalidate>Huỷ đợt</button><?php endif; ?>
   </div>
 </form>

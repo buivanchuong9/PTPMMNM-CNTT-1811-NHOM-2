@@ -6,13 +6,68 @@ declare(strict_types=1);
  * Từ đầu tiên viết thường, phần sau được tô màu nhấn trong logo chữ. Tên mã nguồn / lệnh `bin/stockflow` / CSDL `stockflow` giữ nguyên.
  */
 const APP_NAME = 'Chương Đại Dương';
-const APP_TAGLINE = 'Quản lý kho';
 
 /** Tên hệ thống dạng logo chữ: «Chương <b>Đại Dương</b>». */
 function app_brand(): string
 {
     $parts = explode(' ', APP_NAME, 2);
     return e($parts[0]) . (isset($parts[1]) ? ' <b>' . e($parts[1]) . '</b>' : '');
+}
+
+/** Mốc lọc thời gian nhanh ở các trang danh sách (khoá → nhãn). */
+const DATE_RANGES = ['today' => 'Hôm nay', 'yesterday' => 'Hôm qua', '7d' => '7 ngày qua', '1m' => '1 tháng qua', '3m' => '3 tháng qua'];
+
+/**
+ * Khoảng ngày [từ, đến] (theo giờ Việt Nam, UTC+7) của một mốc lọc nhanh; null nếu khoá không hợp lệ.
+ * @return ?array{0:string,1:string}
+ */
+function date_range(string $key): ?array
+{
+    $today = gmdate('Y-m-d', time() + 7 * 3600);
+    $ago = static fn(string $spec): string => gmdate('Y-m-d', strtotime("$today 00:00:00 UTC $spec"));
+    return match ($key) {
+        'today' => [$today, $today],
+        'yesterday' => [$ago('-1 day'), $ago('-1 day')],
+        '7d' => [$ago('-6 days'), $today],
+        '1m' => [$ago('-1 month'), $today],
+        '3m' => [$ago('-3 months'), $today],
+        default => null,
+    };
+}
+
+/** Bỏ dấu tiếng Việt và hạ chữ thường, giữ nguyên số ký tự (để dò vị trí khớp ở chuỗi gốc). */
+function fold_vn(string $s): string
+{
+    static $map = null;
+    if ($map === null) {
+        $from = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ';
+        $to = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd';
+        $map = array_combine(mb_str_split($from), mb_str_split($to));
+    }
+    return strtr(mb_strtolower($s), $map);
+}
+
+/** Escape rồi tô đậm phần khớp với từ khoá (không phân biệt hoa thường và dấu, giống cách tìm ở CSDL): «<mark class="hl">…</mark>». */
+function hl(?string $text, string $needle): string
+{
+    $text = (string)$text;
+    $needle = trim($needle);
+    if ($needle === '' || $text === '') {
+        return e($text);
+    }
+    $hay = fold_vn($text);
+    $key = fold_vn($needle);
+    if (mb_strlen($hay) !== mb_strlen($text) || $key === '') {
+        return e($text);   // ký tự lạ làm lệch độ dài: bỏ tô để không cắt sai
+    }
+    $out = '';
+    $pos = 0;
+    $len = mb_strlen($key);
+    while (($i = mb_strpos($hay, $key, $pos)) !== false) {
+        $out .= e(mb_substr($text, $pos, $i - $pos)) . '<mark class="hl">' . e(mb_substr($text, $i, $len)) . '</mark>';
+        $pos = $i + $len;
+    }
+    return $out . e(mb_substr($text, $pos));
 }
 
 /** Escape HTML đầu ra. */

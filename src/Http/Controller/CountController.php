@@ -31,11 +31,28 @@ final class CountController extends Controller
         $scope = $user->isAdmin && $wh !== null && in_array($wh, $visible, true) ? [$wh] : $visible;   // chỉ quản trị cấp cao mới chọn được kho
         $status = in_array($r->str('status'), ['OPEN', 'REVIEW', 'CLOSED', 'CANCELLED'], true) ? $r->str('status') : '';
         $countable = $this->auth->warehousesWith($user, Permission::KiemKeThucHien);
-        [$rows, $pg] = Paginator::of($this->counts->list($scope, $status), $r);
+        // lọc thời gian: mốc nhanh (range=today|yesterday|7d|1m|3m) thắng; 'custom' hoặc có from/to thì dùng ngày tự chọn
+        $validDate = fn(string $k) => preg_match('/^\d{4}-\d{2}-\d{2}$/', $r->str($k)) && checkdate((int)substr($r->str($k), 5, 2), (int)substr($r->str($k), 8, 2), (int)substr($r->str($k), 0, 4)) ? $r->str($k) : null;
+        if ($preset = date_range($r->str('range'))) {
+            [$from, $to] = $preset;
+            $rangeSel = $r->str('range');
+        } else {
+            [$from, $to] = [$validDate('from'), $validDate('to')];
+            if ($from && $to && $from > $to) {
+                [$from, $to] = [$to, $from];
+            }
+            $rangeSel = ($r->str('range') === 'custom' || $from || $to) ? 'custom' : '';
+        }
+        // «Tất cả» không gồm các đợt đã huỷ (chỉ xem ở tab «Đã huỷ»)
+        [$rows, $pg] = Paginator::of($this->counts->list($scope, $status, $from, $to, false), $r);
+        $statusCounts = $this->counts->statusCounts($scope);
         $all = $visible ? $this->db->all('SELECT id, ma, ten FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY ma') : [];
         return $this->render('counts/index', $user, 'counts', [
             'rows' => $rows, 'pg' => $pg, 'status' => $status, 'wh' => $scope === [$wh] ? $wh : null,
-            'statusCounts' => $this->counts->statusCounts($scope),
+            'statusCounts' => $statusCounts, 'totalActive' => array_sum($statusCounts) - ($statusCounts['CANCELLED'] ?? 0),
+            'from' => $from, 'to' => $to, 'rangeSel' => $rangeSel,
+            'reasons' => $user->isAdmin ? $this->counts->varianceReasons($scope, $from, $to) : [],
+            'dueDays' => StockCountService::DUE_DAYS,
             'allWarehouses' => $all,
             'summary' => $user->isAdmin ? $this->counts->summaryByWarehouse($visible) : [],
             'warehouses' => $countable ? $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong AND id IN (' . implode(',', array_map('intval', $countable)) . ') ORDER BY ma') : [],
@@ -54,7 +71,7 @@ final class CountController extends Controller
         $c = $this->counts->find((int)$p['id']);
         $this->auth->requireVisible($user, (int)$c['kho_id']);
         return $this->render('counts/show', $user, 'counts', [
-            'c' => $c,
+            'c' => $c, 'cancel' => $c['trang_thai'] === 'CANCELLED' ? $this->counts->cancelInfo((int)$c['id']) : null,
             'canCount' => $this->auth->can($user, (int)$c['kho_id'], Permission::KiemKeThucHien),
             'canApprove' => $this->auth->can($user, (int)$c['kho_id'], Permission::KiemKeDuyet),
             'reasons' => ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng', 'Xuất sai số lượng', 'Chưa ghi phiếu nhập xuất', 'Nhầm lô / nhầm hàng', 'Khác'],
@@ -127,6 +144,12 @@ final class CountController extends Controller
     public function cancel(Request $r, array $p, ?User $user): Response
     {
         $id = (int)$p['id'];
-        return $this->act(fn() => $this->counts->cancel($user, $id), 'Đã huỷ đợt kiểm kê.', "/counts/$id");
+        $reason = trim($r->str('cancel_reason'));
+        return $this->act(function () use ($user, $id, $reason) {
+            if ($reason === '') {
+                throw new DomainError('Ghi lý do huỷ đợt kiểm kê (ô «Lý do huỷ» cạnh nút Huỷ đợt).');
+            }
+            $this->counts->cancel($user, $id, $reason);
+        }, 'Đã huỷ đợt kiểm kê.', "/counts/$id");
     }
 }
