@@ -43,19 +43,18 @@
       <td class="muted"><?= e(pack_label((int)$r['so_luong'], (int)$r['quy_cach_lo'])) ?: '—' ?></td><td class="muted"><?= e(dt($r['last_move'])) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="9" class="empty">Không có tồn phù hợp.</td></tr><?php endif; ?>
   </tbody>
-<?php else: ?>
-  <thead><tr><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Nhà cung cấp</th><th>ĐVT</th><th>Quy cách lô</th><?php foreach ($shown as $w): $own = $mine && (int)$mine['id'] === (int)$w['id']; ?><th class="num" title="<?= e($w['ten'] . ($own ? ' (kho của bạn)' : ($w['quan_ly'] ? ' · Quản lý: ' . $w['quan_ly'] : ''))) ?>"><?= e($w['ma']) ?><?= $own ? ' <small>(bạn)</small>' : '' ?></th><?php endforeach; ?><th class="num">Tổng tồn</th><th>Quy đổi</th><th>Tình trạng</th><?php if ($user->isAdmin): ?><th></th><?php endif; ?></tr></thead>
+<?php else: $anyPack = (bool)array_filter($rows, fn($x) => (int)$x['quy_cach_lo'] > 1); ?>
+  <thead><tr><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Nhà cung cấp</th><th>ĐVT</th><?php if ($anyPack): ?><th>Đóng gói</th><?php endif; ?><?php foreach ($shown as $w): $own = $mine && (int)$mine['id'] === (int)$w['id']; ?><th class="num" title="<?= e($w['ten'] . ($own ? ' (kho của bạn)' : ($w['quan_ly'] ? ' · Quản lý: ' . $w['quan_ly'] : ''))) ?>"><?= e($w['ma']) ?><?= $own ? ' <small>(bạn)</small>' : '' ?></th><?php endforeach; ?><th class="num">Tổng tồn</th><th>Tình trạng</th><?php if ($user->isAdmin): ?><th></th><?php endif; ?></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): $pack = (int)$r['quy_cach_lo']; ?>
-    <tr><td><b><?= e($r['ma_hang']) ?></b></td><td><?= e($r['ten']) ?><?= $r['quan_ly_lo'] ? ' <span class="tag tag-info">Theo dõi số lô · ' . n($r['lots']) . '</span>' : '' ?></td><td><?= $r['category'] ? '<span class="tag tag-info">' . e($r['category']) . '</span>' : '<span class="tag tag-warn">Chưa phân loại</span>' ?></td>
+    <tr<?= is_new($changes, $r['id']) ? ' class="is-new"' : '' ?>><td><b><?= e($r['ma_hang']) ?></b><?= new_tag($changes, $r['id']) ?></td><td><?= e($r['ten']) ?></td><td><?= $r['category'] ? '<span class="tag tag-info">' . e($r['category']) . '</span>' : '<span class="tag tag-warn">Chưa phân loại</span>' ?></td>
       <td class="wrap"><?php if ($r['suppliers']): foreach ($r['suppliers'] as $s): ?><a class="tag tag-muted" href="/partners?q=<?= e(urlencode($s['ma'])) ?>" title="<?= e($s['ten']) ?>"><?= e($s['ten']) ?></a> <?php endforeach; else: ?><span class="muted">—</span><?php endif; ?></td><td><?= e($r['unit']) ?></td>
-      <td><?= $pack > 1 ? '1 lô = <b>' . n($pack) . '</b> ' . e($r['unit']) : '<span class="muted">Bán lẻ (1)</span>' ?></td>
+      <?php if ($anyPack): ?><td class="muted nw"><?= $pack > 1 ? '<b>' . n($pack) . '</b> ' . e($r['unit']) . '/kiện' : '' ?></td><?php endif; ?>
       <?php foreach ($shown as $w): $q1 = $r['by_wh'][(int)$w['id']] ?? 0; ?><td class="num <?= $q1 === 0 ? 'muted' : '' ?>"<?= $mine && (int)$mine['id'] === (int)$w['id'] ? ' style="background:var(--accent-soft,rgba(238,77,45,.08));font-weight:600"' : '' ?>><?= n($q1) ?></td><?php endforeach; ?>
-      <td class="num"><b><?= n($r['total']) ?></b> <small class="muted"><?= e($r['unit']) ?></small></td>
-      <td class="muted"><?= e(pack_label($r['total'], $pack)) ?: '—' ?></td>
+      <td class="num"><b><?= n($r['total']) ?></b> <small class="muted"><?= e($r['unit']) ?></small><?php if ($pack > 1 && ($pl = pack_label($r['total'], $pack)) !== ''): ?><br><small class="muted">≈ <?= e($pl) ?></small><?php endif; ?></td>
       <td><?= $r['total'] <= 0 ? '<span class="tag tag-warn">Hết hàng</span>' : ($r['low'] ? '<span class="tag tag-warn">Sắp hết</span>' : '<span class="tag tag-ok">Còn hàng</span>') ?></td>
       <?php if ($user->isAdmin): ?><td><button type="button" class="btn-ghost" data-dialog-open="edit-dlg" data-fill-label="<?= e($r['ma_hang'] . ' — ' . $r['ten'] . ' (ĐVT: ' . $r['unit'] . ')') ?>" data-fill="<?= e(json_encode(['item_id' => (string)$r['id'], 'category_id' => (string)(int)$r['danh_muc_id'], 'supplier_ids' => implode(',', array_column($r['suppliers'], 'id')), 'pack_size' => (string)$pack, 'reorder_level' => (string)(int)$r['dinh_muc_toi_thieu']])) ?>">Sửa</button></td><?php endif; ?></tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="<?= count($shown) + 9 + ($user->isAdmin ? 1 : 0) ?>" class="empty">Không có mặt hàng phù hợp.</td></tr><?php endif; ?>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="<?= count($shown) + 7 + ($user->isAdmin ? 1 : 0) ?>" class="empty">Không có mặt hàng phù hợp.</td></tr><?php endif; ?>
   </tbody>
 <?php endif; ?>
 </table></div><?= pager($pg) ?></section>
@@ -84,7 +83,7 @@
       <?php foreach ($suppliers as $s): ?><label class="check"><input type="checkbox" name="supplier_ids[]" value="<?= (int)$s['id'] ?>" data-sup-check> <?= e($s['ten']) ?> <small class="muted"><?= e($s['ma']) ?></small></label>
       <?php endforeach; if (!$suppliers): ?><p class="muted small">Chưa có nhà cung cấp — thêm ở trang <a href="/partners">Đối tác</a>.</p><?php endif; ?>
     </fieldset>
-    <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" value="1" required></label>
+    <label>Đóng gói (1 kiện = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" value="1" required></label>
     <label class="check"><input type="checkbox" name="track_batch" value="1"> Quản lý theo lô / hạn dùng</label>
     <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" max="1000000" step="1" value="0"></label>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm mặt hàng</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
@@ -99,7 +98,7 @@
       <?php foreach ($suppliers as $s): ?><label class="check"><input type="checkbox" name="supplier_ids[]" value="<?= (int)$s['id'] ?>" data-sup-check> <?= e($s['ten']) ?> <small class="muted"><?= e($s['ma']) ?></small></label>
       <?php endforeach; if (!$suppliers): ?><p class="muted small">Chưa có nhà cung cấp — thêm ở trang <a href="/partners">Đối tác</a>.</p><?php endif; ?>
     </fieldset>
-    <label>Quy cách lô (1 lô = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" required></label>
+    <label>Đóng gói (1 kiện = ? đơn vị tính)<input type="number" name="pack_size" min="1" max="1000000" step="1" required></label>
     <label>Định mức tồn tối thiểu<input type="number" name="reorder_level" min="0" max="1000000" step="1" required></label>
     <p class="muted small">Số lượng tồn không sửa tay được — tồn chỉ thay đổi qua phiếu nhập/xuất, điều chuyển hoặc kiểm kê.</p>
     <div class="actions"><button type="submit">Lưu</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>

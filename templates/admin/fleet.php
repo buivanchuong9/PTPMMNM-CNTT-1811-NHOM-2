@@ -1,18 +1,47 @@
 <?php /** @var list<array> $vehicles @var list<array> $drivers @var list<array> $trips @var list<array> $warehouses @var int $maxPerWarehouse */
 $running = count(array_filter($vehicles, fn($x) => $x['hoat_dong'] && $x['dang_den_kho_id'] !== null));
-$issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT' && $t['sai_lech'] !== ''));
+$issues = count($missing);
 ?>
 <header class="page-head"><div><h1>Đội xe &amp; tài xế</h1></div>
   <div class="actions">
     <button type="button" data-dialog-open="vehicle-dlg"><?= icon('plus') ?>Thêm xe</button>
-    <button type="button" class="btn-ghost" data-dialog-open="driver-dlg"><?= icon('plus') ?>Thêm tài xế</button>
   </div></header>
 
 <section class="kpis" aria-label="Tình trạng đội xe">
   <div class="kpi"><span class="kpi-ic"><?= icon('truck') ?></span><b><?= n(count(array_filter($vehicles, fn($x) => $x['hoat_dong']))) ?></b><span>Xe đang hoạt động</span></div>
   <div class="kpi kpi-info"><span class="kpi-ic"><?= icon('clock') ?></span><b><?= n($running) ?></b><span>Xe đang chạy trên đường</span></div>
-  <div class="kpi <?= $issues ? 'kpi-warn' : 'kpi-ok' ?>"><span class="kpi-ic"><?= icon($issues ? 'alert' : 'check') ?></span><b><?= n($issues) ?></b><span>Chuyến có báo sai lệch</span></div>
+  <div class="kpi <?= $issues ? 'kpi-warn' : 'kpi-ok' ?>"><span class="kpi-ic"><?= icon($issues ? 'alert' : 'check') ?></span><b><?= n($issues) ?></b><span>Chuyến chưa thấy hàng</span></div>
 </section>
+
+<?php if ($missing): ?>
+<section class="card flush missing-card">
+  <div class="card-head pad"><h2><?= icon('alert') ?> Tài xế chưa thấy đâu <span class="count"><?= n(count($missing)) ?></span></h2><span class="muted small">kho đến báo chưa nhận được hàng — hàng vẫn đang trên đường, tồn chưa đổi</span></div>
+  <div class="table-wrap"><table class="dense">
+    <thead><tr><th>Phiếu</th><th>Tuyến</th><th>Xe</th><th>Tài xế (gọi để hỏi)</th><th>Đã đi từ</th><th>Kho đến báo</th><th>Phản hồi cho kho</th></tr></thead>
+    <tbody>
+    <?php foreach ($missing as $m): ?>
+      <tr>
+        <td><a href="/vouchers/<?= (int)$m['phieu_den_id'] ?>"><b><?= e($m['phieu_den_ma']) ?></b></a><br><small class="muted">từ <a href="/vouchers/<?= (int)$m['phieu_di_id'] ?>"><?= e($m['phieu_di_ma']) ?></a></small></td>
+        <td class="nw"><span class="wh-code"><?= e($m['di_kho']) ?></span> <span class="arrow">→</span> <span class="wh-code"><?= e($m['den_kho']) ?></span></td>
+        <td><b><?= e($m['bien_so']) ?></b><?= $m['loai_xe'] ? '<br><small class="muted">' . e($m['loai_xe']) . '</small>' : '' ?></td>
+        <td><b><?= e($m['tai_xe_ten']) ?></b><br><small class="muted"><?= e($m['so_dien_thoai'] ?: 'chưa có số') ?> · CCCD <?= e($m['cccd']) ?></small></td>
+        <td class="muted"><?= e(dt_short($m['ngay_di'])) ?></td>
+        <td class="wrap"><span class="tag tag-danger"><?= e(preg_replace('/^Chưa nhận được hàng: /u', '', $m['sai_lech'])) ?></span><br><small class="muted"><?= e($m['bao_boi'] ?? '—') ?><?= $m['bao_luc'] ? ' · ' . e(dt_short($m['bao_luc'])) : '' ?></small></td>
+        <td class="wrap reply-cell">
+          <?php if ($m['phan_hoi']): ?><div class="reply-last"><b><?= e($m['phan_hoi']) ?></b><br><small class="muted">gửi kho lúc <?= e(dt_short($m['phan_hoi_luc'])) ?><?= (int)$m['phan_hoi_so'] > 1 ? ' · ' . n($m['phan_hoi_so']) . ' phản hồi' : '' ?></small></div>
+          <?php else: ?><span class="tag tag-warn">Chưa phản hồi kho</span><?php endif; ?>
+          <details class="reply-fold"><summary><?= $m['phan_hoi'] ? 'Cập nhật' : 'Phản hồi kho' ?></summary>
+            <form method="post" action="/fleet/trips/reply" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="voucher_id" value="<?= (int)$m['phieu_den_id'] ?>">
+              <label>Tài xế đang…<select name="status" required><option value="">Chọn tình hình…</option><?php foreach (\StockFlow\Service\FleetService::REPLY_STATUSES as $st): ?><option><?= e($st) ?></option><?php endforeach; ?></select></label>
+              <label>Ghi chú cho kho<input name="note" maxlength="200" autocomplete="off" placeholder="VD: dự kiến tới kho lúc 16:30"></label>
+              <button type="submit"><?= icon('check') ?>Gửi cho kho</button>
+            </form></details>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody></table></div>
+</section>
+<?php endif; ?>
 
 <section class="card flush">
   <div class="card-head pad"><h2>Xe</h2><span class="muted small">mỗi kho gốc tối đa <?= (int)$maxPerWarehouse ?> xe</span></div>
@@ -20,20 +49,20 @@ $issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT'
     <thead><tr><th>Biển số</th><th>Loại xe</th><th>Kho gốc</th><th>Đang ở / đang tới</th><th>Tài xế phụ trách</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
     <tbody>
     <?php foreach ($vehicles as $x): $moving = $x['dang_den_kho_id'] !== null; ?>
-      <tr class="<?= $x['hoat_dong'] ? '' : 'row-off' ?>">
-        <td><b><?= e($x['bien_so']) ?></b></td>
+      <tr class="<?= $x['hoat_dong'] ? '' : 'row-off' ?><?= is_new($changes, $x['id']) ? ' is-new' : '' ?>">
+        <td><b><?= e($x['bien_so']) ?></b><?= new_tag($changes, $x['id']) ?></td>
         <td><?= e($x['loai_xe'] ?: '—') ?></td>
         <td><span class="wh-code"><?= e($x['goc_ma']) ?></span></td>
         <td><?= $moving
             ? '<span class="tag tag-info">Đang chạy</span> <span class="arrow">→</span> <span class="wh-code">' . e($x['den_ma']) . '</span> ' . e($x['den_ten'])
             : '<span class="wh-code">' . e($x['ht_ma']) . '</span> ' . e($x['ht_ten']) ?></td>
-        <td><?= $x['tai_xe_ten'] ? '<b>' . e($x['tai_xe_ten']) . '</b>' . (!$x['tai_xe_hoat_dong'] ? ' <span class="tag tag-danger">Ngừng dùng</span>' : '') . '<br><small class="muted">CCCD ' . e($x['tai_xe_cccd']) . ($moving && $x['phieu_ma'] ? ' · <a href="/vouchers/' . (int)$x['phieu_id'] . '">' . e($x['phieu_ma']) . '</a>' : '') . '</small>' : '<span class="tag tag-warn">Chưa có tài xế</span>' ?></td>
+        <td><?= $x['tai_xe_ten'] ? '<b>' . e($x['tai_xe_ten']) . '</b>' . (!$x['tai_xe_hoat_dong'] ? ' <span class="tag tag-danger">Ngừng dùng</span>' : '') . '<br><small class="muted">CCCD ' . e($x['tai_xe_cccd']) . ($x['tai_xe_sdt'] ? ' · ' . e($x['tai_xe_sdt']) : '') . ($moving && $x['phieu_ma'] ? ' · <a href="/vouchers/' . (int)$x['phieu_id'] . '">' . e($x['phieu_ma']) . '</a>' : '') . '</small>' : '<span class="tag tag-warn">Chưa có tài xế</span>' ?></td>
         <td><?= !$x['hoat_dong'] ? '<span class="tag tag-danger">Ngừng dùng</span>' : ($moving ? '<span class="tag tag-info">Trên đường</span>' : '<span class="tag tag-ok">Sẵn sàng</span>') ?></td>
         <td>
           <div style="display:grid;gap:6px">
           <div class="inline-form">
             <button type="button" class="btn-ghost btn-sm" data-dialog-open="vehicle-edit-dlg" data-fill-label="<?= e($x['bien_so']) ?>"
-              data-fill="<?= e(json_encode(['vehicle_id' => (int)$x['id'], 'plate' => $x['bien_so'], 'type' => $x['loai_xe'], 'warehouse_id' => (string)$x['kho_goc_id'], 'driver_id' => (string)($x['tai_xe_id'] ?? '')], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
+              data-fill="<?= e(json_encode(['vehicle_id' => (int)$x['id'], 'plate' => $x['bien_so'], 'type' => $x['loai_xe'], 'warehouse_id' => (string)$x['kho_goc_id'], 'driver_name' => (string)($x['tai_xe_ten'] ?? ''), 'driver_cccd' => (string)($x['tai_xe_cccd'] ?? ''), 'driver_phone' => (string)($x['tai_xe_sdt'] ?? '')], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
             <?php if (!$moving): ?><form method="post" action="/fleet/vehicles/delete" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$x['id'] ?>">
               <button class="btn-danger btn-sm" data-confirm="Xoá xe <?= e($x['bien_so']) ?>? Chỉ xoá được xe chưa từng chạy chuyến nào.">Xoá</button></form><?php endif; ?>
           </div>
@@ -49,16 +78,17 @@ $issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT'
           </div>
         </td>
       </tr>
-    <?php endforeach; if (!$vehicles): ?><tr><td colspan="7" class="empty">Chưa có xe nào. Bấm «Thêm xe» để bắt đầu.</td></tr><?php endif; ?>
+    <?php endforeach; if (!$vehicles): ?><tr><td colspan="7" class="empty">Chưa có xe nào. Bấm «Thêm xe» (kèm thông tin tài xế) để bắt đầu.</td></tr><?php endif; ?>
     </tbody></table></div>
 </section>
 
+<?php $spare = array_values(array_filter($drivers, fn($d) => $d['xe_phu_trach_id'] === null)); if ($spare): ?>
 <section class="card flush">
-  <div class="card-head pad"><h2>Tài xế</h2><span class="muted small">gắn với một xe — xuất kho đi bằng xe nào thì tài xế của xe đó đi theo</span></div>
+  <div class="card-head pad"><h2>Tài xế chưa gắn xe</h2><span class="muted small">hồ sơ cũ — muốn dùng lại thì nhập CCCD này khi thêm hoặc sửa xe</span></div>
   <div class="table-wrap"><table class="dense">
     <thead><tr><th>Họ tên</th><th>CCCD</th><th>Điện thoại</th><th>Xe phụ trách</th><th>Chuyến đang chạy</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
     <tbody>
-    <?php foreach ($drivers as $d): $busy = $d['chuyen_id'] !== null; ?>
+    <?php foreach ($spare as $d): $busy = $d['chuyen_id'] !== null; ?>
       <tr class="<?= $d['hoat_dong'] ? '' : 'row-off' ?>">
         <td><b><?= e($d['ho_ten']) ?></b></td>
         <td><?= e($d['cccd']) ?></td>
@@ -77,9 +107,10 @@ $issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT'
           </div>
           <?php else: ?><span class="muted small">Đang chạy — chưa sửa được</span><?php endif; ?></td>
       </tr>
-    <?php endforeach; if (!$drivers): ?><tr><td colspan="7" class="empty">Chưa có tài xế nào. Bấm «Thêm tài xế» để bắt đầu.</td></tr><?php endif; ?>
+    <?php endforeach; ?>
     </tbody></table></div>
 </section>
+<?php endif; ?>
 
 <section class="card flush">
   <div class="card-head pad"><h2>Chuyến gần đây</h2><span class="muted small">20 chuyến mới nhất</span></div>
@@ -93,10 +124,11 @@ $issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT'
         <td><?= e($t['bien_so']) ?></td>
         <td><?= e($t['tai_xe_ten']) ?></td>
         <td><small class="muted"><?= e(dt($t['ngay_di'])) ?></small><br><span class="tag tag-ok">Tài xế đã xác nhận đủ hàng</span></td>
-        <td class="wrap"><?php if ($t['trang_thai'] === 'DELIVERED'): ?><span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế</span>
-          <?php elseif ($t['sai_lech'] !== ''): ?><span class="tag tag-danger">Sai lệch</span><br><small><?= e($t['sai_lech']) ?></small>
+        <td class="wrap"><?php if ($t['trang_thai'] === 'DELIVERED' && $t['sai_lech'] !== ''): ?><span class="tag tag-danger">Nhận thiếu</span><br><small><?= e(preg_replace('/^Nhận thiếu: /u', '', $t['sai_lech'])) ?></small>
+          <?php elseif ($t['trang_thai'] === 'DELIVERED'): ?><span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế</span>
+          <?php elseif ($t['sai_lech'] !== ''): ?><span class="tag tag-danger">Chưa nhận được hàng</span><br><small><?= e(preg_replace('/^Chưa nhận được hàng: /u', '', $t['sai_lech'])) ?></small>
           <?php else: ?><span class="muted">Chưa nhận</span><?php endif; ?></td>
-        <td><?= $t['trang_thai'] === 'DELIVERED' ? '<span class="tag tag-ok">Đã giao</span>' : ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Chờ xử lý sai lệch</span>' : '<span class="tag tag-info">Đang vận chuyển</span>') ?></td>
+        <td><?= $t['trang_thai'] === 'DELIVERED' ? ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Đã giao — thiếu hàng</span>' : '<span class="tag tag-ok">Đã giao</span>') : ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Chưa thấy hàng</span>' : '<span class="tag tag-info">Đang vận chuyển</span>') ?></td>
       </tr>
     <?php endforeach; if (!$trips): ?><tr><td colspan="7" class="empty">Chưa có chuyến điều chuyển nào có thông tin xe.</td></tr><?php endif; ?>
     </tbody></table></div>
@@ -108,19 +140,12 @@ $issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT'
     <label>Biển số<input name="plate" required maxlength="15" autocomplete="off" placeholder="vd: 30H-123.45" title="Ví dụ 30H-123.45 hoặc 51C-12345"></label>
     <label>Loại xe<input name="type" maxlength="60" autocomplete="off" placeholder="vd: Xe tải 2 tấn"></label>
     <label>Kho gốc<select name="warehouse_id" required><?= wh_options($warehouses, null, 'Chọn kho…') ?></select></label>
-    <label>Tài xế phụ trách<select name="driver_id"><option value="">Chưa gắn tài xế</option><?php foreach ($drivers as $dr): if (!$dr['hoat_dong']) { continue; } ?><option value="<?= (int)$dr['id'] ?>"><?= e($dr['ho_ten'] . ' · CCCD ' . $dr['cccd'] . ($dr['xe_phu_trach'] ? ' (đang phụ trách xe ' . $dr['xe_phu_trach'] . ')' : '')) ?></option><?php endforeach; ?></select></label>
+    <p class="dlg-sub"><b>Tài xế phụ trách</b></p>
+    <label>Họ tên<input name="driver_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
+    <label>Số CCCD<input name="driver_cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" placeholder="12 chữ số" title="Số CCCD gồm đúng 12 chữ số"></label>
+    <label>Số điện thoại<input name="driver_phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
     <p class="muted small">Xe mới đứng ở kho gốc. Mỗi kho gốc tối đa <?= (int)$maxPerWarehouse ?> xe; xe đi điều chuyển sẽ tự cập nhật vị trí.</p>
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm xe</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
-  </form>
-</dialog>
-
-<dialog id="driver-dlg" class="dlg" aria-labelledby="driver-dlg-t">
-  <form method="post" action="/fleet/drivers" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-    <div class="dlg-head"><h2 id="driver-dlg-t">Thêm tài xế</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
-    <label>Họ tên<input name="full_name" required maxlength="120" autocomplete="off"></label>
-    <label>Số CCCD<input name="cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" placeholder="12 chữ số" title="Số CCCD gồm đúng 12 chữ số"></label>
-    <label>Số điện thoại<input name="phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
-    <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm tài xế</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
 
@@ -131,8 +156,11 @@ $issues = count(array_filter($trips, fn($t) => $t['trang_thai'] === 'IN_TRANSIT'
     <label>Biển số<input name="plate" required maxlength="15" autocomplete="off" title="Ví dụ 30H-123.45 hoặc 51C-12345"></label>
     <label>Loại xe<input name="type" maxlength="60" autocomplete="off"></label>
     <label>Kho gốc<select name="warehouse_id" required><?= wh_options($warehouses, null, 'Chọn kho…') ?></select></label>
-    <label>Tài xế phụ trách<select name="driver_id"><option value="">Chưa gắn tài xế</option><?php foreach ($drivers as $dr): if (!$dr['hoat_dong']) { continue; } ?><option value="<?= (int)$dr['id'] ?>"><?= e($dr['ho_ten'] . ' · CCCD ' . $dr['cccd'] . ($dr['xe_phu_trach'] ? ' (đang phụ trách xe ' . $dr['xe_phu_trach'] . ')' : '')) ?></option><?php endforeach; ?></select></label>
-    <p class="muted small">Đổi kho gốc không dời xe đi đâu — vị trí xe đổi bằng ô «Đặt vị trí» ở danh sách.</p>
+    <p class="dlg-sub"><b>Tài xế phụ trách</b></p>
+    <label>Họ tên<input name="driver_name" required maxlength="120" autocomplete="off"></label>
+    <label>Số CCCD<input name="driver_cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" title="Số CCCD gồm đúng 12 chữ số"></label>
+    <label>Số điện thoại<input name="driver_phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
+    <p class="muted small">Đổi kho gốc không dời xe đi đâu — vị trí xe đổi bằng ô «Đặt vị trí» ở danh sách. Đổi sang CCCD khác nghĩa là người khác lên thay: hồ sơ người cũ được giữ cho các chuyến đã chạy.</p>
     <div class="actions"><button type="submit">Lưu thay đổi</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>

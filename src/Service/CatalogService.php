@@ -104,6 +104,24 @@ final class CatalogService
         return $id;
     }
 
+    /**
+     * Thêm kho KÈM tài khoản quản lý trong một giao dịch: tên đăng nhập trùng hay mật khẩu ngắn thì không có kho nào được tạo.
+     * @return array{warehouse_id:int,manager_id:int}
+     */
+    public function addWarehouseWithManager(User $actor, string $code, string $name, string $address, string $managerUsername, string $managerName, string $managerPassword): array
+    {
+        $this->auth->requireAdmin($actor);
+        $this->auth->requirePermission($actor, Permission::QuanLyTaiKhoan);
+        if (trim($managerUsername) === '' || trim($managerName) === '') {
+            throw new DomainError('Nhập họ tên và tên đăng nhập của quản lý kho mới');
+        }
+        return $this->db->transaction(function () use ($actor, $code, $name, $address, $managerUsername, $managerName, $managerPassword) {
+            $warehouseId = $this->addWarehouse($actor, $code, $name, $address);
+            $managerId = $this->insertAccount($actor, $managerUsername, $managerName, $managerPassword, AccountRole::Manager, $warehouseId);
+            return ['warehouse_id' => $warehouseId, 'manager_id' => $managerId];
+        });
+    }
+
     /** Đổi địa chỉ kho: tài khoản cấp cao sửa mọi kho; quản lý chỉ sửa kho của mình. Mọi trang đọc kho.dia_chi nên thấy địa chỉ mới ngay. */
     public function setWarehouseAddress(User $actor, int $warehouseId, string $address): void
     {
@@ -176,7 +194,7 @@ final class CatalogService
             throw new DomainError('Định mức tồn tối thiểu phải từ 0 đến 1.000.000');
         }
         if ($packSize < 1 || $packSize > 1000000) {
-            throw new DomainError('Quy cách lô phải từ 1 đến 1.000.000');
+            throw new DomainError('Quy cách đóng gói phải từ 1 đến 1.000.000');
         }
         if (!$this->db->value('SELECT 1 FROM don_vi_tinh WHERE id = ?', [$unitId])) {
             throw new DomainError('Đơn vị tính không hợp lệ');
@@ -194,12 +212,12 @@ final class CatalogService
         });
     }
 
-    /** Sửa danh mục, quy cách lô (1 lô = bao nhiêu đơn vị tính) và định mức tồn tối thiểu. Không có cách sửa số lượng tồn: tồn chỉ đổi qua phiếu / kiểm kê. */
+    /** Sửa danh mục, quy cách đóng gói (1 kiện = bao nhiêu đơn vị tính) và định mức tồn tối thiểu. Không có cách sửa số lượng tồn: tồn chỉ đổi qua phiếu / kiểm kê. */
     public function updateItem(User $actor, int $itemId, int $packSize, int $reorder, ?int $categoryId = null): void
     {
         $this->auth->requireAdmin($actor);
         if ($packSize < 1 || $packSize > 1000000) {
-            throw new DomainError('Quy cách lô phải từ 1 đến 1.000.000');
+            throw new DomainError('Quy cách đóng gói phải từ 1 đến 1.000.000');
         }
         if ($reorder < 0 || $reorder > 1000000) {
             throw new DomainError('Định mức tồn tối thiểu phải từ 0 đến 1.000.000');

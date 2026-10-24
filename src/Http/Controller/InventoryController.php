@@ -16,7 +16,7 @@ use StockFlow\Service\CatalogService;
 use StockFlow\Service\PartnerService;
 use StockFlow\Service\StockQuery;
 
-/** Trang «Hàng hoá»: danh mục mặt hàng + lô + tồn theo kho + quy cách lô, gộp trong một trang. */
+/** Trang «Hàng hoá»: danh mục mặt hàng + lô + tồn theo kho + quy cách đóng gói, gộp trong một trang. */
 final class InventoryController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private StockQuery $query, private Db $db, private CatalogService $catalog, private PartnerService $partners)

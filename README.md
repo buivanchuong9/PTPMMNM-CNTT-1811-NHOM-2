@@ -7,7 +7,7 @@
 [![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![MySQL](https://img.shields.io/badge/MySQL%208%2B%20·%20MariaDB%2010.4%2B-4479A1?logo=mysql&logoColor=white)](#-cài-đặt-và-chạy)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#-cấu-trúc-mã-nguồn)
-[![Tests](https://img.shields.io/badge/tests-426%20unit%20%2B%20integration-ee4d2d)](#-kiểm-thử)
+[![Tests](https://img.shields.io/badge/tests-485%20unit%20%2B%20integration-ee4d2d)](#-kiểm-thử)
 [![License](https://img.shields.io/badge/license-MIT-fbbf24)](LICENSE)
 
 **[Tính năng](#-tính-năng) · [Cài đặt và chạy](#-cài-đặt-và-chạy) · [Vai trò](#-vai-trò-và-phân-quyền) · [Quy trình](#-quy-trình-nghiệp-vụ) · [Kiến trúc](#-kiến-trúc) · [Kiểm thử](#-kiểm-thử)**
@@ -37,13 +37,13 @@
 |:-:|---|---|
 | 🏬 | **Nhiều kho, quyền theo kho** | Mỗi kho có 1 quản lý và nhiều nhân viên. Tài khoản chỉ thấy và thao tác trong kho của mình. |
 | 📥📤 | **Phiếu nhập / xuất** | Quy trình *nháp → xác nhận → ghi sổ*. Gửi lại cùng một yêu cầu không sinh phiếu thứ hai (khoá chống trùng). Phiếu xuất báo **thiếu hàng** trước khi ghi sổ. Xuất cho khách mới thì có bước nhập thông tin khách. |
-| 🚚 | **Điều chuyển liên kho kèm xe** | Kho đi chọn xe và tài xế xác nhận nhận đủ hàng. Sinh cặp phiếu **DCX** (đi) và **DCN** (đến). Kho đến kiểm hàng đủ, đúng tài xế và đúng xe rồi mới nhận. Có sai lệch thì **báo sai lệch** và hàng vẫn ở trạng thái đang vận chuyển. |
+| 🚚 | **Điều chuyển liên kho kèm xe** | Kho đi chọn xe và tài xế xác nhận nhận đủ hàng. Sinh cặp phiếu **DCX** (đi) và **DCN** (đến). Kho đến **nhập số thực nhận** từng dòng và xác nhận đúng tài xế, đúng xe: nhận thiếu thì tồn chỉ tăng đúng số thực nhận (phần thiếu ghi bằng phiếu điều chỉnh). Chưa thấy hàng thì bấm **Chưa nhận được hàng**, chọn lý do: không cộng tồn và Admin thấy chuyến ở mục "Tài xế chưa thấy đâu" của trang Đội xe. |
 | 📋 | **Kiểm kê** | Mở đợt, đếm thực tế, ghi lý do chênh lệch, nộp duyệt. Quản lý duyệt thì hệ thống tự lập **phiếu điều chỉnh**. Trạng thái: `OPEN → REVIEW → CLOSED`. |
 | ↩️ | **Sửa sai = đảo phiếu** | Phiếu đã ghi sổ không sửa được. Hệ thống lập phiếu điều chỉnh ngược (mỗi phiếu chỉ đảo được một lần). Điều chuyển thì đảo cả hai đầu cùng lúc. |
 | 📖 | **Sổ phát sinh & đối chiếu** | Tra cứu lịch sử theo kho, mặt hàng, lô, thời gian. Trang **Đối chiếu** so số dư hiện hành với tổng sổ và báo `KHỚP` hoặc `LỆCH`. |
 | 📦 | **Hàng hoá** | Danh mục loại hàng, đơn vị tính, mặt hàng, **quy cách lô** (một thùng gồm bao nhiêu đơn vị), lô và **hạn dùng**, định mức tồn tối thiểu, nhà cung cấp của từng mặt hàng. |
 | 🤝 | **Đối tác** | Nhà cung cấp và khách hàng. Gắn mặt hàng với nhà cung cấp, có thể ngừng hoạt động thay vì xoá. |
-| 🚛 | **Đội xe & tài xế** | Xe có biển số, loại xe, kho gốc, tài xế phụ trách. Theo dõi xe đang đứng ở kho nào hoặc đang chạy tới đâu. Danh sách chuyến gần đây và các chuyến còn sai lệch chưa xử lý. |
+| 🚛 | **Đội xe & tài xế** | Xe có biển số, loại xe, kho gốc, tài xế phụ trách. Theo dõi xe đang đứng ở kho nào hoặc đang chạy tới đâu. Mục riêng "Tài xế chưa thấy đâu" cho các chuyến kho đến báo chưa nhận được hàng, và danh sách chuyến gần đây. |
 | 📊 | **Tổng quan & báo cáo** | Thẻ thống kê, biểu đồ nhập xuất 14 ngày, luồng theo kho 30 ngày, cảnh báo **sắp hết hàng**, phiếu chờ xác nhận. Xuất **CSV**: tồn kho, sổ phát sinh, đối chiếu. |
 | 🔐 | **Phân quyền động** | Admin bật hoặc tắt từng chức năng cho vai trò Quản lý hoặc Nhân viên. Chức năng bị thu hồi sẽ ẩn khỏi menu và bị chặn ở máy chủ, nhưng không bị xoá. |
 | ⚙️ | **Cài đặt** | Hồ sơ, đổi mật khẩu, ảnh đại diện, giao diện **sáng / tối**, số dòng mỗi trang, chế độ gọn. Quản lý kho sửa thông tin kho và nhân viên của mình. Admin đặt độ dài mật khẩu tối thiểu, thời gian tự đăng xuất khi không thao tác, và xem nhật ký thao tác. |
@@ -219,12 +219,12 @@ sequenceDiagram
     QL->>H: Chọn xe, tài xế xác nhận đủ hàng, Xuất kho
     Note over H: 1 giao dịch: trừ tồn kho đi, mở DCN,<br/>lập chuyến, xe chuyển sang "đang chạy"
     TX-->>QD: Giao hàng
-    alt Hàng đủ, đúng tài xế và xe
-        QD->>H: Xác nhận đã nhận hàng
-        Note over H: Cộng tồn kho đến, chuyến DELIVERED,<br/>xe về đứng tại kho đến
-    else Có sai lệch
-        QD->>H: Báo sai lệch kèm lý do
-        Note over H: Chưa cộng tồn, hàng vẫn IN_TRANSIT,<br/>Admin xử lý ở trang Đội xe
+    alt Hàng đã tới
+        QD->>H: Nhập số thực nhận từng dòng, xác nhận đúng tài xế và xe
+        Note over H: Cộng đúng số thực nhận (thiếu thì có phiếu điều chỉnh),<br/>chuyến DELIVERED, xe về đứng tại kho đến
+    else Chưa thấy hàng
+        QD->>H: Bấm "Chưa nhận được hàng" và chọn lý do
+        Note over H: Không cộng tồn, hàng vẫn IN_TRANSIT,<br/>Admin thấy ở mục "Tài xế chưa thấy đâu"
     end
 ```
 
@@ -381,7 +381,7 @@ Bộ test tự viết (không cần PHPUnit), chạy trên CSDL riêng `stockflo
 | Nhóm | Số test | Nội dung |
 |---|:-:|---|
 | **Unit** | 67 | Quy tắc tồn, lõi HTTP (router, session, CSRF), địa chỉ Việt Nam |
-| **Integration** | 359 | Phân quyền, đội xe, kiểm kê, cài đặt, ảnh đại diện, điều chuyển, đồng thời… |
+| **Integration** | 418 | Phân quyền, đội xe, kiểm kê, cài đặt, ảnh đại diện, điều chuyển, đồng thời… |
 | **Http** | | Gọi máy chủ PHP thật, POST thủ công bỏ qua giao diện: phân quyền theo kho, CSRF, duyệt mọi trang |
 
 Đối chiếu với các yêu cầu nghiệp vụ trọng yếu:
@@ -394,7 +394,9 @@ Bộ test tự viết (không cần PHPUnit), chạy trên CSDL riêng `stockflo
 | Sửa sai bằng phiếu đảo, giữ nguyên lịch sử | `CorrectionTest` |
 | Tài khoản kho A không xuất được kho B | `AuthorizationTest` + `AuthorizationHttpTest` |
 | Bật tắt quyền theo vai trò có hiệu lực ngay | `RolePermissionTest` |
-| Xe, tài xế, chuyến vận chuyển, sai lệch | `FleetTest` |
+| Xe, tài xế, chuyến vận chuyển, chưa nhận được hàng | `FleetTest` · `FleetWithDriverTest` |
+| Nhận hàng điều chuyển theo số thực nhận, nhận thiếu vẫn khớp sổ | `TransferReceiptTest` |
+| Thêm kho kèm tài khoản quản lý (nguyên khối) | `WarehouseSetupTest` |
 | Kiểm kê từ mở đợt đến lập phiếu điều chỉnh | `StockCountTest` |
 | Điều chuyển liên kho, tồn khớp sổ | `ScenarioTest` |
 

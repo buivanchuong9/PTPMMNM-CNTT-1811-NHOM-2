@@ -70,6 +70,35 @@ function hl(?string $text, string $needle): string
     return $out . e(mb_substr($text, $pos));
 }
 
+/** Tên thao tác trong nhật ký (hanh_dong) bằng tiếng Việt; chưa có trong bảng thì giữ nguyên mã. */
+function audit_label(string $action): string
+{
+    static $map = [
+        'voucher.create' => 'Lập phiếu', 'voucher.confirm' => 'Xác nhận & ghi sổ', 'voucher.cancel' => 'Huỷ phiếu', 'voucher.correct' => 'Lập phiếu điều chỉnh',
+        'transfer.create' => 'Lập phiếu điều chuyển', 'transfer.dispatch' => 'Xuất kho đi', 'transfer.vehicle' => 'Chọn xe & tài xế',
+        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
+    ];
+    return $map[$action] ?? $action;
+}
+
+/** Đối tượng này có nằm trong phần «thay đổi mới» của trang đang mở không (người khác vừa tạo / sửa, chưa xem). */
+function is_new(?array $changes, int|string|null $id): bool
+{
+    return $changes !== null && $id !== null && isset($changes['ids'][(int)$id]);
+}
+
+/** Nhãn «Mới» cạnh đối tượng vừa thay đổi. */
+function new_tag(?array $changes, int|string|null $id): string
+{
+    return is_new($changes, $id) ? ' <span class="new-tag">Mới</span>' : '';
+}
+
+/** Dòng sổ phát sinh mới (id nằm trong khoảng vừa xuất hiện kể từ lần xem trước). */
+function is_new_ledger(?array $changes, int $id): bool
+{
+    return $changes !== null && ($changes['section'] ?? '') === 'history' && $id > (int)$changes['after'] && $id <= (int)$changes['upto'];
+}
+
 /** Escape HTML đầu ra. */
 function e(mixed $v): string
 {
@@ -82,7 +111,7 @@ function n(int|string|null $v): string
     return number_format((int)$v, 0, ',', '.');
 }
 
-/** Quy đổi số lượng ra lô theo quy cách: 130 với 24/lô → "5 lô + 10 lẻ". Quy cách 1 (không đóng lô) → chuỗi rỗng. */
+/** Quy đổi số lượng ra kiện (thùng đóng sẵn) theo quy cách đóng gói: 130 với 24/kiện → "5 kiện + 10 lẻ". Quy cách 1 (bán lẻ) → chuỗi rỗng. */
 function pack_label(int $qty, int $pack): string
 {
     if ($pack <= 1 || $qty <= 0) {
@@ -90,7 +119,7 @@ function pack_label(int $qty, int $pack): string
     }
     $full = intdiv($qty, $pack);
     $rest = $qty % $pack;
-    return trim(($full > 0 ? n($full) . ' lô' : '') . ($rest > 0 ? ($full > 0 ? ' + ' : '') . n($rest) . ' lẻ' : ''));
+    return trim(($full > 0 ? n($full) . ' kiện' : '') . ($rest > 0 ? ($full > 0 ? ' + ' : '') . n($rest) . ' lẻ' : ''));
 }
 
 /** Số có dấu: +5 / −3. */

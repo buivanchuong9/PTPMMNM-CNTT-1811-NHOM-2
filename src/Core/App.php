@@ -9,6 +9,8 @@ use StockFlow\Domain\NotFound;
 use StockFlow\Domain\User;
 use StockFlow\Http\Controller as C;
 use StockFlow\Service\AuthService;
+use StockFlow\Service\ChangeTracker;
+use StockFlow\Service\NavBadges;
 use StockFlow\Service\SettingsService;
 use Throwable;
 
@@ -35,6 +37,7 @@ final class App
         $r->post('/logout', [C\AuthController::class, 'logout']);
 
         $r->get('/', [C\DashboardController::class, 'index']);
+        $r->get('/api/badges', [C\DashboardController::class, 'badges']);
         $r->get('/inventory', [C\InventoryController::class, 'index']);
         $r->get('/settings', [C\SettingsController::class, 'index']);
         $r->post('/settings/profile', [C\SettingsController::class, 'profile']);
@@ -52,7 +55,7 @@ final class App
         $r->get('/vouchers/{id}', [C\VoucherController::class, 'show']);
         $r->post('/vouchers/{id}/confirm', [C\VoucherController::class, 'confirm']);
         $r->post('/vouchers/{id}/cancel', [C\VoucherController::class, 'cancel']);
-        $r->post('/vouchers/{id}/discrepancy', [C\VoucherController::class, 'discrepancy']);
+        $r->post('/vouchers/{id}/not-received', [C\VoucherController::class, 'notReceived']);
         $r->post('/vouchers/{id}/correct', [C\VoucherController::class, 'correct']);
         $r->get('/transfers/new', [C\VoucherController::class, 'createTransfer']);
         $r->post('/transfers', [C\VoucherController::class, 'storeTransfer']);
@@ -95,12 +98,12 @@ final class App
         $r->post('/users/active', [C\AdminController::class, 'setUserActive']);
         $r->post('/users/password', [C\AdminController::class, 'resetUserPassword']);
         $r->get('/fleet', [C\FleetController::class, 'index']);
+        $r->post('/fleet/trips/reply', [C\FleetController::class, 'reply']);
         $r->post('/fleet/vehicles', [C\FleetController::class, 'addVehicle']);
         $r->post('/fleet/vehicles/update', [C\FleetController::class, 'updateVehicle']);
         $r->post('/fleet/vehicles/delete', [C\FleetController::class, 'deleteVehicle']);
         $r->post('/fleet/vehicles/active', [C\FleetController::class, 'vehicleActive']);
         $r->post('/fleet/vehicles/move', [C\FleetController::class, 'vehicleMove']);
-        $r->post('/fleet/drivers', [C\FleetController::class, 'addDriver']);
         $r->post('/fleet/drivers/update', [C\FleetController::class, 'updateDriver']);
         $r->post('/fleet/drivers/delete', [C\FleetController::class, 'deleteDriver']);
         $r->post('/fleet/drivers/active', [C\FleetController::class, 'driverActive']);
@@ -148,6 +151,15 @@ final class App
                     Paginator::$default = $prefs['rows'];
                     $session->setPrefs($prefs);
                 }
+            }
+            if ($user) {   // số nhỏ trên menu: số chuyến chưa thấy hàng ở «Đội xe & tài xế», số phiếu chờ xác nhận ở «Phiếu nhập xuất»
+                $view->setBadges(fn() => $this->c->get(NavBadges::class)->for($user));
+                $tracker = $this->c->get(ChangeTracker::class);
+                if ($req->method === 'GET' && ($section = ChangeTracker::PATHS[$req->path] ?? null)) {   // mở trang danh sách: bôi đậm cái mới rồi dời mốc «đã xem»
+                    $ref = parse_url((string)($_SERVER['HTTP_REFERER'] ?? ''), PHP_URL_PATH);
+                    $view->setChanges($tracker->visit($user, $section, is_string($ref) && '/' . trim($ref, '/') === $req->path));   // cùng trang (lọc, phân trang) ⇒ giữ phần đã bôi đậm
+                }
+                $view->setNewCounts(fn() => $tracker->counts($user));
             }
             if (!$match['public'] && !$user) {
                 return Response::redirect('/login');

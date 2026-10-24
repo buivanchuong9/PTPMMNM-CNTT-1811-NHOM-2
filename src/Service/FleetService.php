@@ -56,6 +56,62 @@ final class FleetService
              ORDER BY c.id DESC LIMIT " . (int)$limit);
     }
 
+    /**
+     * Chuyến kho đến báo «chưa nhận được hàng» (hàng vẫn đang vận chuyển): kèm xe, tài xế (để gọi điện), người báo và thời điểm báo.
+     * @return list<array<string,mixed>>
+     */
+    public function missingTrips(): array
+    {
+        return $this->db->all(
+            "SELECT c.*, x.bien_so, x.loai_xe, t.ho_ten AS tai_xe_ten, t.cccd, t.so_dien_thoai, a.ma AS phieu_di_ma, b.ma AS phieu_den_ma, b.id AS phieu_den_id,
+                    kd.ma AS di_kho, kn.ma AS den_kho, u.ho_ten AS bao_boi,
+                    (SELECT n.ngay_tao FROM nhat_ky n WHERE n.doi_tuong = 'voucher' AND n.doi_tuong_id = c.phieu_den_id AND n.hanh_dong = 'transfer.missing' ORDER BY n.id DESC LIMIT 1) AS bao_luc,
+                    (SELECT n.chi_tiet FROM nhat_ky n WHERE n.doi_tuong = 'voucher' AND n.doi_tuong_id = c.phieu_den_id AND n.hanh_dong = 'transfer.reply' ORDER BY n.id DESC LIMIT 1) AS phan_hoi,
+                    (SELECT n.ngay_tao FROM nhat_ky n WHERE n.doi_tuong = 'voucher' AND n.doi_tuong_id = c.phieu_den_id AND n.hanh_dong = 'transfer.reply' ORDER BY n.id DESC LIMIT 1) AS phan_hoi_luc,
+                    (SELECT COUNT(*) FROM nhat_ky n WHERE n.doi_tuong = 'voucher' AND n.doi_tuong_id = c.phieu_den_id AND n.hanh_dong = 'transfer.reply') AS phan_hoi_so
+             FROM chuyen_van_chuyen c JOIN xe x ON x.id = c.xe_id JOIN tai_xe t ON t.id = c.tai_xe_id
+             JOIN phieu_nhap_xuat a ON a.id = c.phieu_di_id JOIN phieu_nhap_xuat b ON b.id = c.phieu_den_id
+             JOIN kho kd ON kd.id = c.kho_di_id JOIN kho kn ON kn.id = c.kho_den_id LEFT JOIN nguoi_dung u ON u.id = c.nguoi_nhan_id
+             WHERE c.trang_thai = 'IN_TRANSIT' AND c.sai_lech <> '' ORDER BY c.id DESC");
+    }
+
+    /** Tình hình tài xế mà quản trị chọn khi phản hồi cho kho đến. */
+    public const REPLY_STATUSES = ['Tài xế đang trên đường, sắp tới kho', 'Xe gặp sự cố, đang xử lý', 'Đang kẹt xe, giao chậm', 'Đã liên hệ được tài xế, đang quay lại',
+        'Chưa liên lạc được — đang xác minh', 'Đã giao nhầm kho hoặc điểm khác', 'Khác'];
+
+    /**
+     * Quản trị PHẢN HỒI cho kho đến về chuyến chưa thấy hàng: tài xế đang làm gì + ghi chú (dự kiến tới lúc nào…).
+     * Lưu ở nhật ký thao tác của phiếu đến (kho đi và kho đến đều thấy ở trang phiếu). Chuyến đã giao xong thì không phản hồi thêm.
+     */
+    public function replyToMissing(User $actor, int $inVoucherId, string $status, string $note = ''): void
+    {
+        $this->auth->requirePermission($actor, Permission::QuanLyDoiXe);
+        $trip = $this->db->one('SELECT c.*, b.ma AS phieu_den_ma FROM chuyen_van_chuyen c JOIN phieu_nhap_xuat b ON b.id = c.phieu_den_id WHERE c.phieu_den_id = ?', [$inVoucherId])
+            ?? throw new DomainError('Không tìm thấy chuyến của phiếu này');
+        if ($trip['trang_thai'] !== 'IN_TRANSIT') {
+            throw new DomainError('Chuyến này đã giao xong — không cần phản hồi thêm');
+        }
+        $status = trim($status);
+        $note = trim($note);
+        if (!in_array($status, self::REPLY_STATUSES, true)) {
+            throw new DomainError('Chọn tình hình của tài xế');
+        }
+        if ($status === 'Khác' && $note === '') {
+            throw new DomainError('Ghi rõ tình hình khác của tài xế');
+        }
+        if (mb_strlen($note) > 200) {
+            throw new DomainError('Ghi chú tối đa 200 ký tự');
+        }
+        $this->audit->record($actor->id, 'transfer.reply', 'voucher', $inVoucherId, $status . ($note !== '' ? ' — ' . $note : ''));
+    }
+
+    /** Các phản hồi của quản trị cho một phiếu đến (mới nhất trước). @return list<array<string,mixed>> */
+    public function replies(int $inVoucherId): array
+    {
+        return $this->db->all("SELECT a.chi_tiet AS noi_dung, a.ngay_tao, u.ho_ten FROM nhat_ky a LEFT JOIN nguoi_dung u ON u.id = a.nguoi_dung_id
+                               WHERE a.doi_tuong = 'voucher' AND a.doi_tuong_id = ? AND a.hanh_dong = 'transfer.reply' ORDER BY a.id DESC", [$inVoucherId]);
+    }
+
     /** Số chuyến đang có báo sai lệch chưa xử lý xong. */
     public function openDiscrepancies(): int
     {
@@ -92,6 +148,71 @@ final class FleetService
         [$plate, $type] = $this->cleanVehicle($plate, $type, $homeWarehouseId, null, $driverId);
         $id = $this->db->insert('INSERT INTO xe (bien_so, loai_xe, kho_goc_id, kho_hien_tai_id, tai_xe_id) VALUES (?,?,?,?,?)', [$plate, $type, $homeWarehouseId, $homeWarehouseId, $driverId]);
         $this->audit->record($actor->id, 'vehicle.create', 'vehicle', $id, $plate);
+        return $id;
+    }
+
+    /**
+     * Thêm xe KÈM tài xế phụ trách trong một giao dịch: tài xế mới được tạo cùng lúc (hoặc dùng lại tài xế cùng CCCD đang rảnh).
+     * Lỗi ở phần xe (trùng biển số, kho đủ xe…) thì không có tài xế nào được tạo.
+     * @return array{vehicle_id:int,driver_id:int}
+     */
+    public function addVehicleWithDriver(User $actor, string $plate, string $type, int $homeWarehouseId, string $driverName, string $driverCccd, string $driverPhone): array
+    {
+        $this->auth->requirePermission($actor, Permission::QuanLyDoiXe);
+        return $this->db->transaction(function () use ($actor, $plate, $type, $homeWarehouseId, $driverName, $driverCccd, $driverPhone) {
+            $driverId = $this->resolveDriver($actor, $driverName, $driverCccd, $driverPhone, null);
+            $vehicleId = $this->addVehicle($actor, $plate, $type, $homeWarehouseId, $driverId);
+            return ['vehicle_id' => $vehicleId, 'driver_id' => $driverId];
+        });
+    }
+
+    /**
+     * Sửa xe KÈM thông tin tài xế phụ trách. Cùng CCCD ⇒ sửa họ tên / số điện thoại tại chỗ; CCCD khác ⇒ người khác lên thay:
+     * tài xế mới được tạo (hoặc dùng lại tài xế cùng CCCD đang rảnh), còn hồ sơ tài xế cũ được GIỮ NGUYÊN (các chuyến cũ vẫn ghi đúng người đã chạy):
+     * xoá nếu chưa từng chạy chuyến nào, ngược lại chuyển sang «Ngừng dùng».
+     */
+    public function updateVehicleWithDriver(User $actor, int $vehicleId, string $plate, string $type, int $homeWarehouseId, string $driverName, string $driverCccd, string $driverPhone): void
+    {
+        $this->auth->requirePermission($actor, Permission::QuanLyDoiXe);
+        $this->db->transaction(function () use ($actor, $vehicleId, $plate, $type, $homeWarehouseId, $driverName, $driverCccd, $driverPhone) {
+            $v = $this->db->one('SELECT * FROM xe WHERE id = ?', [$vehicleId]) ?? throw new DomainError('Không tìm thấy xe');
+            $oldId = $v['tai_xe_id'] !== null ? (int)$v['tai_xe_id'] : null;
+            $newId = $this->resolveDriver($actor, $driverName, $driverCccd, $driverPhone, $oldId);
+            $this->updateVehicle($actor, $vehicleId, $plate, $type, $homeWarehouseId, $newId);
+            if ($oldId !== null && $oldId !== $newId) {
+                if ($this->db->value('SELECT 1 FROM chuyen_van_chuyen WHERE tai_xe_id = ?', [$oldId])) {
+                    $this->setDriverActive($actor, $oldId, false);
+                } else {
+                    $this->deleteDriver($actor, $oldId);
+                }
+            }
+        });
+    }
+
+    /**
+     * Tìm hoặc tạo tài xế theo thông tin nhập trên form xe. $currentId = tài xế đang phụ trách xe (null khi thêm xe mới).
+     * @return int id tài xế sẽ phụ trách xe
+     */
+    private function resolveDriver(User $actor, string $name, string $cccd, string $phone, ?int $currentId): int
+    {
+        $cccdKey = trim($cccd);
+        $existing = $this->db->one('SELECT * FROM tai_xe WHERE cccd = ?', [$cccdKey]);
+        if ($existing === null) {
+            return $this->addDriver($actor, $name, $cccd, $phone);   // người mới hoàn toàn (addDriver kiểm tra định dạng)
+        }
+        $id = (int)$existing['id'];
+        if ($id !== $currentId) {
+            if ($other = $this->db->value('SELECT bien_so FROM xe WHERE tai_xe_id = ?', [$id])) {
+                throw new DomainError('Tài xế có CCCD này đang phụ trách xe ' . $other . ' — mỗi tài xế chỉ một xe');
+            }
+            if (!$existing['hoat_dong']) {
+                throw new DomainError('Tài xế có CCCD này đã ngừng dùng — bật lại ở mục tài xế chưa gắn xe, hoặc dùng người khác');
+            }
+        }
+        [$cleanName, , $cleanPhone] = $this->cleanDriver($name, $cccd, $phone, $id);
+        if ($cleanName !== $existing['ho_ten'] || $cleanPhone !== (string)$existing['so_dien_thoai']) {
+            $this->updateDriver($actor, $id, $name, $cccd, $phone);   // chỉ sửa khi có thay đổi (tài xế đang chạy chuyến thì chưa sửa được)
+        }
         return $id;
     }
 

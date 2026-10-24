@@ -59,7 +59,7 @@ $ageDays = fn(?string $t) => $t ? (int)floor((time() - strtotime($t . ' UTC')) /
   <tbody>
   <?php foreach ($rows as $c): $pct = $c['line_total'] ? round($c['counted'] / $c['line_total'] * 100) : 0; $net = (int)$c['net_variance'];
         $age = $c['trang_thai'] === 'REVIEW' ? $ageDays($c['ngay_nop']) : ($c['trang_thai'] === 'OPEN' ? $ageDays($c['ngay_tao']) : 0); ?>
-    <tr data-tone="<?= status_tone($c['trang_thai']) ?>"><td><a href="/counts/<?= (int)$c['id'] ?>"><b><?= e($c['ma']) ?></b></a></td><td><span class="wh-code"><?= e($c['wh_code']) ?></span></td>
+    <tr data-tone="<?= status_tone($c['trang_thai']) ?>"<?= is_new($changes, $c['id']) ? ' class="is-new"' : '' ?>><td><a href="/counts/<?= (int)$c['id'] ?>"><b><?= e($c['ma']) ?></b></a><?= new_tag($changes, $c['id']) ?></td><td><span class="wh-code"><?= e($c['wh_code']) ?></span></td>
       <td><?= status_tag($c['trang_thai']) ?>
         <?php if ($c['trang_thai'] === 'OPEN'): ?><br><small class="muted"><?= e($c['creator_name']) ?> đang đếm<?= $age > 0 ? ' · <span class="' . ($age >= 3 ? 'warn-text' : '') . '">' . n($age) . ' ngày</span>' : '' ?></small>
         <?php elseif ($c['trang_thai'] === 'REVIEW'): ?><br><small class="muted">Chờ <?= e($c['manager_name'] ?: 'quản lý kho ' . $c['wh_code']) ?> duyệt<?= $age > 0 ? ' · <span class="' . ($age >= 3 ? 'warn-text' : '') . '">' . n($age) . ' ngày</span>' : '' ?></small>

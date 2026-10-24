@@ -25,7 +25,7 @@ final class FleetController extends Controller
     {
         $this->need($user, Permission::QuanLyDoiXe);
         return $this->render('admin/fleet', $user, 'fleet', [
-            'vehicles' => $this->fleet->vehicles(), 'drivers' => $this->fleet->drivers(), 'trips' => $this->fleet->recentTrips(20),
+            'vehicles' => $this->fleet->vehicles(), 'missing' => $this->fleet->missingTrips(), 'drivers' => $this->fleet->drivers(), 'trips' => $this->fleet->recentTrips(20),
             'warehouses' => array_values(array_filter($this->catalog->warehouses(), fn($w) => $w['hoat_dong'])),
             'maxPerWarehouse' => FleetService::MAX_VEHICLES_PER_WAREHOUSE,
         ], 'Đội xe & tài xế');
@@ -34,13 +34,13 @@ final class FleetController extends Controller
     public function addVehicle(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->fleet->addVehicle($user, $r->str('plate'), $r->str('type'), (int)$r->int('warehouse_id'), $r->int('driver_id') ?: null);
-        }, 'Đã thêm xe.', '/fleet');
+            $this->fleet->addVehicleWithDriver($user, $r->str('plate'), $r->str('type'), (int)$r->int('warehouse_id'), $r->str('driver_name'), $r->str('driver_cccd'), $r->str('driver_phone'));
+        }, 'Đã thêm xe và tài xế phụ trách.', '/fleet');
     }
 
     public function updateVehicle(Request $r, array $p, ?User $user): Response
     {
-        return $this->act(fn() => $this->fleet->updateVehicle($user, (int)$r->int('vehicle_id'), $r->str('plate'), $r->str('type'), (int)$r->int('warehouse_id'), $r->int('driver_id') ?: null), 'Đã lưu thông tin xe.', '/fleet');
+        return $this->act(fn() => $this->fleet->updateVehicleWithDriver($user, (int)$r->int('vehicle_id'), $r->str('plate'), $r->str('type'), (int)$r->int('warehouse_id'), $r->str('driver_name'), $r->str('driver_cccd'), $r->str('driver_phone')), 'Đã lưu thông tin xe và tài xế.', '/fleet');
     }
 
     public function deleteVehicle(Request $r, array $p, ?User $user): Response
@@ -59,11 +59,10 @@ final class FleetController extends Controller
         return $this->act(fn() => $this->fleet->relocateVehicle($user, (int)$r->int('vehicle_id'), (int)$r->int('warehouse_id')), 'Đã cập nhật vị trí xe.', '/fleet');
     }
 
-    public function addDriver(Request $r, array $p, ?User $user): Response
+    /** Quản trị phản hồi cho kho đến: tài xế đang làm gì, dự kiến thế nào. */
+    public function reply(Request $r, array $p, ?User $user): Response
     {
-        return $this->act(function () use ($r, $user) {
-            $this->fleet->addDriver($user, $r->str('full_name'), $r->str('cccd'), $r->str('phone'));
-        }, 'Đã thêm tài xế.', '/fleet');
+        return $this->act(fn() => $this->fleet->replyToMissing($user, (int)$r->int('voucher_id'), $r->str('status'), $r->str('note')), 'Đã gửi phản hồi cho kho — kho thấy ngay ở phiếu điều chuyển.', '/fleet');
     }
 
     public function updateDriver(Request $r, array $p, ?User $user): Response

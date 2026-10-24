@@ -12,6 +12,21 @@
     setTimeout(done, 4000);
   }
 
+  // Nhận hàng điều chuyển: gõ số thực nhận thì hiện ngay «thiếu N»; vượt số trên phiếu thì báo đỏ
+  document.querySelectorAll('input[data-recv]').forEach((inp) => {
+    const note = inp.parentNode.querySelector('.recv-short');
+    const update = () => {
+      const expected = parseInt(inp.dataset.recv, 10);
+      const raw = inp.value.trim();
+      const got = raw === '' ? expected : parseInt(raw, 10);
+      const miss = expected - (Number.isNaN(got) ? expected : got);
+      inp.classList.toggle('over', got > expected || got < 0);
+      if (note) { note.textContent = miss > 0 ? 'thiếu ' + miss : (got > expected ? 'vượt phiếu' : ''); note.classList.toggle('neg', miss > 0 || got > expected); }
+    };
+    inp.addEventListener('input', update);
+    update();
+  });
+
   // Ảnh đại diện (Cài đặt): xem trước ngay, báo lỗi sớm (loại file, dung lượng). Máy chủ vẫn kiểm tra lại toàn bộ nội dung file.
   const initAvatar = () => {
     const form = document.querySelector('.avatar-form');
@@ -625,6 +640,35 @@
   // ── Điều hướng không tải lại trang ──
   // Thanh đầu và thanh chức năng đứng yên; bấm liên kết / gửi form chỉ đổi vùng nội dung bên phải (<main>).
   // Trang không thuộc khung này (đăng nhập, trang lỗi, tải CSV…) vẫn chuyển trang bình thường.
+  // Số nhỏ cạnh mục menu (VD: phiếu chờ xác nhận): cập nhật tại chỗ, không chạm tới phần còn lại của menu
+  // Hai loại số cạnh mục menu: «nav-new» (+N thay đổi mới, xanh) và «nav-badge» (cần xử lý, đỏ), cùng nằm trong khối .nav-pills
+  const setNavPill = (link, cls, n) => {
+    let box = link.querySelector('.nav-pills'), b = box?.querySelector('.' + cls);
+    const text = !n || n < 1 ? '' : (cls === 'nav-new' ? '+' + (n > 99 ? 99 : n) : String(n));
+    if (!text) { b?.remove(); if (box && !box.children.length) box.remove(); return; }
+    if (!box) { box = document.createElement('span'); box.className = 'nav-pills'; link.appendChild(box); }
+    if (!b) { b = document.createElement('b'); b.className = cls; b.title = cls === 'nav-new' ? 'Thay đổi mới' : 'Cần xử lý'; cls === 'nav-new' ? box.prepend(b) : box.appendChild(b); }
+    if (b.textContent !== text) { b.textContent = text; b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+  };
+  const setNavBadge = (link, n, news) => { setNavPill(link, 'nav-badge', n); setNavPill(link, 'nav-new', news); };
+  // Tự làm tươi số nhỏ: mỗi 30 giây và mỗi lần quay lại thẻ trình duyệt — thấy ngay khi người khác lập / xác nhận / huỷ phiếu
+  if (document.querySelector('.sidebar nav a[data-nav]') && window.fetch) {
+    let busy = false;
+    const refreshBadges = async () => {
+      if (busy || document.hidden) return;
+      busy = true;
+      try {
+        const res = await fetch('/api/badges', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+        if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return;
+        const { badges, news } = await res.json();
+        document.querySelectorAll('.sidebar nav a[data-nav]').forEach((a) => setNavBadge(a, badges[a.dataset.nav] || 0, (news || {})[a.dataset.nav] || 0));
+      } catch (e) { /* mạng chập chờn: lần sau thử lại */ } finally { busy = false; }
+    };
+    setInterval(refreshBadges, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBadges(); });
+    window.refreshBadges = refreshBadges;
+  }
+
   const initPage = (swapped) => { initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
   initPage();
 
@@ -647,7 +691,8 @@
       if (nav && freshNav) {
         const mine = [...nav.querySelectorAll('a')], theirs = [...freshNav.querySelectorAll('a')];
         if (mine.length === theirs.length && mine.every((a, i) => a.getAttribute('href') === theirs[i].getAttribute('href'))) {
-          mine.forEach((a, i) => {                                                    // cùng danh sách mục: chỉ chuyển dấu «đang mở»
+          mine.forEach((a, i) => {                                                    // cùng danh sách mục: chuyển dấu «đang mở» và đồng bộ số nhỏ
+            setNavBadge(a, parseInt(theirs[i].querySelector('.nav-badge')?.textContent || '0', 10), parseInt((theirs[i].querySelector('.nav-new')?.textContent || '0').replace('+', ''), 10));
             const on = theirs[i].classList.contains('active');
             if (a.classList.contains('active') !== on) a.classList.toggle('active', on);
             if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
