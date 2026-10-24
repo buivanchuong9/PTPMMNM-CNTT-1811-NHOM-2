@@ -2,6 +2,16 @@
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Màn chào sau đăng nhập (xe tải chạy ngang màn hình): gỡ khỏi trang khi chạy xong, hoặc khi bấm / nhấn phím để bỏ qua.
+  const welcome = document.getElementById('welcome');
+  if (welcome) {
+    const done = () => welcome.remove();
+    welcome.addEventListener('animationend', (e) => { if (e.target === welcome) done(); });
+    welcome.addEventListener('click', done);
+    document.addEventListener('keydown', done, { once: true });
+    setTimeout(done, 4000);
+  }
+
   // Ảnh đại diện (Cài đặt): xem trước ngay, báo lỗi sớm (loại file, dung lượng). Máy chủ vẫn kiểm tra lại toàn bộ nội dung file.
   const initAvatar = () => {
     const form = document.querySelector('.avatar-form');
