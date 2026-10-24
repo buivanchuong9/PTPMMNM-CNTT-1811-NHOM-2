@@ -86,20 +86,34 @@ final class Session
         return $f;
     }
 
-    /** Throttle đăng nhập sai theo phiên + IP (đơn giản, chống dò mật khẩu hàng loạt). */
-    public function loginBlocked(): bool
+    /** Số lần nhập sai mật khẩu (đúng tên đăng nhập) trước khi tạm khoá. */
+    public const LOGIN_MAX_FAILS = 5;
+    /** Thời gian tạm khoá (giây) theo từng đợt khoá liên tiếp; đợt cuối lặp lại cho các lần sau. */
+    private const LOGIN_LOCK_STEPS = [60, 300, 900, 1800, 3600];
+
+    /** Số giây còn lại của đợt tạm khoá trên máy (phiên) này; 0 nếu không bị khoá. */
+    public function loginLockedFor(): int
     {
-        return ($_SESSION['login_fail'] ?? 0) >= 8 && time() - ($_SESSION['login_fail_at'] ?? 0) < 300;
+        return max(0, (int)($_SESSION['login_lock_until'] ?? 0) - time());
     }
 
+    /** Ghi nhận một lần sai mật khẩu của tài khoản có thật; đủ số lần thì khoá, mỗi đợt lâu hơn đợt trước. */
     public function loginFailed(): void
     {
-        $_SESSION['login_fail'] = ($_SESSION['login_fail'] ?? 0) + 1;
-        $_SESSION['login_fail_at'] = time();
+        $fails = ($_SESSION['login_fail'] ?? 0) + 1;
+        if ($fails < self::LOGIN_MAX_FAILS) {
+            $_SESSION['login_fail'] = $fails;
+            return;
+        }
+        $level = (int)($_SESSION['login_lock_level'] ?? 0);
+        $steps = self::LOGIN_LOCK_STEPS;
+        $_SESSION['login_lock_until'] = time() + $steps[min($level, count($steps) - 1)];
+        $_SESSION['login_lock_level'] = $level + 1;
+        $_SESSION['login_fail'] = 0;
     }
 
     public function loginOk(): void
     {
-        unset($_SESSION['login_fail'], $_SESSION['login_fail_at']);
+        unset($_SESSION['login_fail'], $_SESSION['login_lock_until'], $_SESSION['login_lock_level']);
     }
 }

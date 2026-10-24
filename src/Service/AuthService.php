@@ -19,6 +19,12 @@ final class AuthService
         return $row && $ok ? $this->hydrate($row) : null;
     }
 
+    /** Tên đăng nhập có tài khoản đang hoạt động hay không (để chỉ tính lần sai mật khẩu của tài khoản có thật). */
+    public function exists(string $username): bool
+    {
+        return $this->db->one('SELECT id FROM nguoi_dung WHERE ten_dang_nhap = ? AND hoat_dong', [trim($username)]) !== null;
+    }
+
     public function find(int $id): ?User
     {
         $row = $this->db->one('SELECT * FROM nguoi_dung WHERE id = ? AND hoat_dong', [$id]);

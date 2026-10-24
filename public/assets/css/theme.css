@@ -148,24 +148,12 @@ button:disabled { background: var(--mute-bg); border-color: var(--line); box-sha
 .bare { background: var(--bg); }
 /* Trang đăng nhập — Minimal SaaS: nền sáng, chữ đậm, đỏ StockFlow chỉ làm điểm nhấn. Mọi quy tắc gói trong .login. */
 .login { --l-ink: #111318; --l-ink-2: #4a505c; --l-muted: #6b7280; --l-line: #e5e7eb; --l-soft: var(--panel);
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; background: var(--surface); color: var(--l-ink); }
-.login-aside { position: relative; display: flex; flex-direction: column; gap: 40px; padding: 40px clamp(32px, 5vw, 72px); overflow: hidden;
-  background: radial-gradient(circle at 1px 1px, #dcdfe5 1px, transparent 0) 0 0 / 22px 22px, var(--l-soft); border-right: 1px solid var(--l-line); }
-.login-aside::after { content: ""; position: absolute; right: -120px; bottom: -120px; width: 320px; height: 320px; border-radius: 50%;
-  border: 1px solid var(--brand-100); box-shadow: 0 0 0 40px rgba(209,47,63,.025), 0 0 0 80px rgba(209,47,63,.02); pointer-events: none; }
-.login-brand { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; color: var(--l-ink); font-size: 1.15rem; font-weight: 600; letter-spacing: -.01em; text-decoration: none; }
-.login-brand:hover { text-decoration: none; }
-.login-brand img { width: 36px; height: 36px; border-radius: 9px; background: var(--surface); padding: 3px; border: 1px solid var(--l-line); }
-.login-brand b { font-weight: 800; color: var(--brand); }
-.login-brand small { padding: 2px 7px; border-radius: 5px; background: var(--surface); border: 1px solid var(--l-line); color: var(--l-muted); font-size: .68rem; font-weight: 700; letter-spacing: .08em; }
-.login-intro { margin-block: auto; max-width: 460px; }
-.login-intro h2 { margin: 0 0 26px; font-size: clamp(1.6rem, 2.4vw, 2.2rem); line-height: 1.22; font-weight: 700; letter-spacing: -.025em; color: var(--l-ink); }
-.login-intro h2 span { color: var(--l-muted); font-weight: 600; }
-.login-intro > p { margin: 0 0 28px; color: var(--l-ink-2); font-size: 1rem; }
-.login-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
-.login-points li { display: flex; align-items: center; gap: 12px; color: var(--l-ink-2); font-size: .92rem; }
-.login-points .icon { flex: none; width: 34px; height: 34px; padding: 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--l-line); color: var(--brand); }
-.login-foot { margin: 0; color: var(--l-muted); font-size: .8rem; }
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; background: var(--surface); color: var(--l-ink); }
+/* Cột trái: ảnh phủ kín cả cột (sát mọi góc). Giữ mép dưới và lệch trái để không cắt chữ; mép phải mờ dần sang cột đăng nhập. */
+/* Khung cố định: kích thước cột không phụ thuộc ảnh (contain) nên F5 / ảnh tải chậm cũng không xô lệch bố cục. */
+.login-aside { position: relative; overflow: hidden; min-width: 0; min-height: 0; contain: layout paint size; background: #fcfdfe; }
+.login-hero-img { position: absolute; max-width: none; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 25% 100%;
+  -webkit-mask-image: linear-gradient(90deg, #000 96%, transparent); mask-image: linear-gradient(90deg, #000 96%, transparent); }
 
 .login-main { display: grid; place-items: center; min-width: 0; padding: 40px 24px; }
 .login .login-card { width: 100%; max-width: 400px; padding: 0; margin: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
@@ -187,6 +175,14 @@ button:disabled { background: var(--mute-bg); border-color: var(--line); box-sha
 .login .login-form button:active { background: var(--brand-700); }
 .login .login-form button:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 .login .login-form button:disabled { background: var(--field-line); border-color: var(--field-line); box-shadow: none; }
+.login .login-form .pw-field { position: relative; display: block; }
+.login .login-form .pw-field input:not([type=hidden]) { padding-right: 46px; }
+.login .login-form .pw-toggle, .login .login-form .pw-toggle:hover, .login .login-form .pw-toggle:active { position: absolute; top: 50%; right: 4px; width: 36px; min-height: 36px; height: 36px; margin: 0; padding: 0;
+  transform: translateY(-50%); display: grid; place-items: center; background: transparent; border: 0; border-radius: 6px; box-shadow: none; color: var(--muted); }
+.login .login-form .pw-toggle:hover { color: var(--l-ink); }
+.login .login-form .pw-toggle .icon { width: 20px; height: 20px; }
+.login .login-form .pw-toggle .ic-eye-off, .login .login-form .pw-toggle[aria-pressed=true] .ic-eye { display: none; }
+.login .login-form .pw-toggle[aria-pressed=true] .ic-eye-off { display: block; }
 
 .login .flash { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 20px; padding: 11px 14px; border: 1px solid #fecaca; border-radius: 8px;
   background: #fef2f2; color: #991b1b; font-size: .88rem; font-weight: 500; }
@@ -202,32 +198,9 @@ button:disabled { background: var(--mute-bg); border-color: var(--line); box-sha
 .login .demo-accounts ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
 .login .demo-accounts code { padding: 1px 6px; border-radius: 5px; background: var(--l-soft); border: 1px solid var(--l-line); color: var(--l-ink); font-size: .82rem; }
 
-/* Xe tải chạy ngang dưới danh sách lợi ích. Làn (.login-lane) rộng đúng bằng vùng minh hoạ nên translateX(100%) = độ rộng vùng:
-   quãng đường luôn khớp container khi resize/zoom, không phụ thuộc viewport. Chỉ animate transform ⇒ mượt, không reflow. */
-.login-road { --tw: clamp(90px, 27%, 140px); position: relative; overflow: hidden; height: calc(var(--tw) * .44 + 10px); margin-top: 36px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
-.login-road::before { content: ""; position: absolute; left: 0; right: 0; bottom: 6px; height: 2px;
-  background: repeating-linear-gradient(90deg, var(--field-line) 0 14px, transparent 14px 26px); }
-.login-lane { position: absolute; inset: 0; animation: login-drive 6s linear infinite; will-change: transform; }
-.login-truck { position: absolute; bottom: 0; right: 100%; width: var(--tw); height: auto; display: block; overflow: visible; }
-.login-truck .truck-body { animation: login-bob .7s ease-in-out infinite alternate; }
-.login-truck .truck-speed { animation: login-speed .9s ease-in-out infinite alternate; }
-.login-truck .truck-wheel { transform-box: fill-box; transform-origin: center; animation: login-spin .55s linear infinite; }
-@keyframes login-drive { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--tw))); } }
-@keyframes login-spin { to { transform: rotate(360deg); } }
-@keyframes login-bob { from { transform: translateY(0); } to { transform: translateY(-1px); } }
-@keyframes login-speed { from { opacity: .35; transform: translateX(0); } to { opacity: .9; transform: translateX(-3px); } }
-/* Giảm chuyển động: xe đứng yên giữa đường (app.css đã tắt animation toàn cục) */
-@media (prefers-reduced-motion: reduce) {
-  .login-lane { transform: translateX(calc(50% + var(--tw) / 2)); }
-  .login-truck .truck-speed { display: none; }
-}
-@media (max-height: 640px) { .login-road { display: none; } }
-
 @media (max-width: 900px) {
-  .login { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  .login-aside { gap: 0; padding: 18px 20px; border-right: 0; border-bottom: 1px solid var(--l-line); background: var(--l-soft); }
-  .login-aside::after, .login-intro, .login-foot { display: none; }
+  .login { grid-template-columns: minmax(0, 1fr); }
+  .login-aside { display: none; }
   .login-main { place-items: start center; padding: clamp(32px, 8vh, 96px) 20px 40px; }
   .login .login-card { align-self: start; }
 }
