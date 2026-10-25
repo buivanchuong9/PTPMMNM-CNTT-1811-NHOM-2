@@ -137,6 +137,17 @@ function dt(?string $v, bool $time = true): string
     return gmdate($time ? 'd/m/Y H:i' : 'd/m/Y', strtotime($v . ' UTC') + 7 * 3600);
 }
 
+/** Nhãn hạn dùng của một lô (kết quả StockQuery::expiryState): hết hạn · sắp hết hạn (còn N ngày) · còn hạn. */
+function expiry_tag(array $s): string
+{
+    return match ($s['status']) {
+        'expired' => '<span class="tag tag-danger">Hết hạn ' . n(abs((int)$s['days'])) . ' ngày</span>',
+        'soon' => '<span class="tag tag-warn">Còn ' . n((int)$s['days']) . ' ngày</span>',
+        'ok' => '<span class="tag tag-ok">Còn hạn</span>',
+        default => '<span class="muted">Không ghi hạn</span>',
+    };
+}
+
 const STATUS_LABELS = [
     'DRAFT' => ['Chờ xác nhận', 'warn'], 'CONFIRMED' => ['Đã xác nhận', 'ok'], 'CANCELLED' => ['Đã huỷ', 'danger'],
     'OPEN' => ['Đang kiểm đếm', 'info'], 'REVIEW' => ['Chờ duyệt chênh lệch', 'warn'], 'CLOSED' => ['Đã đóng', 'ok'],

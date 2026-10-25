@@ -40,6 +40,8 @@ final class App
         $r->get('/api/badges', [C\DashboardController::class, 'badges']);
         $r->post('/api/notifications/seen', [C\DashboardController::class, 'notificationsSeen']);
         $r->get('/inventory', [C\InventoryController::class, 'index']);
+        $r->post('/items/price', [C\InventoryController::class, 'price']);
+        $r->post('/items/cost', [C\InventoryController::class, 'cost']);
         $r->get('/settings', [C\SettingsController::class, 'index']);
         $r->post('/settings/profile', [C\SettingsController::class, 'profile']);
         $r->post('/settings/password', [C\SettingsController::class, 'password']);
@@ -81,6 +83,7 @@ final class App
         $r->get('/history', [C\HistoryController::class, 'index']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);
+        $r->get('/valuation', [C\ValuationController::class, 'index']);
         $r->get('/reports/stock.csv', [C\HistoryController::class, 'exportStock']);
         $r->get('/reports/movements.csv', [C\HistoryController::class, 'exportMovements']);
         $r->get('/reports/reconcile.csv', [C\HistoryController::class, 'exportReconcile']);

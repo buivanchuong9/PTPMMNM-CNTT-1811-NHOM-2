@@ -20,7 +20,7 @@ $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
     <?php endif; ?>
     <label>Ghi chú<input name="note" maxlength="255" placeholder="Số phiếu nhập xuất gốc, lý do…"></label>
   </div>
-  <?php $checkStock = !$isIn; require __DIR__ . '/../partials/lines.php'; ?>
+  <?php $checkStock = !$isIn; $newLots = $isIn; $autoLots = !$isIn; require __DIR__ . '/../partials/lines.php'; ?>
   <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Huỷ</a></div>
 </form>
 <?php endif; ?>

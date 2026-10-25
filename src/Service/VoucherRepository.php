@@ -78,8 +78,8 @@ final class VoucherRepository
              mb_substr($v['ly_do'] ?? '', 0, 255), mb_substr($v['ghi_chu'] ?? '', 0, 255), $v['nguoi_lap_id'], $confirmed ? $v['nguoi_lap_id'] : null]
         );
         foreach ($lines as $l) {
-            $this->db->exec('INSERT INTO chi_tiet_phieu_nhap_xuat (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id, so_luong, ghi_chu) VALUES (?,?,?,?,?)',
-                [$id, $l['mat_hang_id'], $l['lo_hang_id'], $l['so_luong'], mb_substr($l['ghi_chu'] ?? '', 0, 255)]);
+            $this->db->exec('INSERT INTO chi_tiet_phieu_nhap_xuat (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id, so_luong, ghi_chu, don_gia, thue_suat, gia_von) VALUES (?,?,?,?,?,?,?,?)',
+                [$id, $l['mat_hang_id'], $l['lo_hang_id'], $l['so_luong'], mb_substr($l['ghi_chu'] ?? '', 0, 255), $l['don_gia'] ?? null, (int)($l['thue_suat'] ?? 0), (int)($l['gia_von'] ?? 0)]);
         }
         return $id;
     }

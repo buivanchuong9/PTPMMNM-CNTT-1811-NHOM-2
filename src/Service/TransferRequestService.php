@@ -55,6 +55,9 @@ final class TransferRequestService
         if ($errors = $this->query->shortages($sourceWh, $lines)) {
             throw new DomainError('Kho cấp không đủ hàng — ' . implode('; ', $errors));
         }
+        if ($errors = $this->query->fefoErrors($sourceWh, $lines)) {
+            throw new DomainError('Kho cấp phải xuất theo hạn dùng — ' . implode('; ', $errors));
+        }
         if ($idem !== null && ($id = $this->db->value('SELECT id FROM yeu_cau_chuyen_hang WHERE khoa_chong_trung = ?', [$idem]))) {
             return ['id' => (int)$id, 'created' => false];
         }
@@ -130,6 +133,9 @@ final class TransferRequestService
         $lines = array_map(fn($l) => ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => (int)$l['so_luong']], $r['lines']);
         if ($errors = $this->query->shortages((int)$r['kho_cap_id'], $lines)) {
             throw new DomainError('Kho không còn đủ hàng để chấp nhận — ' . implode('; ', $errors) . '. Hãy từ chối kèm lý do.');
+        }
+        if ($errors = $this->query->fefoErrors((int)$r['kho_cap_id'], $lines)) {
+            throw new DomainError('Kho phải xuất theo hạn dùng — ' . implode('; ', $errors) . '. Hãy từ chối kèm lý do hoặc nhờ kho nhận lập lại yêu cầu.');
         }
         // Khoá chống trùng suy ra từ mã yêu cầu: bấm đúp cũng chỉ ra một phiếu.
         $res = $this->transfers->createDraft($user, (int)$r['kho_cap_id'], (int)$r['kho_nhan_id'], $lines, 'Theo yêu cầu ' . $r['ma'], md5('request:' . $id));

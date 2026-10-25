@@ -240,14 +240,54 @@ final class CatalogService
         if (!$item || !$item['quan_ly_lo']) {
             throw new DomainError('Mặt hàng không tồn tại hoặc không quản lý theo lô');
         }
-        if ($expiry !== null && $expiry !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry) || !checkdate((int)substr($expiry, 5, 2), (int)substr($expiry, 8, 2), (int)substr($expiry, 0, 4)))) {
+        if ($expiry === null || trim($expiry) === '') {
+            throw new DomainError('Nhập hạn dùng của lô để kho quản lý và xuất theo thứ tự hết hạn trước');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry) || !checkdate((int)substr($expiry, 5, 2), (int)substr($expiry, 8, 2), (int)substr($expiry, 0, 4))) {
             throw new DomainError('Hạn dùng không hợp lệ');
         }
         if ($this->db->value('SELECT 1 FROM lo_hang WHERE mat_hang_id = ? AND so_lo = ?', [$itemId, $batchNo])) {
             throw new DomainError("Lô $batchNo đã tồn tại cho mặt hàng này");
         }
-        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung) VALUES (?,?,?)', [$itemId, $batchNo, $expiry ?: null]);
+        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung) VALUES (?,?,?)', [$itemId, $batchNo, $expiry]);
         $this->audit->record($actor->id, 'batch.create', 'batch', $id, "{$item['ma_hang']}/$batchNo");
+        return $id;
+    }
+
+    /**
+     * Lô của hàng nhập kho: người lập phiếu nhập gõ số lô + hạn dùng ghi trên hàng. Lô đã có (cùng số lô, cùng hạn) thì dùng lại;
+     * cùng số lô mà khác hạn dùng là nhầm lẫn ⇒ báo lỗi; chưa có thì tạo mới. Không cần quyền «Thêm lô» vì đây là một phần của việc nhập hàng.
+     */
+    public function ensureReceiptLot(User $actor, int $itemId, string $batchNo, string $expiry): int
+    {
+        $this->auth->requirePermission($actor, Permission::LapPhieuNhap);
+        $batchNo = strtoupper(trim($batchNo));
+        $expiry = trim($expiry);
+        $item = $this->db->one('SELECT * FROM mat_hang WHERE id = ? AND hoat_dong', [$itemId]);
+        if (!$item || !$item['quan_ly_lo']) {
+            throw new DomainError('Mặt hàng không tồn tại hoặc không quản lý theo lô');
+        }
+        if (!preg_match('/^[A-Z0-9._-]{1,40}$/', $batchNo) || $batchNo === self::NO_LOT) {
+            throw new DomainError($item['ma_hang'] . ': nhập số lô (1–40 ký tự A-Z, 0-9, ., _ hoặc -)');
+        }
+        if ($expiry === '') {
+            throw new DomainError($item['ma_hang'] . ' lô ' . $batchNo . ': nhập hạn dùng ghi trên hàng');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry) || !checkdate((int)substr($expiry, 5, 2), (int)substr($expiry, 8, 2), (int)substr($expiry, 0, 4))) {
+            throw new DomainError($item['ma_hang'] . ' lô ' . $batchNo . ': hạn dùng không hợp lệ');
+        }
+        if ($expiry < StockQuery::today()) {
+            throw new DomainError($item['ma_hang'] . ' lô ' . $batchNo . ': hạn dùng ' . dt($expiry, false) . ' đã qua — không nhập hàng đã hết hạn');
+        }
+        $lot = $this->db->one('SELECT id, han_dung FROM lo_hang WHERE mat_hang_id = ? AND so_lo = ?', [$itemId, $batchNo]);
+        if ($lot) {
+            if ($lot['han_dung'] !== $expiry) {
+                throw new DomainError($item['ma_hang'] . ' lô ' . $batchNo . ' đã có hạn dùng ' . dt($lot['han_dung'], false) . ' — hàng khác hạn dùng phải dùng số lô khác');
+            }
+            return (int)$lot['id'];
+        }
+        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung) VALUES (?,?,?)', [$itemId, $batchNo, $expiry]);
+        $this->audit->record($actor->id, 'batch.create', 'batch', $id, "{$item['ma_hang']}/$batchNo · HSD $expiry");
         return $id;
     }
 

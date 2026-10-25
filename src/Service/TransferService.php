@@ -22,7 +22,7 @@ use StockFlow\Domain\VoucherType;
 final class TransferService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
-                                private Authorizer $auth, private AuditLog $audit) {}
+                                private Authorizer $auth, private AuditLog $audit, private StockQuery $query) {}
 
     /** @param list<array{item_id:int,batch_id:int,qty:int}> $lines @return array{voucher:array,created:bool} */
     public function createDraft(User $user, int $fromWh, int $toWh, array $lines, string $note, ?string $idempotencyKey): array
@@ -89,6 +89,9 @@ final class TransferService
             $outLines = $this->repo->lines($outId);
             if ($outLines === []) {
                 throw new DomainError('Phiếu không có dòng hàng');
+            }
+            if ($errors = $this->query->fefoErrors($from, $outLines)) {
+                throw new DomainError('Xuất theo hạn dùng (hết hạn trước, xuất trước) — ' . implode('; ', $errors));
             }
             $outOps = $this->repo->ops($out, $outLines);
             $this->ledger->lock($this->repo->lockKeys($outOps));

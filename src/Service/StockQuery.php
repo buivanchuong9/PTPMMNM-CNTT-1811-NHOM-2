@@ -20,8 +20,8 @@ final class StockQuery
     public function pickList(): array
     {
         return $this->db->all(
-            'SELECT i.id AS mat_hang_id, i.danh_muc_id, b.id AS lo_hang_id, i.ma_hang, i.ten, u.ma AS unit, i.quan_ly_lo, b.so_lo, b.han_dung
-             FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.mat_hang_id = i.id WHERE i.hoat_dong ORDER BY i.ma_hang, b.so_lo'
+            'SELECT i.id AS mat_hang_id, i.danh_muc_id, b.id AS lo_hang_id, i.ma_hang, i.ten, u.ma AS unit, i.quan_ly_lo, b.so_lo, b.han_dung, i.gia_von, i.gia_ban
+             FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.mat_hang_id = i.id WHERE i.hoat_dong ORDER BY i.ma_hang, (b.han_dung IS NULL), b.han_dung, b.so_lo'
         );
     }
 
@@ -42,6 +42,163 @@ final class StockQuery
             $out[(int)$r['kho_id']][$r['mat_hang_id'] . ':' . $r['lo_hang_id']] = (int)$r['q'];
         }
         return $out;
+    }
+
+    /** Số ngày báo trước khi hàng sắp hết hạn. */
+    public const EXPIRY_WARN_DAYS = 30;
+
+    /** Hôm nay theo giờ Việt Nam (UTC+7), dạng YYYY-MM-DD — hạn dùng là ngày dương lịch, không phải giờ UTC. */
+    public static function today(): string
+    {
+        return gmdate('Y-m-d', time() + 7 * 3600);
+    }
+
+    /** Trạng thái hạn dùng của một lô: expired · soon (≤ 30 ngày) · ok · none (không có hạn). @return array{status:string,days:?int} */
+    public static function expiryState(?string $hanDung): array
+    {
+        if ($hanDung === null || $hanDung === '') {
+            return ['status' => 'none', 'days' => null];
+        }
+        $days = (int)round((strtotime($hanDung . ' UTC') - strtotime(self::today() . ' UTC')) / 86400);
+        return ['status' => $days < 0 ? 'expired' : ($days <= self::EXPIRY_WARN_DAYS ? 'soon' : 'ok'), 'days' => $days];
+    }
+
+    /**
+     * Quy tắc xuất hàng theo hạn dùng (FEFO — hết hạn trước, xuất trước), áp dụng cho phiếu xuất và điều chuyển đi:
+     *  - lô đã quá hạn thì không được xuất đi;
+     *  - còn lô khác CÙNG mặt hàng, hạn gần hơn, đang còn tồn tại kho ⇒ phải xuất lô đó trước (phần đã lấy hết trong chính phiếu này thì không tính).
+     * Mặt hàng không quản lý theo lô, hoặc lô không ghi hạn, thì bỏ qua.
+     * @param list<array{mat_hang_id:int,lo_hang_id:int,so_luong:int}> $lines
+     * @return list<string> thông báo lỗi, rỗng nếu đúng thứ tự
+     */
+    public function fefoErrors(int $warehouseId, array $lines): array
+    {
+        $today = self::today();
+        $taking = [];
+        foreach ($lines as $l) {
+            $taking[(int)$l['lo_hang_id']] = ($taking[(int)$l['lo_hang_id']] ?? 0) + (int)$l['so_luong'];
+        }
+        $errors = [];
+        foreach ($lines as $l) {
+            $lot = $this->db->one(
+                'SELECT b.so_lo, b.han_dung, i.ma_hang, i.quan_ly_lo FROM lo_hang b JOIN mat_hang i ON i.id = b.mat_hang_id WHERE b.id = ? AND i.id = ?',
+                [$l['lo_hang_id'], $l['mat_hang_id']]
+            );
+            if (!$lot || !$lot['quan_ly_lo'] || !$lot['han_dung']) {
+                continue;
+            }
+            $han = dt($lot['han_dung'], false);
+            if ($lot['han_dung'] < $today) {
+                $errors[] = $lot['ma_hang'] . ' lô ' . $lot['so_lo'] . ' đã hết hạn (' . $han . ') — không được xuất đi, hãy xử lý bằng kiểm kê / phiếu điều chỉnh';
+                continue;
+            }
+            $earlier = $this->db->all(
+                'SELECT b.id, b.so_lo, b.han_dung, t.so_luong FROM lo_hang b JOIN ton_kho t ON t.lo_hang_id = b.id AND t.kho_id = ?
+                 WHERE b.mat_hang_id = ? AND b.han_dung IS NOT NULL AND b.han_dung >= ? AND b.han_dung < ? AND t.so_luong > 0 ORDER BY b.han_dung, b.so_lo',
+                [$warehouseId, $l['mat_hang_id'], $today, $lot['han_dung']]
+            );
+            foreach ($earlier as $e) {
+                $left = (int)$e['so_luong'] - ($taking[(int)$e['id']] ?? 0);
+                if ($left > 0) {
+                    $errors[] = $lot['ma_hang'] . ': phải xuất lô ' . $e['so_lo'] . ' (HSD ' . dt($e['han_dung'], false) . ', còn ' . n($left) . ') trước lô ' . $lot['so_lo'] . ' (HSD ' . $han . ')';
+                    break;
+                }
+            }
+        }
+        return array_values(array_unique($errors));
+    }
+
+    /**
+     * Phiếu xuất / điều chuyển đi: dòng «mặt hàng:auto» chỉ nhập TỔNG số lượng, hệ thống tự chia ra các lô còn tồn tại kho theo hạn dùng
+     * (hết hạn trước lấy trước, lô đã quá hạn bỏ qua). Dòng đã chỉ rõ lô thì giữ nguyên. Hai dòng cùng mặt hàng được cộng lại trước khi chia.
+     * @param list<mixed> $keys line[] thô · @param list<mixed> $qtys qty[] thô @return array{0:list<mixed>,1:list<mixed>} cặp line[] / qty[] đã chia lô
+     */
+    public function expandAutoLots(int $warehouseId, array $keys, array $qtys): array
+    {
+        $sum = [];
+        foreach ($keys as $i => $key) {
+            if (is_scalar($key) && preg_match('/^(\d+):auto$/', trim((string)$key), $m)) {
+                $q = \StockFlow\Domain\StockRules::parseQty($qtys[$i] ?? '');
+                if ($q === null || $q < 1) {
+                    throw new \StockFlow\Domain\DomainError('Số lượng phải là số nguyên dương');
+                }
+                $sum[(int)$m[1]] = ($sum[(int)$m[1]] ?? 0) + $q;
+            }
+        }
+        $outK = $outQ = [];
+        $done = [];
+        foreach ($keys as $i => $key) {
+            if (!is_scalar($key) || !preg_match('/^(\d+):auto$/', trim((string)$key), $m)) {
+                $outK[] = $key;
+                $outQ[] = $qtys[$i] ?? '';
+                continue;
+            }
+            $item = (int)$m[1];
+            if (isset($done[$item])) {
+                continue;
+            }
+            $done[$item] = true;
+            foreach ($this->allocateFefo($warehouseId, $item, $sum[$item]) as $lotId => $take) {
+                $outK[] = $item . ':' . $lotId;
+                $outQ[] = (string)$take;
+            }
+        }
+        return [$outK, $outQ];
+    }
+
+    /** @return array<int,int> lô ⇒ số lượng lấy, hạn gần nhất trước */
+    private function allocateFefo(int $warehouseId, int $itemId, int $qty): array
+    {
+        $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ? AND hoat_dong', [$itemId]) ?? throw new \StockFlow\Domain\DomainError('Mặt hàng không tồn tại hoặc đã ngừng hoạt động');
+        $today = self::today();
+        $lots = $this->db->all(
+            'SELECT b.id, b.han_dung, t.so_luong FROM lo_hang b JOIN ton_kho t ON t.lo_hang_id = b.id AND t.kho_id = ? WHERE b.mat_hang_id = ? AND t.so_luong > 0
+             ORDER BY (b.han_dung IS NULL), b.han_dung, b.id',
+            [$warehouseId, $itemId]
+        );
+        $out = [];
+        $left = $qty;
+        $usable = 0;
+        foreach ($lots as $l) {
+            if ($l['han_dung'] !== null && $l['han_dung'] < $today) {
+                continue;   // lô quá hạn không xuất đi
+            }
+            $usable += (int)$l['so_luong'];
+            if ($left > 0) {
+                $take = min($left, (int)$l['so_luong']);
+                $out[(int)$l['id']] = $take;
+                $left -= $take;
+            }
+        }
+        if ($left > 0) {
+            throw new \StockFlow\Domain\DomainError($item['ma_hang'] . ': kho chỉ còn ' . n($usable) . ' (chưa kể lô đã hết hạn), cần ' . n($qty));
+        }
+        return $out;
+    }
+
+    /**
+     * Các lô còn tồn đã hết hạn hoặc sắp hết hạn trong EXPIRY_WARN_DAYS ngày tới, theo từng kho.
+     * @param list<int> $warehouseIds
+     * @return list<array{kho_id:int,wh_code:string,mat_hang_id:int,lo_hang_id:int,ma_hang:string,ten:string,so_lo:string,han_dung:string,so_luong:int,unit:string,status:string,days:int}>
+     */
+    public function expiring(array $warehouseIds): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        $limit = gmdate('Y-m-d', time() + 7 * 3600 + self::EXPIRY_WARN_DAYS * 86400);
+        $rows = $this->db->all(
+            "SELECT t.kho_id, w.ma AS wh_code, t.mat_hang_id, t.lo_hang_id, i.ma_hang, i.ten, b.so_lo, b.han_dung, t.so_luong, u.ma AS unit
+             FROM ton_kho t JOIN kho w ON w.id = t.kho_id JOIN mat_hang i ON i.id = t.mat_hang_id JOIN lo_hang b ON b.id = t.lo_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
+             WHERE t.kho_id IN ({$this->in($warehouseIds)}) AND t.so_luong > 0 AND i.quan_ly_lo AND b.han_dung IS NOT NULL AND b.han_dung <= ? ORDER BY b.han_dung, i.ma_hang",
+            [...$warehouseIds, $limit]
+        );
+        foreach ($rows as &$r) {
+            $s = self::expiryState($r['han_dung']);
+            $r += ['status' => $s['status'], 'days' => (int)$s['days'], 'so_luong' => (int)$r['so_luong']];
+            $r['kho_id'] = (int)$r['kho_id'];
+        }
+        return $rows;
     }
 
     /**

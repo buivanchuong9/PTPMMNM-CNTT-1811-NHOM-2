@@ -92,6 +92,9 @@ final class Migrator
                 $log[] = "✔ Đã thêm cột $table.$column";
             }
         }
+        if ($n = $this->moveDefaultPrices()) {
+            $log[] = "✔ Đã chuyển giá bán mặc định cũ thành giá riêng của $n dòng (kho × mặt hàng)";
+        }
         return $log;
     }
 
@@ -99,7 +102,31 @@ final class Migrator
     private const ADDED_COLUMNS = [
         ['nguoi_dung', 'anh_dai_dien', 'varchar(255) NULL'],
         ['mat_hang', 'danh_muc_id', 'integer NULL'],
+        ['mat_hang', 'gia_ban', 'integer NOT NULL DEFAULT 0'],
+        ['mat_hang', 'thue_suat', 'integer NOT NULL DEFAULT 10'],
+        ['mat_hang', 'gia_von', 'integer NOT NULL DEFAULT 0'],
+        ['lich_su_gia', 'kho_id', 'integer NULL'],
+        ['chi_tiet_phieu_nhap_xuat', 'don_gia', 'integer NULL'],
+        ['chi_tiet_phieu_nhap_xuat', 'thue_suat', 'integer NOT NULL DEFAULT 0'],
+        ['chi_tiet_phieu_nhap_xuat', 'gia_von', 'integer NOT NULL DEFAULT 0'],
     ];
+
+    /**
+     * Bỏ «giá bán mặc định»: giá cũ ở mat_hang.gia_ban được sao thành giá riêng của từng kho chưa có giá (gia_ban_kho), rồi đặt về 0.
+     * Phải chạy SAU khi cột đã được thêm (nên không nằm trong file .sql). Chạy lại an toàn: hết giá mặc định thì không làm gì.
+     * @return int số dòng giá riêng vừa tạo
+     */
+    private function moveDefaultPrices(): int
+    {
+        if (!$this->db->value('SELECT COUNT(*) FROM mat_hang WHERE gia_ban > 0')) {
+            return 0;
+        }
+        $before = (int)$this->db->value('SELECT COUNT(*) FROM gia_ban_kho');
+        $this->db->raw('INSERT INTO gia_ban_kho (kho_id, mat_hang_id, gia_ban) SELECT k.id, i.id, i.gia_ban FROM kho k JOIN mat_hang i ON i.gia_ban > 0
+                        WHERE NOT EXISTS (SELECT 1 FROM gia_ban_kho g WHERE g.kho_id = k.id AND g.mat_hang_id = i.id)');
+        $this->db->raw('UPDATE mat_hang SET gia_ban = 0 WHERE gia_ban > 0');
+        return (int)$this->db->value('SELECT COUNT(*) FROM gia_ban_kho') - $before;
+    }
 
     private function addColumnIfMissing(string $table, string $column, string $definition): bool
     {
