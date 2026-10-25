@@ -16,7 +16,7 @@ use StockFlow\Service\StockQuery;
 
 final class DashboardController extends Controller
 {
-    public function __construct(View $view, Session $session, Authorizer $auth, private StockQuery $query, private NavBadges $badges, private ChangeTracker $changes)
+    public function __construct(View $view, Session $session, Authorizer $auth, private StockQuery $query, private NavBadges $badges, private ChangeTracker $changes, private \StockFlow\Service\NotificationService $notifications)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -24,7 +24,16 @@ final class DashboardController extends Controller
     /** Số nhỏ trên menu (JSON) — trang gọi định kỳ để số tự cập nhật khi người khác xác nhận / huỷ / lập phiếu. */
     public function badges(Request $r, array $p, ?User $user): Response
     {
-        return new Response(json_encode(['badges' => (object)$this->badges->for($user), 'news' => (object)$this->changes->counts($user)]), 200, ['Content-Type' => 'application/json; charset=utf-8']);
+        return new Response(json_encode(['badges' => (object)$this->badges->for($user), 'news' => (object)$this->changes->counts($user), 'notifications' => $this->notifications->all($user)]), 200, ['Content-Type' => 'application/json; charset=utf-8']);
+    }
+
+    /** Quản trị đóng chuông ⇒ đánh dấu đã xem hoạt động mới. */
+    public function notificationsSeen(Request $r, array $p, ?User $user): Response
+    {
+        if ($user->isAdmin) {
+            $this->notifications->markActivitySeen($user);
+        }
+        return new Response('{}', 200, ['Content-Type' => 'application/json; charset=utf-8']);
     }
 
     public function index(Request $r, array $p, ?User $user): Response

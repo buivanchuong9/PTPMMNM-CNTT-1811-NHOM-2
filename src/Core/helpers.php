@@ -183,7 +183,8 @@ function type_chip(string $type): string
 function icon(string $name): string
 {
     static $paths = [
-        'home' => '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+        'bell' => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+        'home' =>'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
         'box' => '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
         'layers' => '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
         'truck' => '<path d="M2 6h11v10H2z"/><path d="M13 9h5l3 3v4h-8"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>',

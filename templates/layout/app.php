@@ -8,6 +8,7 @@ $groups = [
         'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập', [P::LapPhieuNhap]],
         'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', [P::LapPhieuXuat]],
         'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
+        'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
         'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
         'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
     ],
@@ -77,6 +78,26 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
     <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>
   <div class="topuser">
+    <?php $nTasks = $notifications['tasks'] ?? []; $nAct = $notifications['activity'] ?? ['new' => 0, 'list' => []];
+          $notifTotal = array_sum(array_column($nTasks, 'count')) + (int)$nAct['new']; ?>
+    <div class="notif" data-notif>
+      <button class="icon-btn notif-btn" type="button" data-notif-toggle aria-haspopup="true" aria-expanded="false" aria-label="Thông báo" title="Thông báo"><?= icon('bell') ?><b class="notif-count" data-notif-count<?= $notifTotal ? '' : ' hidden' ?>><?= $notifTotal > 99 ? '99+' : $notifTotal ?></b></button>
+      <div class="notif-pop" data-notif-pop hidden>
+        <p class="notif-head">Thông báo</p>
+        <ul class="notif-list" data-notif-list>
+          <?php foreach ($nTasks as $nt): ?>
+          <li><a href="<?= e($nt['href']) ?>" class="notif-item tone-<?= e($nt['tone']) ?>"><i class="notif-dot" aria-hidden="true"></i><span><b><?= e($nt['title']) ?></b><small><?= e($nt['note']) ?></small></span><em><?= n($nt['count']) ?></em></a></li>
+          <?php endforeach; ?>
+        </ul>
+        <p class="notif-sub" data-notif-activity-head<?= $nAct['list'] ? '' : ' hidden' ?>>Hoạt động mới của các kho</p>
+        <ul class="notif-list notif-activity" data-notif-activity>
+          <?php foreach ($nAct['list'] as $ac): ?>
+          <li><a href="<?= e($ac['href']) ?>" class="notif-item<?= $ac['fresh'] ? ' fresh' : '' ?>"><i class="notif-dot" aria-hidden="true"></i><span><b><?= e($ac['who']) ?></b><small><?= e($ac['text']) ?></small></span><em class="when"><?= e($ac['at']) ?></em></a></li>
+          <?php endforeach; ?>
+        </ul>
+        <p class="notif-empty" data-notif-empty<?= $nTasks || $nAct['list'] ? ' hidden' : '' ?>>Không có việc nào đang chờ bạn.</p>
+      </div>
+    </div>
     <button class="icon-btn theme-toggle" type="button" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= str_replace('class="icon"', 'class="icon ic-sun"', icon('sun')) ?><?= str_replace('class="icon"', 'class="icon ic-moon"', icon('moon')) ?></button>
     <a class="avatar" href="/settings" title="Cài đặt tài khoản" aria-label="Cài đặt tài khoản"><?php if ($user->avatar): ?><img src="<?= e($user->avatarUrl()) ?>" alt=""><?php else: ?><?= e($user->initials()) ?><?php endif; ?></a>
     <span class="who" title="<?= e($myWarehouse ? 'Địa chỉ kho: ' . ($myWarehouse['dia_chi'] ?: '—') : 'Tài khoản cấp cao: thấy và thao tác ở mọi kho') ?>"><b><?= e($user->fullName) ?></b><small><em class="role-badge role-<?= e(strtolower($user->role->value)) ?>"><?= e($user->role->label()) ?></em><span class="who-wh"><?= e($myWarehouse ? $whLabel : 'Tất cả các kho') ?></span></small></span>

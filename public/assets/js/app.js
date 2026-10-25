@@ -336,6 +336,12 @@
       search.value = ''; open(false); refresh();
     };
 
+    // Hàng chọn sẵn từ nút «Yêu cầu chuyển hàng» (data-prefill = [["mã hàng:lô", số lượng], …])
+    try {
+      const pre = JSON.parse(picker.dataset.prefill || '[]');
+      if (pre.length) picker.restoreLines(pre.map((x) => x[0]), pre.map((x) => x[1]));
+    } catch (e) { /* bỏ qua */ }
+
     // Phiếu không có dòng nào thì không gửi (bắt ở giai đoạn capture để chạy trước khoá chống bấm đúp)
     form.addEventListener('submit', (ev) => {
       refresh();
@@ -513,6 +519,7 @@
         }
         const fl = dlg.querySelector('[data-dlg-label]');
         if (fl) fl.textContent = open.dataset.fillLabel || '';
+        if (open.dataset.fillAction) dlg.querySelector('form').action = open.dataset.fillAction;   // địa chỉ gửi theo từng dòng (VD: /requests/12/reject)
         dlg.querySelectorAll('.newitem-row').forEach((x) => x.remove());   // hộp mở lại thì bỏ các dòng hàng mới nhập dở
         try { const ids = String(JSON.parse(open.dataset.fill || '{}').supplier_ids ?? '').split(','); dlg.querySelectorAll('[data-sup-check]').forEach((c) => { c.checked = ids.includes(c.value); }); const its = String(JSON.parse(open.dataset.fill || '{}').item_ids ?? '').split(','); dlg.querySelectorAll('[data-item-check]').forEach((c) => { c.checked = its.includes(c.value); }); } catch (e) { /* bỏ qua */ }
         // sau khi điền: đồng bộ ô kho theo vai trò; [data-fill-text="khoá"] nhận chữ từ cùng JSON (VD: nhãn nút Khoá / Mở khoá)
@@ -651,16 +658,66 @@
     if (b.textContent !== text) { b.textContent = text; b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
   };
   const setNavBadge = (link, n, news) => { setNavPill(link, 'nav-badge', n); setNavPill(link, 'nav-new', news); };
+  // Chuông thông báo: bấm để mở danh sách, bấm một dòng để sang đúng trang cần làm; danh sách do /api/badges làm tươi.
+  // Quản trị còn có «Hoạt động mới của các kho»: đóng chuông ⇒ coi như đã xem, số trên chuông về 0.
+  const notifRoot = () => document.querySelector('[data-notif]');
+  let notifNew = 0;   // số hoạt động mới chưa xem (quản trị)
+  const renderNotifs = (data) => {
+    const root = notifRoot();
+    if (!root || !data) return;
+    const tasks = data.tasks || [], act = data.activity || { new: 0, list: [] };
+    notifNew = act.new || 0;
+    const total = tasks.reduce((s, x) => s + (x.count || 0), 0) + notifNew;
+    const badge = root.querySelector('[data-notif-count]');
+    const text = total > 99 ? '99+' : String(total);
+    badge.hidden = total === 0;
+    if (badge.textContent !== text) { badge.textContent = text; badge.classList.remove('bump'); void badge.offsetWidth; badge.classList.add('bump'); }
+    root.querySelector('[data-notif-list]').innerHTML = tasks.map((x) => `<li><a href="${esc(x.href)}" class="notif-item tone-${esc(x.tone)}"><i class="notif-dot" aria-hidden="true"></i><span><b>${esc(x.title)}</b><small>${esc(x.note)}</small></span><em>${vn.format(x.count)}</em></a></li>`).join('');
+    root.querySelector('[data-notif-activity]').innerHTML = (act.list || []).map((x) => `<li><a href="${esc(x.href)}" class="notif-item${x.fresh ? ' fresh' : ''}"><i class="notif-dot" aria-hidden="true"></i><span><b>${esc(x.who)}</b><small>${esc(x.text)}</small></span><em class="when">${esc(x.at)}</em></a></li>`).join('');
+    root.querySelector('[data-notif-activity-head]').hidden = !(act.list || []).length;
+    root.querySelector('[data-notif-empty]').hidden = tasks.length > 0 || (act.list || []).length > 0;
+  };
+  const closeNotif = () => {
+    const root = notifRoot();
+    if (!root) return;
+    const pop = root.querySelector('[data-notif-pop]');
+    if (pop.hidden) return;
+    pop.hidden = true;
+    root.querySelector('[data-notif-toggle]').setAttribute('aria-expanded', 'false');
+    if (notifNew > 0 && window.fetch) {   // đã xem hoạt động mới ⇒ dời mốc «đã xem» (chỉ quản trị có hoạt động mới)
+      const fd = new FormData();
+      fd.set('csrf', document.querySelector('input[name="csrf"]')?.value || '');
+      fetch('/api/notifications/seen', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).then(() => window.refreshBadges && window.refreshBadges(true)).catch(() => {});
+    }
+  };
+  document.addEventListener('click', (ev) => {
+    const toggle = ev.target.closest('[data-notif-toggle]');
+    if (toggle) {
+      const pop = toggle.closest('[data-notif]').querySelector('[data-notif-pop]');
+      if (pop.hidden) {
+        pop.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        if (window.refreshBadges) window.refreshBadges(true);
+      } else {
+        closeNotif();
+      }
+    } else if (!ev.target.closest('[data-notif-pop]') || ev.target.closest('a')) {
+      closeNotif();
+    }
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeNotif(); });
+
   // Tự làm tươi số nhỏ: mỗi 30 giây và mỗi lần quay lại thẻ trình duyệt — thấy ngay khi người khác lập / xác nhận / huỷ phiếu
   if (document.querySelector('.sidebar nav a[data-nav]') && window.fetch) {
     let busy = false;
-    const refreshBadges = async () => {
-      if (busy || document.hidden) return;
+    const refreshBadges = async (force) => {
+      if (busy || (document.hidden && force !== true)) return;
       busy = true;
       try {
         const res = await fetch('/api/badges', { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
         if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) return;
-        const { badges, news } = await res.json();
+        const { badges, news, notifications } = await res.json();
+        renderNotifs(notifications);
         document.querySelectorAll('.sidebar nav a[data-nav]').forEach((a) => setNavBadge(a, badges[a.dataset.nav] || 0, (news || {})[a.dataset.nav] || 0));
       } catch (e) { /* mạng chập chờn: lần sau thử lại */ } finally { busy = false; }
     };

@@ -20,7 +20,7 @@ final class ChangeTracker
 {
     /** Đường dẫn trang danh sách ⇒ chức năng. Trang chi tiết không tính là «đã xem». */
     public const PATHS = ['/vouchers' => 'vouchers', '/counts' => 'counts', '/inventory' => 'inventory', '/history' => 'history',
-        '/partners' => 'partners', '/warehouses' => 'warehouses', '/users' => 'users', '/fleet' => 'fleet'];
+        '/partners' => 'partners', '/warehouses' => 'warehouses', '/users' => 'users', '/fleet' => 'fleet', '/requests' => 'requests'];
 
     /** @var array<int,array<string,int>> bộ nhớ đệm trong một yêu cầu: id tài khoản ⇒ [chức năng ⇒ số mới] */
     private array $counted = [];
@@ -38,6 +38,7 @@ final class ChangeTracker
             'warehouses' => ['perms' => [Permission::XemDanhMuc], 'entity' => 'warehouse', 'scope' => 'kho'],
             'users' => ['perms' => [Permission::QuanLyTaiKhoan], 'entity' => 'user', 'scope' => null],
             'fleet' => ['perms' => [Permission::QuanLyDoiXe], 'entity' => 'vehicle', 'scope' => null],
+            'requests' => ['perms' => [Permission::XemPhieu], 'entity' => 'request', 'scope' => 'yeu_cau_chuyen_hang'],
             'history' => ['perms' => [Permission::XemLichSu], 'entity' => null, 'scope' => 'so_phat_sinh'],
         };
     }
@@ -62,7 +63,9 @@ final class ChangeTracker
     {
         $out = [];
         foreach ($this->db->all("SELECT khoa, gia_tri FROM cai_dat WHERE pham_vi = 'user' AND doi_tuong_id = ? AND khoa LIKE 'seen.%'", [$user->id]) as $r) {
-            $out[substr($r['khoa'], 5)] = (int)$r['gia_tri'];
+            if (in_array(substr($r['khoa'], 5), self::PATHS, true)) {   // khoá lạ (chức năng đã bỏ / do nơi khác ghi) thì bỏ qua, không làm hỏng mọi trang
+                $out[substr($r['khoa'], 5)] = (int)$r['gia_tri'];
+            }
         }
         foreach (self::PATHS as $section) {
             if (!isset($out[$section]) && $this->allowed($user, $section)) {
@@ -98,9 +101,14 @@ final class ChangeTracker
                 return [];
             }
             $in = implode(',', array_fill(0, count($ids), '?'));
-            $col = $d['scope'] === 'kho' ? 'id' : 'kho_id';
-            $sql .= " AND EXISTS (SELECT 1 FROM {$d['scope']} s WHERE s.id = a.doi_tuong_id AND s.$col IN ($in))";
-            array_push($args, ...$ids);
+            if ($d['scope'] === 'yeu_cau_chuyen_hang') {   // yêu cầu liên quan tới kho nhận hoặc kho cấp của tài khoản
+                $sql .= " AND EXISTS (SELECT 1 FROM yeu_cau_chuyen_hang s WHERE s.id = a.doi_tuong_id AND (s.kho_nhan_id IN ($in) OR s.kho_cap_id IN ($in)))";
+                array_push($args, ...$ids, ...$ids);
+            } else {
+                $col = $d['scope'] === 'kho' ? 'id' : 'kho_id';
+                $sql .= " AND EXISTS (SELECT 1 FROM {$d['scope']} s WHERE s.id = a.doi_tuong_id AND s.$col IN ($in))";
+                array_push($args, ...$ids);
+            }
         }
         return array_map(fn($r) => (int)$r['id'], $this->db->all($sql, $args));
     }

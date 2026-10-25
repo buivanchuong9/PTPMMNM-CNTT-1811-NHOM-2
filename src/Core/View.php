@@ -13,6 +13,8 @@ final class View
     private ?\Closure $newCounts = null;
     /** @var array{section:string,ids:array<int,true>,after:int,upto:int}|null phần «thay đổi mới» cần bôi đậm ở trang danh sách đang mở */
     private ?array $changes = null;
+    /** @var ?\Closure():array danh sách thông báo của chuông trên thanh đầu trang */
+    private ?\Closure $notifications = null;
 
     public function __construct(private Session $session) {}
 
@@ -27,6 +29,11 @@ final class View
         $this->changes = $changes;
     }
 
+    public function setNotifications(\Closure $fn): void
+    {
+        $this->notifications = $fn;
+    }
+
     public function setBadges(\Closure $fn): void
     {
         $this->badges = $fn;
@@ -38,6 +45,7 @@ final class View
         $data += ['flash' => $this->session->takeFlash(), 'old' => $this->session->takeOld(), 'csrf' => $this->session->csrf(), 'compact' => (bool)$this->session->pref('compact'),
             'welcome' => $layout === 'layout/app' && $this->session->takeWelcome(),
             'navBadges' => $layout === 'layout/app' && $this->badges ? ($this->badges)() : [],
+            'notifications' => $layout === 'layout/app' && $this->notifications ? ($this->notifications)() : [],
             'navNew' => $layout === 'layout/app' && $this->newCounts ? ($this->newCounts)() : [],
             'changes' => $this->changes ?? ['section' => '', 'ids' => [], 'after' => 0, 'upto' => 0]];
         $content = $this->capture($template, $data);

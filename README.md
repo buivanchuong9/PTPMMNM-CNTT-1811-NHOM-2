@@ -421,7 +421,7 @@ src/
 templates/                 giao diện PHP: layout/ · auth/ · dashboard/ · vouchers/ · transfers/ · counts/ · inventory/
                            history/ · partners/ · admin/ · settings/ · finova/ · errors/
 database/
-├─ migrations/             001 schema · 002 trigger bất biến · 003 cài đặt · 004 đội xe · 005 danh mục · 006 đối tác
+├─ migrations/             001 schema · 002 trigger bất biến · 003 cài đặt · 004 đội xe · 005 danh mục · 006 đối tác · 007 yêu cầu chuyển hàng
 └─ seeds/DemoSeed.php      dữ liệu mẫu
 storage/avatars/           ảnh đại diện (không commit ảnh)
 tests/                     Unit · Integration · Http · Support

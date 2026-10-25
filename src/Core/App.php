@@ -38,6 +38,7 @@ final class App
 
         $r->get('/', [C\DashboardController::class, 'index']);
         $r->get('/api/badges', [C\DashboardController::class, 'badges']);
+        $r->post('/api/notifications/seen', [C\DashboardController::class, 'notificationsSeen']);
         $r->get('/inventory', [C\InventoryController::class, 'index']);
         $r->get('/settings', [C\SettingsController::class, 'index']);
         $r->post('/settings/profile', [C\SettingsController::class, 'profile']);
@@ -59,6 +60,14 @@ final class App
         $r->post('/vouchers/{id}/correct', [C\VoucherController::class, 'correct']);
         $r->get('/transfers/new', [C\VoucherController::class, 'createTransfer']);
         $r->post('/transfers', [C\VoucherController::class, 'storeTransfer']);
+
+        $r->get('/requests', [C\TransferRequestController::class, 'index']);
+        $r->get('/requests/new', [C\TransferRequestController::class, 'create']);
+        $r->post('/requests', [C\TransferRequestController::class, 'store']);
+        $r->post('/requests/{id}/approve', [C\TransferRequestController::class, 'approve']);
+        $r->post('/requests/{id}/accept', [C\TransferRequestController::class, 'accept']);
+        $r->post('/requests/{id}/reject', [C\TransferRequestController::class, 'reject']);
+        $r->post('/requests/{id}/cancel', [C\TransferRequestController::class, 'cancel']);
 
         $r->get('/counts', [C\CountController::class, 'index']);
         $r->post('/counts', [C\CountController::class, 'store']);
@@ -154,6 +163,7 @@ final class App
             }
             if ($user) {   // số nhỏ trên menu: số chuyến chưa thấy hàng ở «Đội xe & tài xế», số phiếu chờ xác nhận ở «Phiếu nhập xuất»
                 $view->setBadges(fn() => $this->c->get(NavBadges::class)->for($user));
+                $view->setNotifications(fn() => $this->c->get(\StockFlow\Service\NotificationService::class)->all($user));
                 $tracker = $this->c->get(ChangeTracker::class);
                 if ($req->method === 'GET' && ($section = ChangeTracker::PATHS[$req->path] ?? null)) {   // mở trang danh sách: bôi đậm cái mới rồi dời mốc «đã xem»
                     $ref = parse_url((string)($_SERVER['HTTP_REFERER'] ?? ''), PHP_URL_PATH);
