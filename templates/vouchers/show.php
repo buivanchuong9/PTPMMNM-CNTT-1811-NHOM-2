@@ -100,6 +100,8 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
         <?php elseif ($canApprove && $recvTrip): ?>
         <div class="form">
           <p class="muted small">Nhập <b>số thực nhận</b> ở cột «Thực nhận» của bảng Dòng hàng (mặc định bằng số trên phiếu). Nhận thiếu thì tồn chỉ tăng đúng số thực nhận.</p>
+          <div class="form short-why"><label>Nếu nhận thiếu — lý do (bắt buộc khi thực nhận ít hơn số trên phiếu)<select name="short_reason"><option value="">Không thiếu / chọn lý do…</option><?php foreach (\StockFlow\Service\TransferService::SHORT_REASONS as $sr): ?><option><?= e($sr) ?></option><?php endforeach; ?></select></label>
+            <label>Ghi chú lý do thiếu<input name="short_note" maxlength="120" autocomplete="off" placeholder="VD: 5 thùng vỡ do xe phanh gấp"></label></div>
           <label class="check"><input type="checkbox" name="driver_match" value="1" required> Đúng tài xế <b><?= e($trip['tai_xe_ten']) ?></b> và đúng xe <b><?= e($trip['bien_so']) ?></b></label>
         </div>
         <?php endif; ?>
@@ -152,6 +154,23 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
           <td class="num <?= $m['bien_dong'] > 0 ? 'pos' : 'neg' ?>"><b><?= signed((int)$m['bien_dong']) ?></b></td><td class="num"><?= n($m['ton_sau']) ?></td></tr><?php endforeach; ?></tbody></table></div>
     </section>
     <?php endif; ?>
+
+    <?php if (!empty($receipt)): $lack = array_sum(array_column($receipt['rows'], 'short'));
+      $why = ($lack && str_contains($receipt['note'], ' · ')) ? trim(preg_replace('/^Nhận thiếu: /u', '', explode(' · ', $receipt['note'])[0])) : ''; ?>
+    <section class="card flush">
+      <div class="card-head pad"><h2>Thực nhận tại kho đến</h2>
+        <span class="muted small"><?= e($receipt['by'] ?? '—') ?> · <?= e(dt($receipt['when'])) ?> · <?= $lack ? '<b class="neg">thiếu ' . n($lack) . '</b>' : 'nhận đủ' ?></span></div>
+      <div class="table-wrap"><table class="dense">
+        <thead><tr><th>Hàng hoá</th><th>Lô</th><th class="num">Theo phiếu</th><th class="num">Thực nhận</th><th class="num">Thiếu</th></tr></thead>
+        <tbody><?php foreach ($receipt['rows'] as $rr): ?><tr>
+          <td><b><?= e($rr['ma_hang']) ?></b> <?= e($rr['ten']) ?></td>
+          <td><?= $rr['so_lo'] === 'NOLOT' ? '<span class="muted">—</span>' : e($rr['so_lo']) ?></td>
+          <td class="num"><?= n($rr['expected']) ?> <small class="muted"><?= e($rr['unit']) ?></small></td>
+          <td class="num"><b class="<?= $rr['short'] ? 'neg' : 'pos' ?>"><?= n($rr['got']) ?></b></td>
+          <td class="num"><?= $rr['short'] ? '<b class="neg">−' . n($rr['short']) . '</b>' : '<span class="muted">—</span>' ?></td></tr><?php endforeach; ?></tbody></table></div>
+      <?php if ($why): ?><p class="pad small"><b>Lý do thiếu:</b> <?= e($why) ?></p><?php endif; ?>
+    </section>
+    <?php endif; ?>
   </div>
 
   <aside>
@@ -180,7 +199,8 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
         <dt>Tài xế</dt><dd><b><?= e($trip['tai_xe_ten']) ?></b><br><small class="muted">CCCD <?= e($trip['cccd']) ?><?= $trip['so_dien_thoai'] ? ' · ' . e($trip['so_dien_thoai']) : '' ?></small></dd>
         <dt>Xuất kho</dt><dd><?= e(dt($trip['ngay_di'])) ?> · <?= e($trip['giao_ten']) ?><br><span class="tag tag-ok">Tài xế xác nhận đủ hàng</span></dd>
         <dt>Kho đến</dt><dd>
-          <?php if ($trip['trang_thai'] === 'DELIVERED'): ?><?= $trip['sai_lech'] !== '' ? '<span class="tag tag-danger">Nhận thiếu</span>' : '<span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế, xe</span>' ?><br><small class="muted"><?= e(dt($trip['ngay_nhan'])) ?> · <?= e($trip['nhan_ten']) ?></small>
+          <?php if ($trip['trang_thai'] === 'LOST'): ?><span class="tag tag-danger">Đã xác nhận mất hàng</span><br><small><?= e($trip['sai_lech']) ?></small>
+          <?php elseif ($trip['trang_thai'] === 'DELIVERED'): ?><?= $trip['sai_lech'] !== '' ? '<span class="tag tag-danger">Nhận thiếu</span>' : '<span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế, xe</span>' ?><br><small class="muted"><?= e(dt($trip['ngay_nhan'])) ?> · <?= e($trip['nhan_ten']) ?></small>
           <?php elseif ($trip['sai_lech'] !== ''): ?><span class="tag tag-danger">Chưa nhận được hàng</span><br><small><?= e($trip['sai_lech']) ?></small><br><small class="muted"><?= e($trip['nhan_ten'] ?? '') ?></small><?= $user->isAdmin ? '<br><a href="/fleet">Theo dõi ở Đội xe →</a>' : '' ?>
           <?php else: ?><span class="muted">Chưa nhận hàng</span><?php endif; ?></dd>
       </dl>

@@ -19,7 +19,7 @@ final class NotificationService
     private const ACTIVITY = [
         'voucher.create' => 'lập phiếu', 'voucher.confirm' => 'xác nhận phiếu', 'voucher.cancel' => 'huỷ phiếu', 'voucher.correct' => 'lập phiếu điều chỉnh',
         'transfer.create' => 'lập phiếu điều chuyển', 'transfer.dispatch' => 'xuất kho điều chuyển', 'transfer.vehicle' => 'giao xe chở hàng', 'transfer.receive' => 'nhận hàng điều chuyển',
-        'transfer.short' => 'nhận thiếu hàng', 'transfer.missing' => 'báo chưa nhận được hàng', 'transfer.reply' => 'phản hồi chuyến hàng', 'transfer.correct' => 'điều chỉnh điều chuyển',
+        'transfer.short' => 'nhận thiếu hàng', 'transfer.missing' => 'báo chưa nhận được hàng', 'transfer.reply' => 'phản hồi chuyến hàng', 'transfer.loss' => 'xác nhận mất hàng', 'transfer.correct' => 'điều chỉnh điều chuyển',
         'count.open' => 'mở đợt kiểm kê', 'count.submit' => 'nộp đợt kiểm kê chờ duyệt', 'count.approve' => 'duyệt đợt kiểm kê', 'count.reject' => 'trả lại đợt kiểm kê', 'count.cancel' => 'huỷ đợt kiểm kê',
         'request.create' => 'lập yêu cầu chuyển hàng', 'request.approve' => 'xác nhận yêu cầu chuyển hàng', 'request.accept' => 'chấp nhận yêu cầu chuyển hàng', 'request.reject' => 'từ chối yêu cầu chuyển hàng', 'request.cancel' => 'huỷ yêu cầu chuyển hàng',
         'item.create' => 'thêm mặt hàng', 'item.update' => 'sửa mặt hàng', 'batch.create' => 'thêm lô hàng', 'category.create' => 'thêm danh mục',
@@ -127,8 +127,8 @@ final class NotificationService
             $add('alert', 'bad', 'Hàng đã hết hạn', 'Còn tồn tại kho — cần xử lý, không được xuất đi', $by['expired'], '/inventory?view=batch&expiry=expired');
             $add('clipboard', 'warn', 'Hàng sắp hết hạn trong 30 ngày tới', 'Lô gần hạn sẽ được xuất trước', $by['soon'], '/inventory?view=batch&expiry=soon');
         }
-        if ($this->auth->allows($user, Permission::QuanLyDoiXe)) {
-            $add('alert', 'bad', 'Chuyến chưa thấy hàng', 'Kho đến báo chưa nhận được hàng — cần phản hồi', $this->fleet->openDiscrepancies(), '/fleet');
+        if ($this->auth->allows($user, Permission::XemDoiXe)) {
+            $add('alert', 'bad', 'Chuyến chưa thấy hàng', 'Kho đến báo chưa nhận được hàng — cần phản hồi', $this->fleet->openDiscrepancies($user->isAdmin ? null : (int)$user->warehouseId), '/fleet');
         }
         if ($scope && ($user->isAdmin || $this->auth->allows($user, Permission::KiemKeDuyet))) {
             $n = (int)$this->db->value("SELECT COUNT(*) FROM dot_kiem_ke WHERE trang_thai = 'REVIEW' AND kho_id IN ($in)", $scope);

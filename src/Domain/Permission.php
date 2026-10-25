@@ -18,6 +18,7 @@ enum Permission: string
     case XemBaoCao = 'xem_bao_cao';
     case XemDanhMuc = 'xem_danh_muc';
     case XemKiemKe = 'xem_kiem_ke';
+    case XemDoiXe = 'xem_doi_xe';
     // ── Tác nghiệp kho ──
     case LapPhieuNhap = 'lap_phieu_nhap';
     case LapPhieuXuat = 'lap_phieu_xuat';
@@ -30,6 +31,7 @@ enum Permission: string
     case ThemLo = 'them_lo';
     case DieuChinhGia = 'dieu_chinh_gia';
     case DatGiaGoc = 'dat_gia_goc';
+    case QuanLyDoiXe = 'quan_ly_doi_xe';
     // ── Nhân sự kho ──
     case QuanLyNhanVien = 'quan_ly_nhan_vien';
     // ── Quản trị hệ thống (chỉ ADMIN) ──
@@ -37,7 +39,6 @@ enum Permission: string
     case QuanLyMatHang = 'quan_ly_mat_hang';
     case QuanLyTaiKhoan = 'quan_ly_tai_khoan';
     case PhanQuyen = 'phan_quyen';
-    case QuanLyDoiXe = 'quan_ly_doi_xe';
 
     public function label(): string
     {
@@ -50,6 +51,7 @@ enum Permission: string
             self::XemBaoCao => 'Báo cáo & xuất CSV',
             self::XemDanhMuc => 'Xem danh mục kho, mặt hàng',
             self::XemKiemKe => 'Xem kiểm kê',
+            self::XemDoiXe => 'Xem đội xe & tài xế',
             self::LapPhieuNhap => 'Lập phiếu nhập',
             self::LapPhieuXuat => 'Lập phiếu xuất',
             self::LapPhieuDieuChuyen => 'Lập phiếu điều chuyển',
@@ -66,7 +68,7 @@ enum Permission: string
             self::QuanLyMatHang => 'Quản lý mặt hàng, đơn vị tính',
             self::QuanLyTaiKhoan => 'Quản lý tài khoản',
             self::PhanQuyen => 'Phân quyền chức năng',
-            self::QuanLyDoiXe => 'Quản lý đội xe & tài xế',
+            self::QuanLyDoiXe => 'Quản lý đội xe & tài xế của kho mình',
         };
     }
 
@@ -81,6 +83,7 @@ enum Permission: string
             self::XemBaoCao => 'Tải báo cáo tồn, phát sinh, đối chiếu',
             self::XemDanhMuc => 'Xem danh sách kho và mặt hàng',
             self::XemKiemKe => 'Xem các đợt kiểm kê và kết quả (chỉ đọc)',
+            self::XemDoiXe => 'Xem xe, tài xế, điểm & lương, chuyến chưa thấy hàng và thất thoát (chỉ đọc; quản lý kho chỉ thấy đội xe của kho mình)',
             self::LapPhieuNhap => 'Tạo phiếu nhập nháp tại kho của mình',
             self::LapPhieuXuat => 'Tạo phiếu xuất nháp tại kho của mình',
             self::LapPhieuDieuChuyen => 'Tạo phiếu điều chuyển từ kho của mình',
@@ -97,18 +100,18 @@ enum Permission: string
             self::QuanLyMatHang => 'Thêm mặt hàng, đơn vị tính',
             self::QuanLyTaiKhoan => 'Tạo tài khoản, đổi kho / vai trò, khoá tài khoản',
             self::PhanQuyen => 'Bật/tắt chức năng cho từng vai trò',
-            self::QuanLyDoiXe => 'Thêm xe, tài xế; xem xe đang ở kho nào / đang chạy tới đâu; theo dõi các chuyến điều chuyển',
+            self::QuanLyDoiXe => 'Thêm, sửa xe và tài xế của kho mình; phản hồi chuyến chưa thấy hàng; xác nhận mất hàng và trừ điểm, lương tài xế',
         };
     }
 
     public function group(): string
     {
         return match ($this) {
-            self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe => 'Xem & tra cứu',
+            self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe, self::XemDoiXe => 'Xem & tra cứu',
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
-            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia => 'Tác nghiệp kho',
+            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia, self::QuanLyDoiXe => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
-            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe, self::DatGiaGoc => 'Quản trị hệ thống',
+            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc => 'Quản trị hệ thống',
         };
     }
 
@@ -119,7 +122,7 @@ enum Permission: string
     public function operational(): bool
     {
         return in_array($this, [
-            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet, self::DieuChinhGia,
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet, self::DieuChinhGia, self::QuanLyDoiXe,
         ], true);
     }
 
@@ -134,6 +137,7 @@ enum Permission: string
             self::KiemKeThucHien, self::KiemKeDuyet => self::XemKiemKe,
             self::ThemLo => self::XemTonKho,
             self::QuanLyNhanVien => self::XemDanhMuc,
+            self::QuanLyDoiXe => self::XemDoiXe,
             default => null,
         };
     }
@@ -141,7 +145,7 @@ enum Permission: string
     /** Chức năng hệ thống: chỉ ADMIN dùng, không giao cho quản lý / nhân viên. */
     public function adminOnly(): bool
     {
-        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe, self::DatGiaGoc], true);
+        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc], true);
     }
 
     /** Quyền mặc định của vai trò (khi chưa có dòng trong phan_quyen_vai_tro). */

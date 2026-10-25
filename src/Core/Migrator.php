@@ -92,6 +92,10 @@ final class Migrator
                 $log[] = "✔ Đã thêm cột $table.$column";
             }
         }
+        $this->backfillDriverWarehouses();
+        if ($this->widenTripStatus()) {
+            $log[] = '✔ Đã thêm trạng thái LOST cho chuyen_van_chuyen.trang_thai';
+        }
         if ($n = $this->moveDefaultPrices()) {
             $log[] = "✔ Đã chuyển giá bán mặc định cũ thành giá riêng của $n dòng (kho × mặt hàng)";
         }
@@ -109,7 +113,34 @@ final class Migrator
         ['chi_tiet_phieu_nhap_xuat', 'don_gia', 'integer NULL'],
         ['chi_tiet_phieu_nhap_xuat', 'thue_suat', 'integer NOT NULL DEFAULT 0'],
         ['chi_tiet_phieu_nhap_xuat', 'gia_von', 'integer NOT NULL DEFAULT 0'],
+        ['tai_xe', 'diem', 'integer NOT NULL DEFAULT 100'],
+        ['tai_xe', 'luong', 'integer NOT NULL DEFAULT 0'],
+        ['tai_xe', 'kho_id', 'integer NULL'],
+        ['that_thoat_hang', 'loai', "varchar(12) NOT NULL DEFAULT 'MAT_CHUYEN'"],
     ];
+
+    /** Tài xế cũ chưa có kho quản lý: lấy kho gốc của xe đang phụ trách, hoặc của xe họ chạy chuyến gần nhất. Chạy lại an toàn. */
+    private function backfillDriverWarehouses(): void
+    {
+        $this->db->raw('UPDATE tai_xe SET kho_id = (SELECT x.kho_goc_id FROM xe x WHERE x.tai_xe_id = tai_xe.id)
+                        WHERE kho_id IS NULL AND EXISTS (SELECT 1 FROM xe x WHERE x.tai_xe_id = tai_xe.id)');
+        $this->db->raw('UPDATE tai_xe SET kho_id = (SELECT x.kho_goc_id FROM chuyen_van_chuyen c JOIN xe x ON x.id = c.xe_id WHERE c.tai_xe_id = tai_xe.id ORDER BY c.id DESC LIMIT 1)
+                        WHERE kho_id IS NULL AND EXISTS (SELECT 1 FROM chuyen_van_chuyen c WHERE c.tai_xe_id = tai_xe.id)');
+    }
+
+    /** MySQL: bảng chuyến cũ chưa có trạng thái LOST (mất hàng) ⇒ mở rộng enum tại chỗ. SQLite chỉ dựng đúng từ đầu (CHECK không sửa được). */
+    private function widenTripStatus(): bool
+    {
+        if ($this->db->isSqlite()) {
+            return false;
+        }
+        $type = (string)$this->db->value("SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'chuyen_van_chuyen' AND column_name = 'trang_thai'");
+        if ($type === '' || str_contains($type, 'LOST')) {
+            return false;
+        }
+        $this->db->raw("ALTER TABLE chuyen_van_chuyen MODIFY trang_thai enum('IN_TRANSIT','DELIVERED','LOST') NOT NULL DEFAULT 'IN_TRANSIT'");
+        return true;
+    }
 
     /**
      * Bỏ «giá bán mặc định»: giá cũ ở mat_hang.gia_ban được sao thành giá riêng của từng kho chưa có giá (gia_ban_kho), rồi đặt về 0.

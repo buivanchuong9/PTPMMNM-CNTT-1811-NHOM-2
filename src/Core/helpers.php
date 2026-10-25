@@ -76,7 +76,7 @@ function audit_label(string $action): string
     static $map = [
         'voucher.create' => 'Lập phiếu', 'voucher.confirm' => 'Xác nhận & ghi sổ', 'voucher.cancel' => 'Huỷ phiếu', 'voucher.correct' => 'Lập phiếu điều chỉnh',
         'transfer.create' => 'Lập phiếu điều chuyển', 'transfer.dispatch' => 'Xuất kho đi', 'transfer.vehicle' => 'Chọn xe & tài xế',
-        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
+        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.loss' => 'Xác nhận mất hàng', 'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm, lương tài xế', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
     ];
     return $map[$action] ?? $action;
 }
