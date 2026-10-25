@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NavBadges
 {
-    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers) {}
+    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests) {}
 
     /** @return array<string,int> chỉ gồm các mục có số > 0 */
     public function for(User $user): array
@@ -24,6 +24,9 @@ final class NavBadges
         }
         if ($this->auth->allows($user, Permission::XemPhieu)) {
             $out['vouchers'] = (int)($this->vouchers->statusCounts($this->auth->visibleWarehouseIds($user))['DRAFT'] ?? 0);
+        }
+        if ($this->auth->allows($user, Permission::LapPhieuDieuChuyen) || $this->auth->allows($user, Permission::XacNhanPhieu)) {
+            $out['requests'] = $this->requests->pendingFor($user);
         }
         return array_filter($out);
     }

@@ -155,14 +155,15 @@ final class StockQuery
         }
         $in = $this->in($warehouseIds);
         $rows = $this->db->all(
-            "SELECT k.kho_id, w.ma AS wh_code, k.mat_hang_id, i.ma_hang, k.lo_hang_id, b.so_lo,
-                    COALESCE(sb.so_luong, 0) AS balance, COALESCE(sm.q, 0) AS ledger
+            "SELECT k.kho_id, w.ma AS wh_code, k.mat_hang_id, i.ma_hang, i.ten, i.danh_muc_id, c.ten AS category, u.ma AS unit, k.lo_hang_id, b.so_lo, b.han_dung,
+                    COALESCE(sb.so_luong, 0) AS balance, COALESCE(sm.q, 0) AS ledger, sm.last_move
              FROM (SELECT kho_id, mat_hang_id, lo_hang_id FROM ton_kho WHERE kho_id IN ($in)
                    UNION SELECT kho_id, mat_hang_id, lo_hang_id FROM so_phat_sinh WHERE kho_id IN ($in)) k
              LEFT JOIN ton_kho sb ON sb.kho_id = k.kho_id AND sb.mat_hang_id = k.mat_hang_id AND sb.lo_hang_id = k.lo_hang_id
-             LEFT JOIN (SELECT kho_id, mat_hang_id, lo_hang_id, SUM(bien_dong) AS q FROM so_phat_sinh GROUP BY kho_id, mat_hang_id, lo_hang_id) sm
+             LEFT JOIN (SELECT kho_id, mat_hang_id, lo_hang_id, SUM(bien_dong) AS q, MAX(ngay_ghi_so) AS last_move FROM so_phat_sinh GROUP BY kho_id, mat_hang_id, lo_hang_id) sm
                     ON sm.kho_id = k.kho_id AND sm.mat_hang_id = k.mat_hang_id AND sm.lo_hang_id = k.lo_hang_id
              JOIN kho w ON w.id = k.kho_id JOIN mat_hang i ON i.id = k.mat_hang_id JOIN lo_hang b ON b.id = k.lo_hang_id
+             JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
              ORDER BY w.ma, i.ma_hang, b.so_lo",
             [...$warehouseIds, ...$warehouseIds]
         );
