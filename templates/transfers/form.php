@@ -14,7 +14,7 @@
     <label>Kho đến<select name="to_wh" required data-addr-for="addr-to"><?= wh_options($user->isAdmin ? $to : array_values(array_filter($to, fn($w) => (int)$w['id'] !== (int)$user->warehouseId)), null, 'Chọn kho đến…') ?></select><small class="muted wh-addr" id="addr-to"></small></label>
   </div>
   <label>Ghi chú<input name="note" maxlength="255" placeholder="Lý do điều chuyển, đơn vị vận chuyển…"></label>
-  <?php $checkStock = true; require __DIR__ . '/../partials/lines.php'; ?>
+  <?php $checkStock = true; $autoLots = true; require __DIR__ . '/../partials/lines.php'; ?>
   <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Huỷ</a></div>
 </form>
 <?php endif; ?>

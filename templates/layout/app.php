@@ -17,6 +17,7 @@ $groups = [
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
         'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
         'reports' => ['/reports', 'chart', 'Báo cáo', [P::XemBaoCao]],
+        'valuation' => ['/valuation', 'scale', 'Giá trị tồn & doanh thu', [P::XemBaoCao]],
     ],
     'Danh mục' => [
         'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],

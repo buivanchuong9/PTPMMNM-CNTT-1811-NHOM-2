@@ -28,6 +28,8 @@ enum Permission: string
     case KiemKeThucHien = 'kiem_ke_thuc_hien';
     case KiemKeDuyet = 'kiem_ke_duyet';
     case ThemLo = 'them_lo';
+    case DieuChinhGia = 'dieu_chinh_gia';
+    case DatGiaGoc = 'dat_gia_goc';
     // ── Nhân sự kho ──
     case QuanLyNhanVien = 'quan_ly_nhan_vien';
     // ── Quản trị hệ thống (chỉ ADMIN) ──
@@ -57,6 +59,8 @@ enum Permission: string
             self::KiemKeThucHien => 'Kiểm kê: mở đợt, nhập số đếm',
             self::KiemKeDuyet => 'Kiểm kê: duyệt chênh lệch',
             self::ThemLo => 'Thêm lô hàng',
+            self::DieuChinhGia => 'Điều chỉnh giá bán ra của kho mình',
+            self::DatGiaGoc => 'Đặt giá gốc và thuế suất',
             self::QuanLyNhanVien => 'Thêm nhân viên kho',
             self::QuanLyKho => 'Quản lý kho',
             self::QuanLyMatHang => 'Quản lý mặt hàng, đơn vị tính',
@@ -86,6 +90,8 @@ enum Permission: string
             self::KiemKeThucHien => 'Mở đợt kiểm kê, nhập số đếm thực tế, nộp duyệt',
             self::KiemKeDuyet => 'Duyệt chênh lệch và lập phiếu điều chỉnh',
             self::ThemLo => 'Thêm số lô, hạn dùng cho mặt hàng quản lý theo lô',
+            self::DieuChinhGia => 'Đặt giá bán ra của kho mình (mỗi kho một giá; mỗi lần đổi ghi lý do và lưu lịch sử giá)',
+            self::DatGiaGoc => 'Đặt giá gốc (giá vốn) và thuế suất của mặt hàng — dùng chung mọi kho, điều chuyển giữa kho lấy giá gốc này',
             self::QuanLyNhanVien => 'Tạo tài khoản nhân viên trong kho của mình (trang Kho & nhân sự)',
             self::QuanLyKho => 'Thêm kho mới, gắn quản lý và nhân viên cho kho',
             self::QuanLyMatHang => 'Thêm mặt hàng, đơn vị tính',
@@ -100,9 +106,9 @@ enum Permission: string
         return match ($this) {
             self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe => 'Xem & tra cứu',
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
-            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo => 'Tác nghiệp kho',
+            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
-            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe => 'Quản trị hệ thống',
+            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe, self::DatGiaGoc => 'Quản trị hệ thống',
         };
     }
 
@@ -113,7 +119,7 @@ enum Permission: string
     public function operational(): bool
     {
         return in_array($this, [
-            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet,
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet, self::DieuChinhGia,
         ], true);
     }
 
@@ -135,7 +141,7 @@ enum Permission: string
     /** Chức năng hệ thống: chỉ ADMIN dùng, không giao cho quản lý / nhân viên. */
     public function adminOnly(): bool
     {
-        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe], true);
+        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::QuanLyDoiXe, self::DatGiaGoc], true);
     }
 
     /** Quyền mặc định của vai trò (khi chưa có dòng trong phan_quyen_vai_tro). */

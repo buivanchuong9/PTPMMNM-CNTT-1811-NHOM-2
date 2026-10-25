@@ -27,6 +27,13 @@ $shortBy = [];   // đã nhận thiếu: «mặt hàng:lô» ⇒ phần thiếu
 foreach ($shortage ?? [] as $sh) { $shortBy[$sh['mat_hang_id'] . ':' . $sh['lo_hang_id']] = (int)$sh['thieu']; }
 $shortVoucher = $shortage[0] ?? null;
 // phiếu nhập/xuất thường: nút thao tác nằm ngay trên đầu trang; điều chuyển cần chọn xe / kiểm hàng nên có khung riêng
+$priced = in_array($v['loai'], ['RECEIPT', 'ISSUE'], true);   // phiếu có tiền: đơn giá, thuế, thành tiền (giá lưu tại lúc lập phiếu)
+$sumNet = $sumTax = 0;
+foreach ($lines as $pl) {
+    $net = (int)$pl['so_luong'] * (int)($pl['don_gia'] ?? 0);
+    $sumNet += $net;
+    $sumTax += (int)round($net * (int)$pl['thue_suat'] / 100);
+}
 $headActions = $draft && !$isXfer && ($canApprove || $canDraft);
 $actionCard = $draft && $isXfer && ($canApprove || $canDraft);
 $cancelEntry = null;
@@ -113,17 +120,25 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
       <div class="card-head pad"><h2>Dòng hàng <span class="count"><?= n(count($lines)) ?></span></h2>
         <?php if ($showCheck): ?><?= $allOk ? '<span class="tag tag-ok">Đủ hàng</span>' : '<span class="tag tag-danger">Thiếu hàng</span>' ?><?php endif; ?></div>
       <div class="table-wrap"><table class="dense">
-        <thead><tr><th>Hàng hoá</th><th>Lô</th><th class="num">Số lượng</th><?php if ($recvForm || $shortBy): ?><th class="num">Thực nhận</th><?php endif; ?><?php if ($showCheck): ?><th class="num">Tồn hiện có</th><th></th><?php endif; ?></tr></thead>
+        <thead><tr><th>Hàng hoá</th><th>Lô</th><th class="num">Số lượng</th><?php if ($priced): ?><th class="num"><?= $v['loai'] === 'RECEIPT' ? 'Giá gốc' : 'Giá bán' ?></th><th class="num">Thuế</th><th class="num">Thành tiền</th><?php endif; ?><?php if ($recvForm || $shortBy): ?><th class="num">Thực nhận</th><?php endif; ?><?php if ($showCheck): ?><th class="num">Tồn hiện có</th><th></th><?php endif; ?></tr></thead>
         <tbody>
         <?php foreach ($lines as $i => $l): $c = $check[$i] ?? null; ?>
           <tr><td><b><?= e($l['ma_hang']) ?></b> <?= e($l['ten']) ?><?= $l['ghi_chu'] !== '' ? '<br><small class="muted">' . e($l['ghi_chu']) . '</small>' : '' ?></td>
             <td><?= $l['so_lo'] === 'NOLOT' ? '<span class="muted">—</span>' : e($l['so_lo']) . ($l['han_dung'] ? '<br><small class="muted">HSD ' . e(dt($l['han_dung'], false)) . '</small>' : '') ?></td>
             <td class="num"><b class="<?= $v['loai'] === 'ADJUSTMENT' ? ($l['so_luong'] > 0 ? 'pos' : 'neg') : '' ?>"><?= $v['loai'] === 'ADJUSTMENT' ? signed((int)$l['so_luong']) : n($l['so_luong']) ?></b> <small class="muted"><?= e($l['unit']) ?></small></td>
+            <?php if ($priced): $ln = (int)$l['so_luong'] * (int)($l['don_gia'] ?? 0); ?><td class="num money"><?= n((int)($l['don_gia'] ?? 0)) ?> đ</td><td class="num"><?= (int)$l['thue_suat'] ?>%</td><td class="num money"><b><?= n($ln) ?> đ</b></td><?php endif; ?>
             <?php if ($recvForm): ?><td class="num recv-cell"><input type="number" class="qty-input" name="received[<?= (int)$l['id'] ?>]" form="recv-form" min="0" max="<?= (int)$l['so_luong'] ?>" step="1" value="<?= (int)$l['so_luong'] ?>" data-recv="<?= (int)$l['so_luong'] ?>" aria-label="Thực nhận <?= e($l['ma_hang']) ?>"><small class="recv-short"></small></td>
             <?php elseif ($shortBy): $lost = $shortBy[$l['mat_hang_id'] . ':' . $l['lo_hang_id']] ?? 0; ?><td class="num"><b><?= n((int)$l['so_luong'] - $lost) ?></b> <small class="muted"><?= e($l['unit']) ?></small><?= $lost ? '<br><span class="tag tag-danger">Thiếu ' . n($lost) . '</span>' : '' ?></td><?php endif; ?>
             <?php if ($showCheck): ?><?php if ($c): ?><td class="num"><?= n($c['available']) ?></td><td><?= $c['ok'] ? '<span class="tag tag-ok">Đủ</span>' : '<span class="tag tag-danger">Thiếu ' . n(abs($c['available'] - (int)$l['so_luong'])) . '</span>' ?></td><?php else: ?><td></td><td></td><?php endif; ?><?php endif; ?></tr>
         <?php endforeach; ?>
         </tbody></table></div>
+      <?php if ($priced && $sumNet > 0): ?>
+      <div class="totals" aria-label="Tổng tiền phiếu">
+        <div><span class="muted"><?= $v['loai'] === 'ISSUE' ? 'Tiền hàng (chưa thuế)' : 'Tiền hàng nhập (chưa thuế)' ?></span><span class="money"><?= n($sumNet) ?> đ</span></div>
+        <div><span class="muted">Thuế GTGT</span><span class="money"><?= n($sumTax) ?> đ</span></div>
+        <div class="grand"><span>Tổng thanh toán</span><span class="money"><?= n($sumNet + $sumTax) ?> đ</span></div>
+      </div>
+      <?php endif; ?>
     </section>
 
     <?php if ($recvForm) { echo $actionHtml; } /* nhận hàng: nhập số thực nhận ở bảng trên rồi mới tới nút xác nhận */ ?>

@@ -4,13 +4,54 @@
  * chọn xong mới sinh dòng với số lượng +/−. Form vẫn gửi line[] = "mã hàng:mã lô" và qty[] như cũ.
  * Cần $pick; tuỳ chọn $stock (tồn theo kho) và $checkStock (cảnh báo khi số lượng vượt tồn).
  */
-$pickItems = array_map(fn($p) => [
+$pickRows = $pick;
+if (!empty($newLots)) {   // phiếu nhập: hàng theo lô chỉ liệt kê một lần cho mỗi mặt hàng — số lô và hạn dùng gõ ngay trên dòng
+    $seen = [];
+    $pickRows = [];
+    $lotsOf = [];   // lô đã có của từng mặt hàng — chọn để tự điền số lô + hạn dùng
+    foreach ($pick as $p) {
+        if ($p['quan_ly_lo']) {
+            $lotsOf[$p['mat_hang_id']][] = ['lot' => $p['so_lo'], 'exp' => $p['han_dung'] ? dt($p['han_dung'], false) : '', 'iso' => $p['han_dung']];
+        }
+    }
+    foreach ($pick as $p) {
+        if ($p['quan_ly_lo']) {
+            if (isset($seen[$p['mat_hang_id']])) {
+                continue;
+            }
+            $seen[$p['mat_hang_id']] = true;
+            $p['lo_hang_id'] = 'new';
+            $p['lots'] = $lotsOf[$p['mat_hang_id']] ?? [];
+            $p['so_lo'] = '';
+            $p['han_dung'] = null;
+        }
+        $pickRows[] = $p;
+    }
+}
+if (!empty($autoLots)) {   // phiếu xuất / điều chuyển đi: mỗi mặt hàng một dòng, nhập tổng số lượng — hệ thống tự chia lô theo hạn dùng
+    $groups = [];
+    foreach ($pick as $p) {
+        $id = $p['mat_hang_id'];
+        $groups[$id] ??= $p;
+        $groups[$id]['lots'] ??= [];
+        if ($p['quan_ly_lo']) {
+            $groups[$id]['lots'][] = ['k' => $id . ':' . $p['lo_hang_id'], 'lot' => $p['so_lo'], 'exp' => $p['han_dung'] ? dt($p['han_dung'], false) : '', 'iso' => $p['han_dung']];
+        }
+    }
+    $pickRows = [];
+    foreach ($groups as $id => $g) {
+        $g['lo_hang_id'] = 'auto';
+        $g['quan_ly_lo'] = false;   // dòng không gắn một lô cụ thể
+        $pickRows[] = $g;
+    }
+}
+$pickItems = array_map(fn($p) => (!empty($p['lots']) ? ['lots' => $p['lots']] : []) + [
     'k' => $p['mat_hang_id'] . ':' . $p['lo_hang_id'], 'sku' => $p['ma_hang'], 'name' => $p['ten'], 'unit' => $p['unit'],
-    'cat' => (int)($p['danh_muc_id'] ?? 0), 'sup' => $itemSuppliers[$p['mat_hang_id']] ?? [], 'lot' => $p['quan_ly_lo'] ? $p['so_lo'] : '', 'exp' => $p['quan_ly_lo'] && $p['han_dung'] ? dt($p['han_dung'], false) : '',
-], $pick);
+    'cat' => (int)($p['danh_muc_id'] ?? 0), 'sup' => $itemSuppliers[$p['mat_hang_id']] ?? [], 'lot' => $p['quan_ly_lo'] ? $p['so_lo'] : '', 'exp' => $p['quan_ly_lo'] && $p['han_dung'] ? dt($p['han_dung'], false) : '', 'tracked' => (bool)$p['quan_ly_lo'], 'cost' => (int)($p['gia_von'] ?? 0),
+], $pickRows);
 ?>
 <fieldset class="lines picker" id="picker"<?= !empty($suppliers) || !empty($supplierMode) ? ' data-supplier="1"' : '' ?> data-items="<?= e(json_encode($pickItems, JSON_UNESCAPED_UNICODE)) ?>"
-          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>"<?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
+          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
   <legend>Dòng hàng</legend>
   <?php $showSup = empty($suppliers) && !empty($pickSups); ?>
   <?php if (empty($lockPick) && (!empty($pickCats) || $showSup)): ?>

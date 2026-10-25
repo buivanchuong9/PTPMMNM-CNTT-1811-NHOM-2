@@ -73,7 +73,13 @@ final class TransferRequestController extends Controller
         if ($item) {
             $left = max(1, (int)$r->int('qty'));
             $keys = $qtys = [];
-            foreach ($stock[$from] ?? [] as $key => $have) {   // mặt hàng theo lô: lấy lần lượt các lô còn hàng cho đến khi đủ
+            $han = [];   // lô hết hạn trước lấy trước
+            foreach ($this->query->pickList() as $pl) {
+                $han[$pl['mat_hang_id'] . ':' . $pl['lo_hang_id']] = $pl['han_dung'] ?? '9999-12-31';
+            }
+            $lots = $stock[$from] ?? [];
+            uksort($lots, fn($a, $b) => strcmp((string)($han[$a] ?? '9999'), (string)($han[$b] ?? '9999')));
+            foreach ($lots as $key => $have) {   // mặt hàng theo lô: lấy lần lượt các lô còn hàng cho đến khi đủ
                 if ($left > 0 && str_starts_with((string)$key, $item . ':')) {
                     $keys[] = $key;
                     $qtys[] = $take = min($left, $have);

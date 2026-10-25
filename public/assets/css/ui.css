@@ -463,3 +463,110 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .notif-activity .fresh .notif-dot { background: var(--brand); }
 .notif-activity .fresh b { color: var(--brand); }
 .notif-item .when { background: transparent; color: var(--muted); font-weight: 400; font-size: .75rem; padding: 0; white-space: nowrap; }
+
+/* Tên hàng bấm được để xem các lô và hạn dùng */
+.link-btn { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-bottom: 1px dashed var(--muted); }
+.link-btn:hover { color: var(--brand); border-bottom-color: var(--brand); }
+
+
+/* Phiếu nhập: số lô + hạn dùng gõ ngay dưới tên hàng */
+.lot-in { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.lot-in label { display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
+.lot-in small { color: var(--muted); }
+
+/* Dòng tự chia lô: xem trước lô nào lấy bao nhiêu */
+.pick-table .alloc { margin-top: 4px; }
+.pick-table .alloc:empty { display: none; }
+
+/* Ô chọn lô hiện sẵn khi xuất / điều chuyển: hết hạn trước đứng đầu */
+.lot-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.lot-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.lot-chip span { display: flex; flex-direction: column; line-height: 1.25; }
+.lot-chip small { color: var(--muted); }
+.lot-chip.on { border-color: var(--brand); background: var(--brand-50); }
+.lot-chip.off { opacity: .55; cursor: not-allowed; }
+
+.pick-table td .lot-chips { justify-content: flex-start; text-align: left; }
+.lot-in select { min-width: 150px; }
+
+/* Cột số lượng của dòng chọn lô đủ rộng để các ô lô xếp thành hàng gọn */
+.pick-table td.lot-cell { min-width: 380px; }
+.pick-table td.lot-cell .stepper { margin-left: auto; }
+.lot-chip b { white-space: nowrap; }
+.lot-chip small b { color: var(--ink); }
+.lot-chip .bad-text { color: var(--danger); font-style: normal; }
+
+/* Dòng chọn lô: các ô lô nằm cùng hàng với ô số lượng (lô bên trái, số lượng bên phải) */
+.pick-table td.lot-cell { min-width: 0; width: 62%; }
+.qty-line { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+.qty-line .lot-chips { margin-top: 0; flex: 1; justify-content: flex-start; }
+.qty-line .qty-box { display: flex; align-items: center; gap: 6px; flex: none; white-space: nowrap; }
+.pick-table td.lot-cell .stepper { margin-left: 0; }
+@media (max-width: 900px) { .qty-line { flex-direction: column; align-items: stretch; } .qty-line .qty-box { justify-content: flex-end; } }
+
+/* Ô nhập nhỏ dưới tên hàng (đơn giá nhập…) */
+.exp-in { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-width: 220px; }
+.exp-in small { color: var(--muted); }
+/* Tiền */
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.totals { display: grid; gap: 4px; margin: 12px 16px 16px auto; max-width: 340px; }
+.totals div { display: flex; justify-content: space-between; gap: 24px; }
+.totals .grand { border-top: 1px solid var(--line); padding-top: 6px; font-size: 1.05rem; font-weight: 700; }
+
+/* Hộp thoại có nhiều ô (giá, thêm mặt hàng): rộng hơn và các ô thẳng hàng */
+.dlg-form-wide { width: min(780px, calc(100% - 32px)); }
+.dlg-form-wide .form { display: grid; gap: 14px; }
+.dlg-form-wide .form .row-3 { align-items: end; gap: 16px; }
+.dlg-form-wide .form label { display: grid; gap: 6px; align-content: end; }
+.dlg-form-wide .form label.check { display: flex; align-items: center; gap: 8px; }
+.dlg-form-wide .form input:not([type=checkbox]), .dlg-form-wide .form select { width: 100%; min-height: 42px; box-sizing: border-box; }
+.price-margin { min-height: 1.3em; margin: 0; }
+.dlg-form-wide .dlg-head, .dlg-form-wide .actions, .dlg-form-wide fieldset, .dlg-form-wide .table-wrap { grid-column: 1 / -1; }
+
+/* Giá bán từng kho: nhóm cột có ô nhỏ cho mỗi kho */
+.dense thead th.group { text-align: center; border-bottom: 1px solid var(--line); }
+.dense thead tr.sub-head th { font-size: .72rem; }
+.price-cell small { font-size: .72rem; }
+.price-cell.own { background: var(--brand-50); }
+
+/* Tồn từng kho (quản trị): xanh ≥ 100 · vàng 50–99 · đỏ < 50 */
+.stk { display: inline-block; min-width: 3.2em; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.stk-ok { color: var(--ok); background: var(--ok-bg); }
+.stk-warn { color: var(--warn); background: var(--warn-bg); }
+.stk-bad { color: var(--danger); background: var(--danger-bg); }
+
+/* Tên hàng trải dài, không gom thành nhiều dòng */
+.dense td.item-name { min-width: 230px; white-space: nowrap; }
+.link-btn { all: unset; box-sizing: border-box; cursor: pointer; color: inherit; font: inherit; white-space: nowrap; border-bottom: 1px dashed var(--muted); }
+.link-btn:hover { color: var(--brand); border-bottom-color: var(--brand); }
+.link-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* Nút kéo bảng ngang: nổi giữa màn hình, chỉ hiện khi bảng còn phần bị che */
+.hscroll { position: sticky; top: 45%; height: 0; z-index: 6; pointer-events: none; }
+.hscroll[hidden] { display: none; }
+.hs-btn { position: absolute; top: -22px; box-sizing: border-box; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font-size: 28px; line-height: 1; padding: 0 0 4px !important; cursor: pointer; pointer-events: auto; box-shadow: 0 8px 22px rgba(17, 24, 39, .28); display: grid; place-items: center; }
+.hs-btn[hidden] { display: none; }
+.hs-btn:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
+.hs-left { left: 8px; }
+.hs-right { right: 8px; }
+
+/* Mũi tên trượt thanh danh mục: nằm trong thanh, cùng hàng với các tab, luôn tròn đều */
+.ts-btn { flex: none; position: static; box-sizing: border-box; width: 34px; height: 34px; min-width: 34px; min-height: 34px; margin: 0; padding: 0 0 2px !important; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(17, 24, 39, .15); }
+.ts-btn[hidden] { display: none; }
+.ts-btn:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+/* Tên hàng bấm được: rê chuột chỉ đổi màu chữ + gạch chân liền, không nền, không bo, không bóng (thắng kiểu nút chung của giao diện) */
+.dense .link-btn, .dense .link-btn:hover, .dense .link-btn:focus, .dense .link-btn:active {
+  background: transparent !important; box-shadow: none !important; transform: none !important; filter: none !important;
+  border-radius: 0 !important; padding: 0 !important; min-height: 0 !important; min-width: 0 !important; height: auto !important; width: auto !important;
+  font-weight: inherit !important; text-shadow: none !important;
+}
+.dense .link-btn { color: inherit !important; border: 0 !important; border-bottom: 1px dashed var(--muted) !important; }
+.dense .link-btn:hover, .dense .link-btn:focus-visible { color: var(--brand) !important; border-bottom: 1px solid var(--brand) !important; }
+
+/* Nút «Yêu cầu chuyển hàng» cạnh số tồn kho khác: chỉ còn biểu tượng xe tải */
+.req-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-left: 6px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); vertical-align: middle; text-decoration: none; }
+.req-btn .icon { width: 15px; height: 15px; }
+.req-btn:hover { background: var(--brand); border-color: var(--brand); color: #fff; }

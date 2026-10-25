@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NotificationService
 {
-    public function __construct(private Db $db, private Authorizer $auth, private FleetService $fleet) {}
+    public function __construct(private Db $db, private Authorizer $auth, private FleetService $fleet, private StockQuery $query) {}
 
     /** Hành động trong nhật ký ⇒ câu mô tả. Hành động không có ở đây (đổi ảnh, đổi mật khẩu của chính mình…) không báo. */
     private const ACTIVITY = [
@@ -118,6 +118,14 @@ final class NotificationService
                 $add('alert', 'info', 'Quản trị đã phản hồi', 'Phản hồi về chuyến bạn báo chưa nhận được hàng', count($rows),
                     count($rows) === 1 ? '/vouchers/' . (int)$rows[0]['phieu_den_id'] : '/vouchers?type=TRANSFER_IN&status=DRAFT');
             }
+        }
+        if ($scope && $this->auth->allows($user, Permission::XemTonKho)) {   // hàng đã / sắp hết hạn (trong 30 ngày tới) còn tồn tại kho
+            $by = ['expired' => 0, 'soon' => 0];
+            foreach ($this->query->expiring($scope) as $e) {
+                $by[$e['status']] = ($by[$e['status']] ?? 0) + 1;
+            }
+            $add('alert', 'bad', 'Hàng đã hết hạn', 'Còn tồn tại kho — cần xử lý, không được xuất đi', $by['expired'], '/inventory?view=batch&expiry=expired');
+            $add('clipboard', 'warn', 'Hàng sắp hết hạn trong 30 ngày tới', 'Lô gần hạn sẽ được xuất trước', $by['soon'], '/inventory?view=batch&expiry=soon');
         }
         if ($this->auth->allows($user, Permission::QuanLyDoiXe)) {
             $add('alert', 'bad', 'Chuyến chưa thấy hàng', 'Kho đến báo chưa nhận được hàng — cần phản hồi', $this->fleet->openDiscrepancies(), '/fleet');

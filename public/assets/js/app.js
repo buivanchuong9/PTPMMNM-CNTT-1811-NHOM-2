@@ -160,6 +160,54 @@
   const vn = new Intl.NumberFormat('vi-VN');
   const SUGGEST = 100; // số gợi ý hiển thị mỗi lần (danh sách tự cuộn, bấm vào là thấy gần như đủ)
 
+  // «Các lô và hạn dùng» của một mặt hàng (bấm tên hàng ở trang Hàng hoá): hạn gần nhất lên đầu, kèm tình trạng hạn và tồn từng kho
+  const LOT_TAG = {
+    expired: (d) => `<span class="tag tag-danger">Hết hạn ${vn.format(Math.abs(d))} ngày</span>`,
+    soon: (d) => `<span class="tag tag-warn">Còn ${vn.format(d)} ngày</span>`,
+    ok: () => '<span class="tag tag-ok">Còn hạn</span>',
+    none: () => '<span class="muted">Không ghi hạn</span>',
+  };
+  const renderLots = (dlg, data) => {
+    const box = dlg.querySelector('[data-lots-body]');
+    let whs = [];
+    try { whs = JSON.parse(dlg.dataset.whs || '[]'); } catch (e) { /* bỏ qua */ }
+    if (!data.tracked) { box.innerHTML = '<p class="empty">Mặt hàng này không quản lý theo lô nên không có hạn dùng.</p>'; return; }
+    if (!data.lots.length) { box.innerHTML = '<p class="empty">Chưa có lô nào còn tồn.</p>'; return; }
+    const fmt = (d) => (d ? d.split('-').reverse().join('/') : '—');
+    box.innerHTML = '<table class="dense"><thead><tr><th>Lô</th><th>Hạn dùng</th><th>Tình trạng</th>'
+      + whs.map((w) => `<th class="num">${esc(w.ma)}</th>`).join('') + '<th class="num">Tổng</th></tr></thead><tbody>'
+      + data.lots.map((l, i) => `<tr><td><b>${esc(l.lot)}</b>${i === 0 && l.state.status !== 'expired' ? ' <span class="tag tag-info">Xuất trước</span>' : ''}</td><td>${fmt(l.exp)}</td><td>${(LOT_TAG[l.state.status] || LOT_TAG.none)(l.state.days)}</td>`
+        + whs.map((w) => `<td class="num${l.by[w.id] ? '' : ' muted'}">${vn.format(l.by[w.id] || 0)}</td>`).join('')
+        + `<td class="num"><b>${vn.format(l.total)}</b> <small class="muted">${esc(data.unit)}</small></td></tr>`).join('')
+      + '</tbody></table>';
+  };
+
+  // Lịch sử giá của mặt hàng trong hộp thoại «Giá bán và thuế»
+  const PRICE_LABEL = { GIA_BAN: 'Giá bán', THUE_SUAT: 'Thuế suất', GIA_VON: 'Giá gốc' };
+  const renderPriceHist = (dlg, rows) => {
+    const box = dlg.querySelector('[data-price-hist]');
+    if (!box) return;
+    box.innerHTML = rows.length
+      ? '<table class="dense"><thead><tr><th>Lúc</th><th>Thay đổi</th><th>Cũ → mới</th><th>Lý do</th><th>Người đổi</th></tr></thead><tbody>'
+        + rows.map((h) => { const pct = h.loai === 'THUE_SUAT'; const f = (v) => (pct ? v + '%' : vn.format(v) + ' đ');
+          return `<tr><td class="muted nw">${esc(h.luc)}</td><td>${esc(PRICE_LABEL[h.loai] || h.loai)}</td><td class="money">${f(h.cu)} → <b>${f(h.moi)}</b></td><td>${esc(h.ly_do)}</td><td>${esc(h.ai)}</td></tr>`; }).join('')
+        + '</tbody></table>'
+      : '<p class="muted small">Chưa có lần đổi giá nào.</p>';
+  };
+
+  // Hộp thoại giá: vừa gõ giá vốn / giá bán vừa thấy lãi gộp trên mỗi đơn vị
+  document.addEventListener('input', (ev) => {
+    if (!ev.target.matches('[data-price-calc]')) return;
+    const form = ev.target.closest('form');
+    const num = (el) => parseInt(String(el.value).replace(/[\s.,]/g, ''), 10) || 0;
+    const cost = num(form.querySelector('[name=cost], [name=cost_show]')), price = num(form.querySelector('[name=price]'));
+    const out = form.querySelector('[data-margin]');
+    if (!out) return;
+    if (!cost || !price) { out.textContent = ''; return; }
+    const gain = price - cost;
+    out.innerHTML = `Lãi gộp mỗi đơn vị: <b class="${gain >= 0 ? 'pos' : 'neg'}">${vn.format(gain)} đ</b> (${Math.round(gain / price * 100)}% giá bán)${gain < 0 ? ' — giá bán đang thấp hơn giá vốn' : ''}`;
+  });
+
   const initPickers = () => {
   // Ô chọn hàng của phiếu: bấm vào là gợi ý vài mặt hàng đầu danh sách, gõ để tìm, chọn xong mới sinh dòng có +/−
   const picker = document.getElementById('picker');
@@ -183,8 +231,57 @@
       return base;
     };
 
+    const todayIso = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);   // hôm nay theo giờ Việt Nam
+    const autoItem = (k) => (picker.dataset.auto && /:auto$/.test(k) ? items.find((x) => x.k === k) : null);
+    // Dòng «tự chia lô»: tồn = tổng các lô chưa quá hạn tại kho đang chọn; xem trước lô nào lấy bao nhiêu (hết hạn trước, lấy trước)
+    const autoStock = (it, wh) => (it.lots && it.lots.length
+      ? it.lots.reduce((s, l) => s + (l.iso && l.iso < todayIso() ? 0 : (stock[wh][l.k] || 0)), 0)
+      : (stock[wh] ? Object.entries(stock[wh]).reduce((s, [k, v]) => s + (k.startsWith(it.k.split(':')[0] + ':') ? v : 0), 0) : 0));
+    // Hàng theo lô khi xuất / điều chuyển đi: các ô lô hiện sẵn (hết hạn trước đứng đầu). Chọn bao nhiêu lô thì số lượng tự ra
+    // (đầy đủ tồn của các lô đó); hoặc gõ số lượng thì hệ thống tự tích các lô theo thứ tự hết hạn trước. Mỗi lô được chọn thành một dòng phiếu.
+    const lotStock = (l, wh) => (stock[wh] || {})[l.k] || 0;
+    const lotExpired = (l) => !!(l.iso && l.iso < todayIso());
+    const usableLots = (it, wh) => (it.lots || []).filter((l) => !lotExpired(l) && lotStock(l, wh) > 0);
+    const rowItem = (tr) => items.find((x) => x.k === tr.dataset.k);
+    const whVal = () => (whSelect ? whSelect.value : '');
+    const writeOut = (tr) => {
+      tr.querySelector('.auto-out').innerHTML = Object.entries(tr._alloc || {}).filter(([, n]) => n > 0)
+        .map(([k, n]) => `<input type="hidden" name="line[]" value="${esc(k)}"><input type="hidden" name="qty[]" value="${n}">`).join('');
+    };
+    const drawChips = (tr) => {
+      const it = rowItem(tr), wh = whVal();
+      tr.querySelector('.lot-chips').innerHTML = (it.lots || []).filter((l) => !wh || lotStock(l, wh) > 0).map((l) => {
+        const have = wh ? lotStock(l, wh) : 0, take = (tr._alloc || {})[l.k] || 0, off = !wh || lotExpired(l) || have <= 0;
+        const stockNote = !wh ? 'chọn kho trước' : lotExpired(l) ? '<em class="bad-text">đã hết hạn</em>' : `tồn <b>${vn.format(have)}</b>${take && take < have ? ' · lấy <b>' + vn.format(take) + '</b>' : ''}`;
+        return `<label class="lot-chip${take ? ' on' : ''}${off ? ' off' : ''}"><input type="checkbox" data-lot="${esc(l.k)}"${take ? ' checked' : ''}${off ? ' disabled' : ''}>`
+          + `<span><b>Lô ${esc(l.lot)}</b><small>${l.exp ? 'HSD ' + esc(l.exp) + ' · ' : ''}${stockNote}</small></span></label>`;
+      }).join('') || '<small class="muted">Kho này chưa có lô nào còn hàng.</small>';
+    };
+    // gõ / bấm +− số lượng ⇒ chia lô hết hạn trước lấy trước rồi tích các ô tương ứng
+    const syncLots = (tr) => {
+      const it = rowItem(tr), wh = whVal(), raw = tr.querySelector('input[data-qty]').value.trim();
+      let left = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
+      tr._alloc = {};
+      for (const l of usableLots(it, wh)) {
+        const take = Math.min(left, lotStock(l, wh));
+        if (take > 0) { tr._alloc[l.k] = take; left -= take; }
+      }
+      drawChips(tr); writeOut(tr);
+    };
+    // tích ô lô ⇒ lấy hết lô đó và mọi lô hết hạn trước nó; bỏ tích ⇒ bỏ lô đó và các lô sau; số lượng tự ra
+    const pickLots = (tr, cb) => {
+      const it = rowItem(tr), wh = whVal(), usable = usableLots(it, wh), idx = usable.findIndex((l) => l.k === cb.dataset.lot);
+      const upto = cb.checked ? idx : idx - 1;
+      tr._alloc = {};
+      usable.forEach((l, n) => { if (n <= upto) tr._alloc[l.k] = lotStock(l, wh); });
+      const total = Object.values(tr._alloc).reduce((a, b) => a + b, 0);
+      tr.querySelector('input[data-qty]').value = total || '';
+      drawChips(tr); writeOut(tr);
+    };
     const stockOf = (k) => {
       const wh = whSelect ? whSelect.value : '';
+      const auto = autoItem(k);
+      if (auto) return wh && stock[wh] ? autoStock(auto, wh) : (wh ? 0 : null);
       return wh && stock[wh] ? stock[wh][k] ?? 0 : null; // null: chưa chọn kho
     };
     const lotTag = (i) => (i.lot ? ` <small class="tag tag-muted">Lô ${esc(i.lot)}${i.exp ? ' · HSD ' + esc(i.exp) : ''}</small>` : '');
@@ -218,13 +315,14 @@
       const trs = [...body.rows];
       let total = 0;
       trs.forEach((tr) => {
-        const raw = tr.querySelector('input[name="qty[]"]').value.trim();
+        const raw = tr.querySelector('input[data-qty]').value.trim();
         const s = stockOf(tr.dataset.k), cell = tr.querySelector('.stock-cell'), err = tr.querySelector('.row-err');
         const qty = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
         total += qty;
         cell.textContent = s === null ? '—' : vn.format(s);
         let msg = '';
-        if (!/^\d+$/.test(raw) || qty < 1) msg = raw.startsWith('-') ? 'Không được nhập số âm' : 'Số lượng phải là số nguyên dương';
+        if (raw === '' && tr._alloc && !picker._submitting) msg = '';   // dòng chọn lô còn trống: nhắc nhẹ, không tô đỏ
+        else if (!/^\d+$/.test(raw) || qty < 1) msg = raw.startsWith('-') ? 'Không được nhập số âm' : 'Số lượng phải là số nguyên dương';
         else if (qty > 1000000) msg = 'Tối đa 1.000.000 mỗi dòng';
         else if (check && s !== null && qty > s) msg = s === 0 ? 'Kho đã hết hàng, không thể xuất' : `Vượt tồn kho — chỉ còn ${vn.format(s)}`;
         tr.classList.toggle('over', !!msg);
@@ -242,33 +340,44 @@
 
     // Cộng/trừ số lượng; tăng quá tồn thì giữ nguyên và báo ngay
     const bump = (tr, d) => {
-      const q = tr.querySelector('input[name="qty[]"]');
+      const q = tr.querySelector('input[data-qty]');
       const cur = /^\d+$/.test(q.value.trim()) ? parseInt(q.value, 10) : 0;
       const s = stockOf(tr.dataset.k);
       let next = Math.max(1, Math.min(1000000, cur + d));
       if (d > 0 && check && s !== null && next > s) {
         next = Math.max(1, Math.min(cur || 1, s) || 1);
-        q.value = next; refresh();
+        q.value = next; if (tr._alloc) syncLots(tr); refresh();
         const err = tr.querySelector('.row-err');
         err.textContent = s === 0 ? 'Kho đã hết hàng, không thể xuất' : `Không được vượt tồn kho (chỉ còn ${vn.format(s)})`;
         err.hidden = false; tr.classList.add('over');
         return;
       }
-      q.value = next; refresh();
+      q.value = next; if (tr._alloc) syncLots(tr); refresh();
     };
 
     const add = (i) => {
-      let tr = [...body.rows].find((r) => r.dataset.k === i.k);
+      const newLot = !!picker.dataset.newlots && i.tracked;   // phiếu nhập hàng theo lô: mỗi lần chọn là một dòng mới có ô số lô + hạn dùng
+      const lotRow = !!picker.dataset.auto && !!(i.lots && i.lots.length);   // xuất / điều chuyển hàng theo lô: ô chọn lô hiện sẵn
+      let tr = newLot ? null : [...body.rows].find((r) => r.dataset.k === i.k);
       if (tr) {
         bump(tr, 1);
       } else {
         tr = body.insertRow();
         tr.dataset.k = i.k;
-        tr.innerHTML = `<td><input type="hidden" name="line[]" value="${esc(i.k)}"><b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}</td>`
+        const lotCells = !picker.dataset.newlots ? '' : (newLot
+          ? '<div class="lot-in">'
+            + ((i.lots || []).length ? '<label><small>Lô có sẵn</small><select class="lot-existing" aria-label="Chọn lô có sẵn"><option value="">Chọn lô có sẵn…</option>'
+              + i.lots.map((l) => `<option value="${esc(l.lot)}" data-iso="${esc(l.iso || '')}">${esc(l.lot)}${l.exp ? ' · HSD ' + esc(l.exp) : ''}</option>`).join('') + '</select></label>' : '')
+            + '<label><small>Số lô</small><input type="text" name="lot_no[]" required maxlength="40" pattern="[A-Za-z0-9._\\-]{1,40}" placeholder="VD: L2611A" autocomplete="off" aria-label="Số lô"></label>'
+            + '<label><small>Hạn dùng (ghi trên hàng)</small><input type="date" name="exp[]" required aria-label="Hạn dùng"></label></div>'
+          : '<input type="hidden" name="lot_no[]" value=""><input type="hidden" name="exp[]" value="">');
+        const addLot = newLot ? '<div><button type="button" class="btn-ghost btn-sm add-lot">+ Thêm lô khác của hàng này</button></div>' : '';
+        tr.innerHTML = `<td>${lotRow ? '<span class="auto-out"></span>' : `<input type="hidden" name="line[]" value="${esc(i.k)}">`}<b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}${lotCells}${addLot}</td>`
           + '<td class="num stock-cell"></td>'
-          + `<td class="num"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input name="qty[]" type="number" min="1" max="1000000" value="1" inputmode="numeric" aria-label="Số lượng"><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small><div class="row-err" role="alert" hidden></div></td>`
+          + `<td class="num${lotRow ? ' qty-cell lot-cell' : ''}"><div class="qty-line">${lotRow ? '<div class="lot-chips"></div>' : ''}<div class="qty-box"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input${lotRow ? '' : ' name="qty[]"'} data-qty type="number" min="1" max="1000000" value="1" inputmode="numeric" aria-label="Số lượng"${lotRow ? ' placeholder="Chọn lô"' : ''}><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small></div></div><div class="row-err" role="alert" hidden></div></td>`
           + '<td class="num"><button type="button" class="icon-btn remove-line" aria-label="Xoá dòng">✕</button></td>';
       }
+      if (lotRow && !tr._alloc) { tr._alloc = {}; syncLots(tr); }
       tr.classList.remove('flash-row'); void tr.offsetWidth; tr.classList.add('flash-row');
       search.value = ''; active = -1; open(false); refresh(); search.focus();
     };
@@ -301,20 +410,40 @@
       const tr = ev.target.closest('tr');
       if (!tr) return;
       const step = ev.target.closest('.step');
-      if (step) {
+      if (ev.target.closest('.add-lot')) {
+        const it = rowItem(tr);
+        if (it) add(it);
+      } else if (step) {
         bump(tr, +step.dataset.d);
       } else if (ev.target.closest('.remove-line')) { tr.remove(); refresh(); }
     });
-    body.addEventListener('input', refresh);
+    body.addEventListener('input', (ev) => {
+      const tr = ev.target.closest('tr');
+      if (tr && tr._alloc && ev.target.matches('input[data-qty]')) syncLots(tr);
+      refresh();
+    });
+    body.addEventListener('change', (ev) => {
+      const pre = ev.target.closest('.lot-existing');
+      if (pre) {   // chọn lô đã có ⇒ số lô + hạn dùng tự điền, chỉ còn nhập số lượng
+        const tr = pre.closest('tr'), opt = pre.selectedOptions[0];
+        tr.querySelector('input[name="lot_no[]"]').value = pre.value;
+        tr.querySelector('input[name="exp[]"]').value = pre.value ? (opt.dataset.iso || '') : '';
+        return;
+      }
+      const cb = ev.target.closest('.lot-chip input');
+      if (!cb) return;
+      pickLots(cb.closest('tr'), cb);
+      refresh();
+    });
     body.addEventListener('keydown', (ev) => { // ô số lượng chỉ nhận chữ số
-      if (ev.target.matches('input[name="qty[]"]') && ['-', '+', '.', ',', 'e', 'E'].includes(ev.key)) {
+      if (ev.target.matches('input[data-qty]') && ['-', '+', '.', ',', 'e', 'E'].includes(ev.key)) {
         ev.preventDefault();
         const err = ev.target.closest('tr').querySelector('.row-err');
         err.textContent = ev.key === '-' ? 'Không được nhập số âm' : 'Chỉ nhập số nguyên dương';
         err.hidden = false;
       }
     });
-    if (whSelect) whSelect.addEventListener('change', () => { refresh(); if (!list.hidden) render(); });
+    if (whSelect) whSelect.addEventListener('change', () => { [...body.rows].forEach((tr) => { if (tr._alloc) syncLots(tr); }); refresh(); if (!list.hidden) render(); });
     [catSel, supFilter].forEach((sel) => { if (sel) sel.addEventListener('change', () => { render(); search.focus(); }); });
     if (supSel) supSel.addEventListener('change', () => {
       const ok = new Set(pool().map((i) => i.k));
@@ -325,13 +454,28 @@
     if (supSel) search.placeholder = 'Hãy chọn nhà cung cấp trước…';
 
     // Điền lại các dòng hàng đã chọn sau khi lưu phiếu bị từ chối
-    picker.restoreLines = (keys, qtys) => {
+    picker.restoreLines = (keys, qtys, lotNos, exps) => {
+      const grouped = new Set();
       keys.forEach((k, n) => {
-        const it = items.find((x) => x.k === k);
+        let it = items.find((x) => x.k === k);
+        if (!it && picker.dataset.auto) it = items.find((x) => (x.lots || []).some((l) => l.k === k));   // lô cụ thể ⇒ dòng hàng chứa lô đó
         if (!it) return;
+        if (picker.dataset.auto && it.lots && it.lots.length) {
+          if (grouped.has(it.k)) return;
+          grouped.add(it.k);
+          add(it);
+          const row = [...body.rows].find((r) => r.dataset.k === it.k);
+          row._alloc = {};
+          keys.forEach((kk, m) => { if (it.lots.some((l) => l.k === kk)) row._alloc[kk] = (row._alloc[kk] || 0) + (parseInt(qtys[m], 10) || 0); });
+          row.querySelector('input[data-qty]').value = Object.values(row._alloc).reduce((a, b) => a + b, 0) || 1;
+          drawChips(row); writeOut(row);
+          return;
+        }
         add(it);
-        const tr = [...body.rows].find((r) => r.dataset.k === k);
-        if (tr) tr.querySelector('input[name="qty[]"]').value = qtys[n] ?? 1;
+        const tr = picker.dataset.newlots && it.tracked ? body.rows[body.rows.length - 1] : [...body.rows].find((r) => r.dataset.k === k);
+        if (tr) tr.querySelector('input[data-qty]').value = qtys[n] ?? 1;
+        const lotIn = tr && tr.querySelector('input[type=text][name="lot_no[]"]');
+        if (lotIn) { lotIn.value = (lotNos && lotNos[n]) || ''; tr.querySelector('input[type=date][name="exp[]"]').value = (exps && exps[n]) || ''; }
       });
       search.value = ''; open(false); refresh();
     };
@@ -344,12 +488,14 @@
 
     // Phiếu không có dòng nào thì không gửi (bắt ở giai đoạn capture để chạy trước khoá chống bấm đúp)
     form.addEventListener('submit', (ev) => {
+      picker._submitting = true;
       refresh();
+      picker._submitting = false;
       const bad = [...body.rows].find((r) => r.dataset.err);
       if (body.rows.length && !bad) return;
       ev.preventDefault(); ev.stopImmediatePropagation();
       if (bad) {
-        const inp = bad.querySelector('input[name="qty[]"]');
+        const inp = bad.querySelector('input[data-qty]');
         inp.focus(); inp.select();
         sum.hidden = false; sum.classList.add('bad');
         sum.textContent = `Không thể lưu: ${bad.dataset.err.toLowerCase()} (${bad.querySelector('b').textContent}).`;
@@ -519,6 +665,8 @@
         }
         const fl = dlg.querySelector('[data-dlg-label]');
         if (fl) fl.textContent = open.dataset.fillLabel || '';
+        if (open.dataset.lots) renderLots(dlg, JSON.parse(open.dataset.lots));
+        if (open.dataset.hist !== undefined) renderPriceHist(dlg, JSON.parse(open.dataset.hist || '[]'));
         if (open.dataset.fillAction) dlg.querySelector('form').action = open.dataset.fillAction;   // địa chỉ gửi theo từng dòng (VD: /requests/12/reject)
         dlg.querySelectorAll('.newitem-row').forEach((x) => x.remove());   // hộp mở lại thì bỏ các dòng hàng mới nhập dở
         try { const ids = String(JSON.parse(open.dataset.fill || '{}').supplier_ids ?? '').split(','); dlg.querySelectorAll('[data-sup-check]').forEach((c) => { c.checked = ids.includes(c.value); }); const its = String(JSON.parse(open.dataset.fill || '{}').item_ids ?? '').split(','); dlg.querySelectorAll('[data-item-check]').forEach((c) => { c.checked = its.includes(c.value); }); } catch (e) { /* bỏ qua */ }
@@ -726,7 +874,58 @@
     window.refreshBadges = refreshBadges;
   }
 
-  const initPage = (swapped) => { initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
+  // Bảng rộng hơn màn hình: hai nút ‹ › nổi giữa màn hình, bấm là bảng tự trượt sang bên kia (không phải lướt xuống tìm thanh cuộn)
+  const initHScroll = () => {
+    document.querySelectorAll('.table-wrap').forEach((wrap) => {
+      if (wrap.dataset.hs || wrap.closest('dialog') || !wrap.parentElement) return;
+      wrap.dataset.hs = '1';
+      const nav = document.createElement('div');
+      nav.className = 'hscroll';
+      nav.innerHTML = '<button type="button" class="hs-btn hs-left" aria-label="Kéo bảng sang trái" title="Kéo sang trái">‹</button><button type="button" class="hs-btn hs-right" aria-label="Kéo bảng sang phải" title="Kéo sang phải">›</button>';
+      wrap.parentElement.insertBefore(nav, wrap);
+      const left = nav.querySelector('.hs-left'), right = nav.querySelector('.hs-right');
+      const sync = () => {
+        const max = wrap.scrollWidth - wrap.clientWidth;
+        nav.hidden = max <= 4;
+        left.hidden = wrap.scrollLeft <= 4;
+        right.hidden = wrap.scrollLeft >= max - 4;
+      };
+      const go = (dir) => wrap.scrollBy({ left: dir * Math.max(240, wrap.clientWidth * 0.75), behavior: 'smooth' });
+      left.addEventListener('click', () => go(-1));
+      right.addEventListener('click', () => go(1));
+      wrap.addEventListener('scroll', sync, { passive: true });
+      window.addEventListener('resize', sync);
+      new ResizeObserver(sync).observe(wrap);
+      sync();
+    });
+  };
+  // Thanh danh mục dài: hai mũi tên nằm TRONG thanh, cùng hàng với các tab (trái ‹ · phải ›); mỗi lần bấm trượt khoảng 75% chiều rộng
+  const initTabScroll = () => {
+    document.querySelectorAll('.ts-btn').forEach((b) => { if (!b._nav || !b._nav.isConnected) b.remove(); });   // thanh đã bị thay mới (lọc, làm tươi) ⇒ bỏ nút cũ
+    document.querySelectorAll('.cat-bar nav.tabs').forEach((nav) => {
+      if (nav.dataset.ts || !nav.parentElement) return;
+      nav.dataset.ts = '1';
+      const mk = (cls, label, txt) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ts-btn ' + cls; b.setAttribute('aria-label', label); b.title = label; b.textContent = txt; b._nav = nav; return b; };
+      const left = mk('ts-left', 'Trượt thanh sang trái', '‹'), right = mk('ts-right', 'Trượt thanh sang phải', '›');
+      nav.before(left);
+      nav.after(right);
+      const sync = () => {
+        const max = nav.scrollWidth - nav.clientWidth;
+        left.hidden = nav.scrollLeft <= 4 || max <= 4;
+        right.hidden = nav.scrollLeft >= max - 4 || max <= 4;
+      };
+      const go = (dir) => nav.scrollBy({ left: dir * Math.max(160, nav.clientWidth * 0.75), behavior: 'smooth' });
+      left.addEventListener('click', () => go(-1));
+      right.addEventListener('click', () => go(1));
+      nav.addEventListener('scroll', sync, { passive: true });
+      window.addEventListener('resize', sync);
+      new ResizeObserver(sync).observe(nav);
+      sync();
+    });
+  };
+  new MutationObserver(() => { initHScroll(); initTabScroll(); }).observe(document.body, { childList: true, subtree: true });
+
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
@@ -991,7 +1190,7 @@ document.addEventListener('click', (ev) => {
   });
   // 4) dòng hàng của phiếu
   const picker = document.getElementById('picker');
-  if (picker && picker.restoreLines && Array.isArray(data.line)) picker.restoreLines(data.line, Array.isArray(data.qty) ? data.qty : []);
+  if (picker && picker.restoreLines && Array.isArray(data.line)) picker.restoreLines(data.line, Array.isArray(data.qty) ? data.qty : [], Array.isArray(data.lot_no) ? data.lot_no : [], Array.isArray(data.exp) ? data.exp : []);
   // 5) đưa thông báo lỗi lên trên hộp thoại vừa mở lại
   const notice = document.getElementById('notice-dlg');
   if (dlg && notice && notice.open) { notice.close(); notice.showModal(); }

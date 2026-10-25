@@ -14,6 +14,7 @@ use StockFlow\Service\AuthService;
 use StockFlow\Service\CatalogService;
 use StockFlow\Service\FleetService;
 use StockFlow\Service\PartnerService;
+use StockFlow\Service\PricingService;
 use StockFlow\Service\StockCountService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\TransferService;
@@ -38,6 +39,7 @@ final class DemoSeed
         $c = new Container();
         $c->set(Db::class, $db);
         $catalog = $c->get(CatalogService::class);
+        $pricing = $c->get(PricingService::class);
         $vouchers = $c->get(VoucherService::class);
         $transfers = $c->get(TransferService::class);
         $counts = $c->get(StockCountService::class);
@@ -109,6 +111,13 @@ final class DemoSeed
             ['VIT-C', 'Vitamin C 1000 mg (hộp 20 viên)', 'hộp', 1, 40, 150], ['MASK-50', 'Khẩu trang y tế (hộp 50)', 'hộp', 1, 60, 220],
             ['OIL-1L', 'Dầu ăn 1 L', 'chai', 1, 80, 300], ['SGR-1KG', 'Đường tinh luyện 1 kg', 'kg', 1, 100, 400],
         ];
+        // sku => [giá nhập, giá bán chưa thuế (đồng), thuế GTGT %]
+        $money = ['BOX-S' => [4200, 5500, 10], 'BOX-M' => [6800, 8800, 10], 'BOX-L' => [12500, 16000, 10], 'TAPE-48' => [14000, 18500, 10], 'BUBBLE' => [95000, 125000, 10],
+            'PE-BAG' => [32000, 42000, 10], 'LBL-A6' => [38000, 49000, 10], 'STRETCH' => [78000, 98000, 10], 'PALLET' => [185000, 240000, 10], 'STRAP' => [145000, 185000, 10],
+            'GLOVE' => [9500, 13000, 10], 'CUTTER' => [11000, 15500, 10], 'PHN-A15' => [3850000, 4490000, 10], 'PHN-A25' => [6900000, 7990000, 10], 'EARBUD' => [420000, 590000, 10],
+            'CHG-65W' => [310000, 429000, 10], 'CAB-USBC' => [38000, 59000, 10], 'PWR-20K' => [380000, 529000, 10], 'SPK-BT' => [520000, 749000, 10], 'WATCH-S' => [1450000, 1990000, 10],
+            'MLK-1L' => [21500, 27500, 5], 'NDL-PK' => [92000, 118000, 5], 'CFE-3IN1' => [58000, 79000, 5], 'TEA-GRN' => [34000, 45000, 5], 'SOAP-500' => [26000, 39000, 10],
+            'DET-3KG' => [118000, 155000, 10], 'VIT-C' => [64000, 89000, 8], 'MASK-50' => [41000, 59000, 8], 'OIL-1L' => [43000, 54000, 8], 'SGR-1KG' => [19500, 24500, 5]];
         // Quy cách lô: 1 lô (thùng/kiện đóng sẵn) gồm bao nhiêu đơn vị tính; không có trong bảng ⇒ bán lẻ (1)
         $pack = ['BOX-S' => 50, 'BOX-M' => 50, 'BOX-L' => 25, 'TAPE-48' => 6, 'BUBBLE' => 4, 'PE-BAG' => 10, 'LBL-A6' => 10, 'STRETCH' => 6, 'PALLET' => 10,
             'STRAP' => 4, 'GLOVE' => 12, 'CUTTER' => 24, 'PHN-A15' => 10, 'PHN-A25' => 10, 'EARBUD' => 20, 'CHG-65W' => 20, 'CAB-USBC' => 50, 'PWR-20K' => 10,
@@ -127,13 +136,26 @@ final class DemoSeed
             $id = $catalog->addItem($admin, $sku, $name, $unit[$un], (bool)$lot, $reorder, $pack[$sku] ?? 1, $cat[$catOf[$sku] ?? 'PKG']);
             $batches = [];
             if ($lot) {
-                foreach ([['L2601A', '+5 months'], ['L2602B', '+11 months']] as [$no, $rel]) {
+                $soon = in_array($sku, ['MLK-1L', 'VIT-C'], true);   // vài mặt hàng có lô sắp hết hạn để minh hoạ cảnh báo
+                foreach ([['L2601A', $soon ? '+25 days' : '+5 months'], ['L2602B', '+11 months']] as [$no, $rel]) {
                     $batches[] = $catalog->addBatch($admin, $id, $no, gmdate('Y-m-d', strtotime($rel)));
                 }
             } else {
                 $batches[] = (int)$db->value('SELECT id FROM lo_hang WHERE mat_hang_id = ?', [$id]);
             }
+            if (isset($money[$sku])) {   // giá gốc + thuế do quản trị đặt; giá bán do quản lý từng kho đặt bên dưới
+                $pricing->setCost($admin, $id, $money[$sku][0], $money[$sku][2], 'Giá gốc khởi tạo');
+            }
             $item[$sku] = ['id' => $id, 'batches' => $batches, 'hub' => end($defs[array_search($sku, array_column($defs, 0))])];
+        }
+
+        // ── giá bán riêng từng kho do quản lý kho đặt: HN theo giá niêm yết, HCM cao hơn 3%, DN thấp hơn 2% ──
+        foreach (['HN01' => 1.0, 'HCM01' => 1.03, 'DN01' => 0.98] as $code => $k) {
+            foreach ($money as $sku => [$cost, $sell]) {
+                if (isset($item[$sku])) {
+                    $pricing->setSellPrice($approver[$code], $wh[$code], $item[$sku]['id'], (int)(round($sell * $k / 100) * 100), 'Giá bán khởi tạo của kho');
+                }
+            }
         }
 
         // ── đối tác: nhà cung cấp theo danh mục hàng + khách hàng ──
@@ -199,7 +221,7 @@ final class DemoSeed
             for ($i = 0; $i < $vouchersCount; $i++) {
                 $lines = [];
                 foreach (array_rand(array_flip($skus), 3) as $sku) {
-                    $bi = mt_rand(0, count($item[$sku]['batches']) - 1);
+                    $bi = 0;   // xuất theo hạn dùng: lô hết hạn trước (lô đầu) xuất trước
                     $have = $stock($code, $sku, $bi);
                     if ($have >= 4) {
                         $lines[$sku . $bi] = $line($sku, $bi, mt_rand(2, max(2, (int)($have * 0.25))));
@@ -216,7 +238,7 @@ final class DemoSeed
         foreach ($route as [$from, $to]) {
             $lines = [];
             foreach (array_rand(array_flip($skus), 4) as $sku) {
-                $bi = mt_rand(0, count($item[$sku]['batches']) - 1);
+                $bi = 0;   // điều chuyển đi cũng lấy lô hết hạn trước
                 $have = $stock($from, $sku, $bi);
                 if ($have >= 8) {
                     $lines[$sku . $bi] = $line($sku, $bi, mt_rand(3, max(3, (int)($have * 0.3))));

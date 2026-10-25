@@ -26,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -111,7 +111,21 @@ final class VoucherController extends Controller
             return $step;
         }
         return $this->act(function () use ($r, $user, $type) {
-            $lines = StockRules::normalizeLines($r->arr('line'), $r->arr('qty'));
+            $keys = $r->arr('line');
+            $qtys = $r->arr('qty');
+            if ($type === VoucherType::Issue) {   // «mặt hàng:auto» ⇒ tự chia lô theo hạn dùng
+                [$keys, $qtys] = $this->query->expandAutoLots((int)$r->int('warehouse_id'), $keys, $qtys);
+            }
+            if ($type === VoucherType::Receipt) {   // hàng theo lô: «mặt hàng:new» + số lô + hạn dùng gõ trên dòng ⇒ tìm / tạo lô rồi đổi thành «mặt hàng:lô»
+                $lotNos = $r->arr('lot_no');
+                $exps = $r->arr('exp');
+                foreach ($keys as $i => $key) {
+                    if (is_scalar($key) && preg_match('/^(\d+):new$/', trim((string)$key), $m)) {
+                        $keys[$i] = $m[1] . ':' . $this->catalog->ensureReceiptLot($user, (int)$m[1], is_scalar($lotNos[$i] ?? null) ? (string)$lotNos[$i] : '', is_scalar($exps[$i] ?? null) ? (string)$exps[$i] : '');
+                    }
+                }
+            }
+            $lines = StockRules::normalizeLines($keys, $qtys);
             if ($type === VoucherType::Issue) {
                 $this->assertInStock((int)$r->int('warehouse_id'), $lines);
             }
@@ -145,7 +159,8 @@ final class VoucherController extends Controller
             return null;
         }
         try {   // kiểm tra dòng hàng / tồn trước: phiếu sai thì báo ngay ở bước 1, không bắt nhập khách
-            $lines = StockRules::normalizeLines($r->arr('line'), $r->arr('qty'));
+            [$keys, $qtys] = $this->query->expandAutoLots((int)$r->int('warehouse_id'), $r->arr('line'), $r->arr('qty'));
+            $lines = StockRules::normalizeLines($keys, $qtys);
             $this->assertInStock((int)$r->int('warehouse_id'), $lines);
         } catch (DomainError $e) {
             $this->session->flash('err', $e->getMessage());
@@ -287,7 +302,8 @@ final class VoucherController extends Controller
     {
         $this->need($user, Permission::LapPhieuDieuChuyen);
         return $this->act(function () use ($r, $user) {
-            $lines = StockRules::normalizeLines($r->arr('line'), $r->arr('qty'));
+            [$keys, $qtys] = $this->query->expandAutoLots((int)$r->int('from_wh'), $r->arr('line'), $r->arr('qty'));
+            $lines = StockRules::normalizeLines($keys, $qtys);
             $this->assertInStock((int)$r->int('from_wh'), $lines);
             $res = $this->transfers->createDraft($user, (int)$r->int('from_wh'), (int)$r->int('to_wh'), $lines, $r->str('note'), $this->idemKey($r));
             if (!$res['created']) {
@@ -302,6 +318,9 @@ final class VoucherController extends Controller
     {
         if ($errors = $this->query->shortages($warehouseId, $lines)) {
             throw new \StockFlow\Domain\DomainError('Số lượng vượt tồn kho — ' . implode('; ', $errors));
+        }
+        if ($errors = $this->query->fefoErrors($warehouseId, $lines)) {
+            throw new \StockFlow\Domain\DomainError('Xuất theo hạn dùng (hết hạn trước, xuất trước) — ' . implode('; ', $errors));
         }
     }
 

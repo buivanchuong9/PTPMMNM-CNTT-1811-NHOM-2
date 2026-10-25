@@ -21,7 +21,7 @@ use StockFlow\Service\StockQuery;
 
 final class AdminController extends Controller
 {
-    public function __construct(View $view, Session $session, Authorizer $auth, private CatalogService $catalog, private StockQuery $query, private PartnerService $partners)
+    public function __construct(View $view, Session $session, Authorizer $auth, private CatalogService $catalog, private StockQuery $query, private PartnerService $partners, private \StockFlow\Service\PricingService $pricing)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -70,8 +70,13 @@ final class AdminController extends Controller
     public function addItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
+            $cost = \StockFlow\Service\PricingService::parseMoney($r->str('cost'));
+            if ($cost === null || $cost < 1) {   // kiểm tra giá TRƯỚC khi tạo mặt hàng
+                throw new DomainError('Nhập giá gốc lớn hơn 0 (đồng / 1 đơn vị tính)');
+            }
             $id = $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
             $this->partners->setItemSuppliers($user, $id, $r->arr('supplier_ids'));
+            $this->pricing->setCost($user, $id, $cost, (int)$r->int('vat'), 'Giá gốc khi tạo mặt hàng');
         }, 'Đã thêm mặt hàng.', '/inventory');
     }
 

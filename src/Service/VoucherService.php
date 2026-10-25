@@ -15,7 +15,7 @@ use StockFlow\Domain\VoucherType;
 final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
-                                private Authorizer $auth, private AuditLog $audit, private TransferService $transfers) {}
+                                private Authorizer $auth, private AuditLog $audit, private TransferService $transfers, private StockQuery $query, private PricingService $pricing) {}
 
     /**
      * Lập phiếu nhập/xuất ở trạng thái nháp (chưa ảnh hưởng tồn).
@@ -42,6 +42,7 @@ final class VoucherService
             $id = $this->db->transaction(function () use ($user, $type, $warehouseId, $lines, $partner, $note, $idempotencyKey) {
                 $this->requireActiveWarehouse($warehouseId);
                 $this->validateLines($lines);
+                $lines = $this->priceLines($type, $warehouseId, $lines);
                 $id = $this->repo->insert([
                     'loai' => $type->value, 'kho_id' => $warehouseId, 'doi_tac' => trim($partner), 'ghi_chu' => trim($note),
                     'khoa_chong_trung' => $idempotencyKey, 'nguoi_lap_id' => $user->id,
@@ -102,6 +103,9 @@ final class VoucherService
             $lines = $this->repo->lines($id);
             if ($lines === []) {
                 throw new DomainError('Phiếu không có dòng hàng');
+            }
+            if ($v['loai'] === VoucherType::Issue->value && ($errors = $this->query->fefoErrors((int)$v['kho_id'], $lines))) {
+                throw new DomainError('Xuất theo hạn dùng (hết hạn trước, xuất trước) — ' . implode('; ', $errors));
             }
             $ops = $this->repo->ops($v, $lines);
             $this->ledger->lock($this->repo->lockKeys($ops));
@@ -187,6 +191,23 @@ final class VoucherService
     }
 
     /** Mặt hàng/lô phải tồn tại, đang hoạt động và khớp nhau. */
+    /**
+     * Giá tại lúc lập phiếu (lưu lại trên dòng vì phiếu đã xác nhận bất biến):
+     *  - phiếu xuất: đơn giá = giá bán hiện hành CỦA KHO LẬP PHIẾU (quản lý kho đặt), kèm thuế suất và giá gốc;
+     *  - phiếu nhập: đơn giá = giá gốc quản trị đặt cho mặt hàng (nhân viên kho không nhập giá), kèm thuế suất.
+     * @return list<array<string,mixed>>
+     */
+    private function priceLines(VoucherType $type, int $warehouseId, array $lines): array
+    {
+        foreach ($lines as &$l) {
+            $item = $this->db->one('SELECT thue_suat, gia_von FROM mat_hang WHERE id = ?', [$l['mat_hang_id']]);
+            $l['thue_suat'] = (int)$item['thue_suat'];
+            $l['gia_von'] = (int)$item['gia_von'];
+            $l['don_gia'] = $type === VoucherType::Issue ? $this->pricing->sellPrice($warehouseId, (int)$l['mat_hang_id']) : (int)$item['gia_von'];
+        }
+        return $lines;
+    }
+
     public function validateLines(array $lines): void
     {
         if ($lines === []) {
