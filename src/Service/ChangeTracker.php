@@ -37,7 +37,7 @@ final class ChangeTracker
             'partners' => ['perms' => [Permission::XemDanhMuc], 'entity' => 'partner', 'scope' => null],
             'warehouses' => ['perms' => [Permission::XemDanhMuc], 'entity' => 'warehouse', 'scope' => 'kho'],
             'users' => ['perms' => [Permission::QuanLyTaiKhoan], 'entity' => 'user', 'scope' => null],
-            'fleet' => ['perms' => [Permission::QuanLyDoiXe], 'entity' => 'vehicle', 'scope' => null],
+            'fleet' => ['perms' => [Permission::XemDoiXe], 'entity' => 'vehicle', 'scope' => null],
             'requests' => ['perms' => [Permission::XemPhieu], 'entity' => 'request', 'scope' => 'yeu_cau_chuyen_hang'],
             'history' => ['perms' => [Permission::XemLichSu], 'entity' => null, 'scope' => 'so_phat_sinh'],
         };

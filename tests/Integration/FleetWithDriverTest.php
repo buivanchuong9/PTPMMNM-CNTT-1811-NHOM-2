@@ -18,7 +18,8 @@ $driverOf = fn(int $xe) => $f->db->one('SELECT t.* FROM tai_xe t JOIN xe x ON x.
 
 section('Thêm xe kèm tài xế');
 $c1 = $cccd();
-$r1 = $fleet->addVehicleWithDriver($f->admin, $plate(), 'Xe tải', $f->wa, '  Nguyễn  Văn   Lái ', $c1, '0912345678');
+throws(fn() => $fleet->addVehicleWithDriver($f->admin, $plate(), 'Xe tải', $f->wa, 'Admin thử', $cccd(), ''), Forbidden::class, 'admin chỉ xem, không thêm xe');
+$r1 = $fleet->addVehicleWithDriver($f->approverA, $plate(), 'Xe tải', $f->wa, '  Nguyễn  Văn   Lái ', $c1, '0912345678');
 $d = $driverOf($r1['vehicle_id']);
 same([$d['ho_ten'], $d['cccd'], $d['so_dien_thoai']], ['Nguyễn Văn Lái', $c1, '0912345678'], 'tài xế được tạo cùng xe và gắn đúng xe (họ tên được chuẩn hoá)');
 same((int)$f->db->value('SELECT kho_hien_tai_id FROM xe WHERE id = ?', [$r1['vehicle_id']]), $f->wa, 'xe đứng ở kho gốc');
@@ -28,26 +29,29 @@ section('Lỗi ở phần xe hoặc tài xế thì không tạo gì (nguyên kh�
 $xeBefore = $count('SELECT COUNT(*) FROM xe');
 $drvBefore = $count('SELECT COUNT(*) FROM tai_xe');
 $samePlate = (string)$f->db->value('SELECT bien_so FROM xe WHERE id = ?', [$r1['vehicle_id']]);
-throws(fn() => $fleet->addVehicleWithDriver($f->admin, $samePlate, '', $f->wb, 'Người mới', $cccd(), ''), DomainError::class, 'trùng biển số bị từ chối');
-throws(fn() => $fleet->addVehicleWithDriver($f->admin, $plate(), '', $f->wb, 'Sai CCCD', '12345', ''), DomainError::class, 'CCCD sai định dạng bị từ chối');
-throws(fn() => $fleet->addVehicleWithDriver($f->admin, 'abc', '', $f->wb, 'Biển sai', $cccd(), ''), DomainError::class, 'biển số sai bị từ chối');
-$r2 = $fleet->addVehicleWithDriver($f->admin, $plate(), '', $f->wa, 'Tài xế hai', $cccd(), '');   // kho A đủ 2 xe
+throws(fn() => $fleet->addVehicleWithDriver($f->approverB, $samePlate, '', $f->wb, 'Người mới', $cccd(), ''), DomainError::class, 'trùng biển số bị từ chối');
+throws(fn() => $fleet->addVehicleWithDriver($f->approverB, $plate(), '', $f->wb, 'Sai CCCD', '12345', ''), DomainError::class, 'CCCD sai định dạng bị từ chối');
+throws(fn() => $fleet->addVehicleWithDriver($f->approverB, 'abc', '', $f->wb, 'Biển sai', $cccd(), ''), DomainError::class, 'biển số sai bị từ chối');
+$r2 = $fleet->addVehicleWithDriver($f->approverA, $plate(), '', $f->wa, 'Tài xế hai', $cccd(), '');
 $xeBefore++;
 $drvBefore++;
-throws(fn() => $fleet->addVehicleWithDriver($f->admin, $plate(), '', $f->wa, 'Tài xế ba', $cccd(), ''), DomainError::class, 'kho đủ 2 xe bị từ chối');
+$fleet->addVehicleWithDriver($f->approverA, $plate(), '', $f->wa, 'Tài xế ba', $cccd(), '');   // xe thứ ba của kho A: không giới hạn
+$xeBefore++;
+$drvBefore++;
+truthy((int)$f->db->value('SELECT COUNT(*) FROM xe WHERE kho_goc_id = ?', [$f->wa]) >= 3, 'kho A có từ 3 xe trở lên');
 same([$count('SELECT COUNT(*) FROM xe'), $count('SELECT COUNT(*) FROM tai_xe')], [$xeBefore, $drvBefore], 'các lần lỗi không để lại xe hay tài xế nào');
 
 section('CCCD đã có');
-throws(fn() => $fleet->addVehicleWithDriver($f->admin, $plate(), '', $f->wb, 'Giả mạo', $c1, ''), DomainError::class, 'CCCD của tài xế đang phụ trách xe khác bị từ chối');
+throws(fn() => $fleet->addVehicleWithDriver($f->approverB, $plate(), '', $f->wb, 'Giả mạo', $c1, ''), DomainError::class, 'CCCD của tài xế đang phụ trách xe khác bị từ chối');
 
 section('Sửa xe kèm tài xế');
-$fleet->updateVehicleWithDriver($f->admin, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Nguyễn Văn Lái Mới', $c1, '0987654321');
+$fleet->updateVehicleWithDriver($f->approverA, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Nguyễn Văn Lái Mới', $c1, '0987654321');
 $d2 = $driverOf($r1['vehicle_id']);
 same([(int)$d2['id'], $d2['ho_ten'], $d2['so_dien_thoai']], [(int)$d['id'], 'Nguyễn Văn Lái Mới', '0987654321'], 'cùng CCCD ⇒ sửa họ tên / số điện thoại tại chỗ (cùng hồ sơ)');
 same($f->db->value('SELECT loai_xe FROM xe WHERE id = ?', [$r1['vehicle_id']]), 'Xe tải 3 tấn', 'loại xe cũng được lưu');
 
 $c2 = $cccd();
-$fleet->updateVehicleWithDriver($f->admin, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Người Thay Thế', $c2, '');
+$fleet->updateVehicleWithDriver($f->approverA, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Người Thay Thế', $c2, '');
 $d3 = $driverOf($r1['vehicle_id']);
 truthy((int)$d3['id'] !== (int)$d['id'] && $d3['cccd'] === $c2, 'CCCD khác ⇒ người khác lên thay: tài xế mới gắn với xe');
 same($count('SELECT COUNT(*) FROM tai_xe WHERE id = ?', [$d['id']]), 0, 'tài xế cũ chưa từng chạy chuyến nào ⇒ hồ sơ được xoá, không để rác');
@@ -59,20 +63,20 @@ $t = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 5)], 'chuyến
 $ts->dispatch($f->approverA, (int)$t['id'], $r1['vehicle_id'], true);
 $oldId = (int)$d3['id'];
 $c3 = $cccd();
-throws(fn() => $fleet->updateVehicleWithDriver($f->admin, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Người Đổi Ca', $c3, ''), DomainError::class, 'xe đang chạy trên đường thì chưa đổi được tài xế');
+throws(fn() => $fleet->updateVehicleWithDriver($f->approverA, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Người Đổi Ca', $c3, ''), DomainError::class, 'xe đang chạy trên đường thì chưa đổi được tài xế');
 same((int)$driverOf($r1['vehicle_id'])['id'], $oldId, 'bị từ chối thì tài xế cũ vẫn phụ trách xe (không tạo người mới)');
 $in = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($f->c->get(\StockFlow\Service\VoucherRepository::class)->find((int)$t['id']));
 $ts->receiveChecked($f->approverB, (int)$in['id'], null, true);   // kho đến nhận đủ ⇒ chuyến xong, xe đứng ở kho đến
-$fleet->updateVehicleWithDriver($f->admin, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Người Đổi Ca', $c3, '');
+$fleet->updateVehicleWithDriver($f->approverA, $r1['vehicle_id'], $samePlate, 'Xe tải 3 tấn', $f->wa, 'Người Đổi Ca', $c3, '');
 same($count('SELECT COUNT(*) FROM tai_xe WHERE id = ?', [$oldId]), 1, 'hồ sơ người cũ còn nguyên vì đã chạy chuyến');
 same($count('SELECT hoat_dong FROM tai_xe WHERE id = ?', [$oldId]), 0, 'người cũ chuyển sang «Ngừng dùng»');
 same($f->db->value('SELECT t.ho_ten FROM chuyen_van_chuyen c JOIN tai_xe t ON t.id = c.tai_xe_id WHERE c.xe_id = ?', [$r1['vehicle_id']]), 'Người Thay Thế', 'chuyến cũ vẫn ghi đúng người đã chạy');
 same($driverOf($r1['vehicle_id'])['cccd'], $c3, 'xe hiện do người mới phụ trách');
 
 section('Dùng lại tài xế đã ngừng / tài xế rảnh');
-throws(fn() => $fleet->updateVehicleWithDriver($f->admin, $r1['vehicle_id'], $samePlate, '', $f->wa, 'Người Thay Thế', $c2, ''), DomainError::class, 'CCCD của tài xế đã ngừng dùng bị từ chối');
-$spare = $fleet->addDriver($f->admin, 'Tài xế dự bị', $c4 = $cccd(), '');
-$fleet->updateVehicleWithDriver($f->admin, $r2['vehicle_id'], (string)$f->db->value('SELECT bien_so FROM xe WHERE id = ?', [$r2['vehicle_id']]), '', $f->wa, 'Tài xế dự bị', $c4, '');
+throws(fn() => $fleet->updateVehicleWithDriver($f->approverA, $r1['vehicle_id'], $samePlate, '', $f->wa, 'Người Thay Thế', $c2, ''), DomainError::class, 'CCCD của tài xế đã ngừng dùng bị từ chối');
+$spare = $fleet->addDriver($f->approverA, 'Tài xế dự bị', $c4 = $cccd(), '');
+$fleet->updateVehicleWithDriver($f->approverA, $r2['vehicle_id'], (string)$f->db->value('SELECT bien_so FROM xe WHERE id = ?', [$r2['vehicle_id']]), '', $f->wa, 'Tài xế dự bị', $c4, '');
 same((int)$driverOf($r2['vehicle_id'])['id'], $spare, 'CCCD của tài xế rảnh ⇒ dùng lại hồ sơ đó, không tạo trùng');
 
 finish();

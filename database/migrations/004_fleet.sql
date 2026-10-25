@@ -7,11 +7,14 @@ CREATE TABLE IF NOT EXISTS tai_xe (
     cccd                      varchar(12)  NOT NULL,
     so_dien_thoai             varchar(15)  NOT NULL DEFAULT '',
     hoat_dong                 boolean      NOT NULL DEFAULT TRUE,
+    diem                      integer      NOT NULL DEFAULT 100,
+    luong                     integer      NOT NULL DEFAULT 0,
+    kho_id                    integer      NULL,
     ngay_tao                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (cccd)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
--- Xe: mỗi kho là «kho gốc» của 1–2 xe (ứng dụng kiểm tra); mỗi xe có một tài xế phụ trách (tai_xe_id, mỗi tài xế chỉ một xe) — tài xế đi theo xe. Xe đứng ở một kho (kho_hien_tai_id) hoặc đang chạy tới kho khác (dang_den_kho_id) — đúng một trong hai.
+-- Xe: mỗi kho là «kho gốc» của bao nhiêu xe cũng được; mỗi xe có một tài xế phụ trách (tai_xe_id, mỗi tài xế chỉ một xe) — tài xế đi theo xe. Xe đứng ở một kho (kho_hien_tai_id) hoặc đang chạy tới kho khác (dang_den_kho_id) — đúng một trong hai.
 CREATE TABLE IF NOT EXISTS xe (
     id                        integer      NOT NULL AUTO_INCREMENT PRIMARY KEY,
     bien_so                   varchar(15)  NOT NULL,
@@ -31,9 +34,11 @@ CREATE TABLE IF NOT EXISTS xe (
     UNIQUE (tai_xe_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
+-- tai_xe.diem: điểm uy tín (mặc định 100, bị trừ khi tài xế chịu trách nhiệm mất hàng) · tai_xe.luong: lương tháng (đồng) · tai_xe.kho_id: kho quản lý tài xế (kho gốc của xe tài xế phụ trách).
 -- Một chuyến = một phiếu điều chuyển đi + phiếu đến đối ứng. IN_TRANSIT: đang chạy · DELIVERED: kho đến đã nhận.
 -- tai_xe_xac_nhan_du_hang: lúc xuất kho, tài xế đã xác nhận nhận đủ hàng.
 -- nhan_du_hang / nhan_dung_tai_xe: kho đến kiểm tra lúc nhận (hàng đủ không, đúng tài xế và xe không).
+-- LOST: admin đã xác nhận mất hàng (xem that_thoat_hang) — phiếu đến bị huỷ, tồn kho đến không đổi.
 -- sai_lech: nội dung kho đến báo khi hàng thiếu hoặc không đúng tài xế (chuyến vẫn IN_TRANSIT cho tới khi xử lý xong).
 CREATE TABLE IF NOT EXISTS chuyen_van_chuyen (
     id                        bigint       NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -43,7 +48,7 @@ CREATE TABLE IF NOT EXISTS chuyen_van_chuyen (
     tai_xe_id                 integer      NOT NULL,
     kho_di_id                 integer      NOT NULL,
     kho_den_id                integer      NOT NULL,
-    trang_thai                enum('IN_TRANSIT','DELIVERED') NOT NULL DEFAULT 'IN_TRANSIT',
+    trang_thai                enum('IN_TRANSIT','DELIVERED','LOST') NOT NULL DEFAULT 'IN_TRANSIT',
     tai_xe_xac_nhan_du_hang   boolean      NOT NULL DEFAULT FALSE,
     nguoi_giao_id             integer      NOT NULL,
     ngay_di                   timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
