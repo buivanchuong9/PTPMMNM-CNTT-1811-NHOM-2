@@ -22,10 +22,10 @@ $groups = [
     'Danh mục' => [
         'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],
         'partners' => ['/partners', 'users', 'Đối tác & nhà cung cấp', [P::XemDanhMuc]],
+        'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::XemDoiXe]],
     ],
     'Quản trị hệ thống' => [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
-        'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::QuanLyDoiXe]],
         'roles' => ['/roles', 'shield', 'Phân quyền chức năng', [P::PhanQuyen]],
     ],
 ];

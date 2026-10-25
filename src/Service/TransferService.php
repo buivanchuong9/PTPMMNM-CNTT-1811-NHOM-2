@@ -194,6 +194,13 @@ final class TransferService
         });
     }
 
+    /** Lý do nhận THIẾU hàng (bắt buộc khi thực nhận ít hơn số trên phiếu). */
+    public const SHORT_REASONS = ['Hàng vỡ / hư hỏng trong lúc vận chuyển', 'Hàng rơi mất trên đường', 'Tài xế giao thiếu', 'Kho đi xuất thiếu so với phiếu', 'Khác'];
+
+    /** Lý do thiếu hàng do tài xế gây ra ⇒ tài xế chịu: trừ lương theo giá trị phần thiếu và trừ điểm. Lý do khác thì kho chịu (vẫn ghi nhận, không trừ tài xế). */
+    public const DRIVER_FAULT_REASONS = ['Hàng vỡ / hư hỏng trong lúc vận chuyển', 'Hàng rơi mất trên đường', 'Tài xế giao thiếu'];
+    public const SHORT_PENALTY_POINTS = 5;
+
     /** Lý do kho đến báo «chưa nhận được hàng». */
     public const MISSING_REASONS = ['Tài xế chưa đến kho', 'Không liên lạc được với tài xế', 'Xe đến nhưng không có hàng', 'Sai tài xế hoặc sai xe', 'Khác'];
 
@@ -206,14 +213,16 @@ final class TransferService
      * @param ?array<int,int> $received
      * @return array{voucher:array,already:bool,short:list<array{sku:string,expected:int,got:int}>,adjustment:?array}
      */
-    public function receiveChecked(User $user, int $inId, ?array $received, bool $rightDriver): array
+    public function receiveChecked(User $user, int $inId, ?array $received, bool $rightDriver, string $shortReason = '', string $shortNote = ''): array
     {
         $peek = $this->repo->find($inId);
         if ($peek['loai'] !== VoucherType::TransferIn->value) {
             throw new DomainError('Đây không phải phiếu điều chuyển đến');
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::NhanHangDieuChuyen);
-        return $this->db->transaction(function () use ($user, $inId, $received, $rightDriver, $peek) {
+        $shortReason = trim($shortReason);
+        $shortNote = trim($shortNote);
+        return $this->db->transaction(function () use ($user, $inId, $received, $rightDriver, $peek, $shortReason, $shortNote) {
             $in = $this->repo->lock($inId);
             if ($in['trang_thai'] === 'CONFIRMED') {
                 return ['voucher' => $in, 'already' => true, 'short' => [], 'adjustment' => null];
@@ -224,6 +233,7 @@ final class TransferService
                 throw new DomainError('Chỉ nhận hàng khi đúng tài xế và đúng xe. Nếu không, hãy bấm «Chưa nhận được hàng».');
             }
             $short = [];
+            $shortValue = 0;   // giá trị phần thiếu theo giá gốc
             $adjLines = [];
             $gotTotal = 0;
             foreach ($this->repo->lines($inId) as $l) {
@@ -235,11 +245,25 @@ final class TransferService
                 $gotTotal += $got;
                 if ($got < $expected) {
                     $short[] = ['sku' => $l['ma_hang'], 'expected' => $expected, 'got' => $got];
+                    $shortValue += ($expected - $got) * (int)$this->db->value('SELECT gia_von FROM mat_hang WHERE id = ?', [(int)$l['mat_hang_id']]);
                     $adjLines[] = ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => $got - $expected, 'ghi_chu' => 'Nhận thiếu ' . ($expected - $got) . '/' . $expected];
                 }
             }
             if ($gotTotal === 0) {
                 throw new DomainError('Chưa nhận được hàng nào — hãy bấm «Chưa nhận được hàng» và chọn lý do.');
+            }
+            $why = '';
+            if ($short !== []) {
+                if (!in_array($shortReason, self::SHORT_REASONS, true)) {
+                    throw new DomainError('Nhận thiếu hàng — chọn lý do thiếu (vỡ, rơi mất, tài xế giao thiếu…)');
+                }
+                if ($shortReason === 'Khác' && $shortNote === '') {
+                    throw new DomainError('Ghi rõ lý do thiếu hàng');
+                }
+                if (mb_strlen($shortNote) > 120) {
+                    throw new DomainError('Ghi chú tối đa 120 ký tự');
+                }
+                $why = $shortReason . ($shortNote !== '' ? ' — ' . $shortNote : '');
             }
             $res = $this->receive($user, $inId);   // ghi sổ đủ số trên phiếu (+)
             $adj = null;
@@ -247,19 +271,30 @@ final class TransferService
                 $desc = implode('; ', array_map(fn($s) => $s['sku'] . ' ' . $s['got'] . '/' . $s['expected'], $short));
                 $adjId = $this->repo->insert([
                     'loai' => VoucherType::Adjustment->value, 'trang_thai' => 'CONFIRMED', 'kho_id' => (int)$in['kho_id'],
-                    'phieu_nhap_xuat_lien_quan_id' => $inId, 'ly_do' => 'Nhận thiếu hàng điều chuyển ' . $in['ma'] . ': ' . $desc, 'nguoi_lap_id' => $user->id,
+                    'phieu_nhap_xuat_lien_quan_id' => $inId, 'ly_do' => mb_substr('Nhận thiếu hàng điều chuyển ' . $in['ma'] . ' (' . $why . '): ' . $desc, 0, 255), 'nguoi_lap_id' => $user->id,
                 ], $adjLines);
                 $adjRow = $this->repo->lock($adjId);
                 $ops = $this->repo->ops($adjRow, $this->repo->lines($adjId));
                 $this->ledger->lock($this->repo->lockKeys($ops));
                 $this->ledger->post($ops);
                 $adj = $this->repo->find($adjId);
-                $this->audit->record($user->id, 'transfer.short', 'voucher', $inId, $in['ma'] . ' · nhận thiếu: ' . $desc);
+                $this->audit->record($user->id, 'transfer.short', 'voucher', $inId, $in['ma'] . ' · nhận thiếu: ' . $desc . ' · lý do: ' . $why);
             }
             if ($open) {
                 $this->db->exec("UPDATE chuyen_van_chuyen SET trang_thai = 'DELIVERED', nhan_du_hang = ?, nhan_dung_tai_xe = 1, sai_lech = ?, nguoi_nhan_id = ?, ngay_nhan = CURRENT_TIMESTAMP WHERE id = ?",
-                    [$short ? 0 : 1, $short ? mb_substr('Nhận thiếu: ' . implode('; ', array_map(fn($s) => $s['sku'] . ' ' . $s['got'] . '/' . $s['expected'], $short)), 0, 255) : '', $user->id, (int)$trip['id']]);
+                    [$short ? 0 : 1, $short ? mb_substr('Nhận thiếu: ' . $why . ' · ' . implode('; ', array_map(fn($s) => $s['sku'] . ' ' . $s['got'] . '/' . $s['expected'], $short)), 0, 255) : '', $user->id, (int)$trip['id']]);
                 $this->db->exec('UPDATE xe SET kho_hien_tai_id = ?, dang_den_kho_id = NULL WHERE id = ?', [(int)$trip['kho_den_id'], (int)$trip['xe_id']]);
+                if ($short) {
+                    $faulty = in_array($shortReason, self::DRIVER_FAULT_REASONS, true);
+                    $deduct = $faulty ? $shortValue : 0;
+                    $points = $faulty ? self::SHORT_PENALTY_POINTS : 0;
+                    $this->db->insert('INSERT INTO that_thoat_hang (chuyen_id, tai_xe_id, loai, nguoi_chiu, ly_do, gia_tri, tien_tru_luong, diem_tru, nguoi_xac_nhan_id) VALUES (?,?,?,?,?,?,?,?,?)',
+                        [(int)$trip['id'], (int)$trip['tai_xe_id'], 'NHAN_THIEU', $faulty ? 'TAI_XE' : 'CONG_TY', mb_substr($why, 0, 255), $shortValue, $deduct, $points, $user->id]);
+                    if ($points > 0) {
+                        $this->db->exec('UPDATE tai_xe SET diem = CASE WHEN diem > ? THEN diem - ? ELSE 0 END WHERE id = ?', [$points, $points, (int)$trip['tai_xe_id']]);
+                        $this->audit->record($user->id, 'driver.penalty', 'driver', (int)$trip['tai_xe_id'], $in['ma'] . ' · nhận thiếu (' . $why . ') · −' . number_format($deduct, 0, ',', '.') . ' đ lương, −' . $points . ' điểm');
+                    }
+                }
             }
             return $res + ['short' => $short, 'adjustment' => $adj];
         });

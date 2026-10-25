@@ -111,6 +111,9 @@ final class App
         $r->post('/users/password', [C\AdminController::class, 'resetUserPassword']);
         $r->get('/fleet', [C\FleetController::class, 'index']);
         $r->post('/fleet/trips/reply', [C\FleetController::class, 'reply']);
+        $r->post('/fleet/trips/loss', [C\FleetController::class, 'confirmLoss']);
+        $r->post('/fleet/losses/adjust', [C\FleetController::class, 'adjustLoss']);
+        $r->post('/fleet/drivers/pay', [C\FleetController::class, 'driverPay']);
         $r->post('/fleet/vehicles', [C\FleetController::class, 'addVehicle']);
         $r->post('/fleet/vehicles/update', [C\FleetController::class, 'updateVehicle']);
         $r->post('/fleet/vehicles/delete', [C\FleetController::class, 'deleteVehicle']);

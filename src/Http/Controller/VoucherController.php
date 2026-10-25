@@ -226,8 +226,35 @@ final class VoucherController extends Controller
             'shortage' => $v['loai'] === 'TRANSFER_IN' && $v['trang_thai'] === 'CONFIRMED' ? $this->db->all(
                 "SELECT l.mat_hang_id, l.lo_hang_id, -l.so_luong AS thieu, p.id AS adj_id, p.ma AS adj_ma FROM phieu_nhap_xuat p JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = p.id
                  WHERE p.phieu_nhap_xuat_lien_quan_id = ? AND p.loai = 'ADJUSTMENT'", [(int)$v['id']]) : [],
+            'receipt' => $this->receiptOf($trip),
             'vehicles' => $isTransfer && $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
         ], $v['ma']);
+    }
+
+    /**
+     * Thực nhận tại kho đến của một chuyến đã giao (hiện ở cả phiếu đi lẫn phiếu đến, để kho gửi biết kho nhận nhận được bao nhiêu):
+     * từng dòng = số trên phiếu − phần thiếu ghi ở phiếu điều chỉnh của phiếu đến.
+     * @return ?array{rows:list<array<string,mixed>>,in_id:int,when:?string,by:?string,note:string}
+     */
+    private function receiptOf(?array $trip): ?array
+    {
+        if (!$trip || $trip['trang_thai'] !== 'DELIVERED') {
+            return null;
+        }
+        $inId = (int)$trip['phieu_den_id'];
+        $lack = [];
+        foreach ($this->db->all("SELECT l.mat_hang_id, l.lo_hang_id, -l.so_luong AS thieu FROM phieu_nhap_xuat p JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = p.id
+                                 WHERE p.phieu_nhap_xuat_lien_quan_id = ? AND p.loai = 'ADJUSTMENT'", [$inId]) as $s) {
+            $k = $s['mat_hang_id'] . ':' . $s['lo_hang_id'];
+            $lack[$k] = ($lack[$k] ?? 0) + (int)$s['thieu'];
+        }
+        $rows = [];
+        foreach ($this->repo->lines($inId) as $l) {
+            $expected = (int)$l['so_luong'];
+            $short = $lack[$l['mat_hang_id'] . ':' . $l['lo_hang_id']] ?? 0;
+            $rows[] = ['ma_hang' => $l['ma_hang'], 'ten' => $l['ten'], 'unit' => $l['unit'], 'so_lo' => $l['so_lo'], 'expected' => $expected, 'got' => $expected - $short, 'short' => $short];
+        }
+        return ['rows' => $rows, 'in_id' => $inId, 'when' => $trip['ngay_nhan'], 'by' => $trip['nhan_ten'], 'note' => (string)$trip['sai_lech']];
     }
 
     public function confirm(Request $r, array $p, ?User $user): Response
@@ -249,7 +276,7 @@ final class VoucherController extends Controller
                         $received[(int)$lineId] = $q;
                     }
                 }
-                $res = $this->transfers->receiveChecked($user, $id, $received, $r->str('driver_match') === '1');
+                $res = $this->transfers->receiveChecked($user, $id, $received, $r->str('driver_match') === '1', $r->str('short_reason'), $r->str('short_note'));
                 if (!$res['already'] && $res['short']) {
                     $this->session->flash('ok', 'Đã nhận hàng — nhận thiếu ở ' . count($res['short']) . ' dòng, phần thiếu đã được ghi bằng phiếu điều chỉnh ' . ($res['adjustment']['ma'] ?? '') . ' và báo cho quản trị.');
                     return null;

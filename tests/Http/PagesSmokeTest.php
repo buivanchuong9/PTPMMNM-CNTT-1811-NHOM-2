@@ -15,8 +15,8 @@ $f->arrive((int)$transfer['id']);
 $pair = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($transfer);
 // điều chuyển có xe: một phiếu nháp (chọn xe + tài xế), một phiếu đang vận chuyển (kho đến kiểm tra)
 $fleet = $f->c->get(\StockFlow\Service\FleetService::class);
-$driverId = $fleet->addDriver($f->admin, 'Tài xế thử', (string)random_int(100000000000, 999999999999), '0912345678');
-$fleet->addVehicle($f->admin, '30H-' . random_int(100, 999) . '.' . random_int(10, 99), 'Xe tải 2 tấn', $f->wa, $driverId);
+$driverId = $fleet->addDriver($f->approverA, 'Tài xế thử', (string)random_int(100000000000, 999999999999), '0912345678');
+$fleet->addVehicle($f->approverA, '30H-' . random_int(100, 999) . '.' . random_int(10, 99), 'Xe tải 2 tấn', $f->wa, $driverId);
 $ts = $f->c->get(\StockFlow\Service\TransferService::class);
 $xferDraft = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 1)], '', null)['voucher'];
 $xferGo = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 2)], '', null)['voucher'];
@@ -63,7 +63,8 @@ section('Chủ hệ thống (tài khoản cấp cao): xem thống kê mọi kho,
 $login($f->both->username);
 $pages = ['/', '/inventory', '/inventory?view=batch', '/inventory?q=' . $f->it['x']['ma_hang'], '/vouchers', '/vouchers?status=DRAFT', '/vouchers?type=TRANSFER_OUT&q=DC',
     "/vouchers/{$issue['id']}", "/vouchers/{$transfer['id']}", "/vouchers/{$pair['id']}", "/vouchers/{$xferDraft['id']}", "/vouchers/{$xferGo['id']}", "/vouchers/{$xferGoIn['id']}",
-    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles', '/fleet'];
+    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles', '/fleet', '/fleet?q=a&kho=1&tt=off&ai=CONG_TY'];
+// (admin xem được Đội xe nhưng chỉ xem: không có form thêm xe)
 foreach ($pages as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "admin GET $p ⇒ 200");
@@ -93,7 +94,12 @@ foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouche
 same($get("/vouchers/{$pair['id']}")[0], 403, 'phiếu nhập xuất của kho B ⇒ 403');
 [, $draftPage] = $get("/vouchers/{$xferDraft['id']}");
 truthy(str_contains($draftPage, 'name="vehicle_id"') && str_contains($draftPage, 'name="driver_ok"') && !str_contains($draftPage, 'name="driver_id"'), 'phiếu điều chuyển nháp: chỉ chọn xe (tài xế đi theo xe) và tài xế xác nhận đủ hàng');
-same($get('/fleet')[0], 403, 'trang Đội xe chỉ dành cho admin ⇒ 403');
+[$st, $fleetPage] = $get('/fleet');
+truthy($st === 200 && $noPhpError($fleetPage) && str_contains($fleetPage, 'name="plate"'), 'quản lý kho A vào được trang Đội xe và thấy form thêm xe');
+foreach (['/fleet?q=khongco&tt=ready&ai=TAI_XE', '/fleet?thang=2000-01', '/fleet?thang=sai&tt=zzz&q=' . urlencode('30h')] as $p) {
+    [$st, $body] = $get($p);
+    truthy($st === 200 && $noPhpError($body) && str_contains($body, 'data-live="results"'), "quản lý GET $p ⇒ 200, có vùng tự lọc");
+}
 section('Quản lý kho B: kiểm tra hàng khi nhận');
 $login($f->approverB->username);
 [$st, $inPage] = $get("/vouchers/{$xferGoIn['id']}");
