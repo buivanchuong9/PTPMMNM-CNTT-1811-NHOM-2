@@ -176,7 +176,7 @@ final class CatalogService
         }
     }
 
-    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null, bool $viaSupplier = false): int
+    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null, bool $viaSupplier = false, ?string $barcode = null): int
     {
         // Quản lý kho chỉ được thêm mặt hàng mới khi đang lập nhà cung cấp (hàng mới do nhà cung cấp đó cung cấp)
         if (!($viaSupplier && $actor->role === AccountRole::Manager)) {
@@ -201,15 +201,53 @@ final class CatalogService
         }
         $this->requireCategory($categoryId);
         $this->requireUnique('mat_hang', 'ma_hang', $sku, "SKU $sku đã tồn tại");
-        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize, $categoryId) {
-            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo, danh_muc_id) VALUES (?,?,?,?,?,?,?)',
-                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize, $categoryId]);
+        $barcode = self::normalizeBarcode($barcode);
+        if ($barcode !== null) {
+            $this->requireUnique('mat_hang', 'ma_vach', $barcode, "Mã vạch $barcode đã gắn cho mặt hàng khác");
+        }
+        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize, $categoryId, $barcode) {
+            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo, danh_muc_id, ma_vach) VALUES (?,?,?,?,?,?,?,?)',
+                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize, $categoryId, $barcode]);
             if (!$trackBatch) {
                 $this->db->exec('INSERT INTO lo_hang (mat_hang_id, so_lo) VALUES (?,?)', [$id, self::NO_LOT]);
             }
-            $this->audit->record($actor->id, 'item.create', 'item', $id, $sku);
+            $this->audit->record($actor->id, 'item.create', 'item', $id, $sku . ($barcode !== null ? " · mã vạch $barcode" : ''));
             return $id;
         });
+    }
+
+    // ───── mã vạch ─────
+    /** Chuẩn hoá mã vạch đọc được / gõ vào: bỏ khoảng trắng hai đầu, 4–64 ký tự in được (không có dấu cách). Rỗng ⇒ null (không có mã). */
+    public static function normalizeBarcode(?string $code): ?string
+    {
+        $code = trim((string)$code);
+        if ($code === '') {
+            return null;
+        }
+        if (!preg_match('/^[!-~]{4,64}$/', $code)) {
+            throw new DomainError('Mã vạch gồm 4–64 ký tự chữ, số hoặc ký hiệu, không có dấu cách');
+        }
+        return $code;
+    }
+
+    /** Mặt hàng đang hoạt động gắn với mã vạch này (null nếu chưa có trong hệ thống). */
+    public function itemByBarcode(string $code): ?array
+    {
+        return $this->db->one('SELECT i.*, u.ma AS unit, c.ten AS category FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
+                               WHERE i.ma_vach = ? AND i.hoat_dong', [$code]);
+    }
+
+    /** Gán, đổi hoặc gỡ mã vạch của mặt hàng — chỉ tài khoản có chức năng «Gán mã vạch» (quản lý kho). Chỉ lưu chuỗi mã, không lưu ảnh. */
+    public function setBarcode(User $actor, int $itemId, ?string $code): void
+    {
+        $this->auth->requirePermission($actor, Permission::GanMaVach);
+        $code = self::normalizeBarcode($code);
+        $item = $this->db->one('SELECT ma_hang, ma_vach FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
+        if ($code !== null && ($other = $this->db->one('SELECT ma_hang FROM mat_hang WHERE ma_vach = ? AND id <> ?', [$code, $itemId]))) {
+            throw new DomainError("Mã vạch $code đã gắn cho mặt hàng {$other['ma_hang']}");
+        }
+        $this->db->exec('UPDATE mat_hang SET ma_vach = ? WHERE id = ?', [$code, $itemId]);
+        $this->audit->record($actor->id, 'item.barcode', 'item', $itemId, "{$item['ma_hang']} · " . ($item['ma_vach'] ?: '—') . ' → ' . ($code ?? '—'));
     }
 
     /** Sửa danh mục, quy cách đóng gói (1 kiện = bao nhiêu đơn vị tính) và định mức tồn tối thiểu. Không có cách sửa số lượng tồn: tồn chỉ đổi qua phiếu / kiểm kê. */

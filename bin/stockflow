@@ -85,7 +85,12 @@ function cmdDbSync(array $argv): int
 function cmdSeed(array $argv): int
 {
     require __DIR__ . '/../database/seeds/DemoSeed.php';
-    return \StockFlow\Seeds\DemoSeed::run(connect(), in_array('--force', $argv, true));
+    $rc = \StockFlow\Seeds\DemoSeed::run(connect(), in_array('--force', $argv, true));
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillBarcodes(connect())) {   // CSDL demo có từ trước khi có mã vạch
+        echo "✔ Đã gán mã vạch mẫu cho $n mặt hàng demo chưa có mã
+";
+    }
+    return $rc;
 }
 
 /** Thông tin kết nối mặc định của XAMPP: root, không mật khẩu. Máy nào khác thì chạy `bin/stockflow db-config`. */

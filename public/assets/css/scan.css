@@ -1,0 +1,26 @@
+/* Hộp thoại quét mã vạch */
+.scan-src { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.scan-src .icon { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
+.scan-src label.btn { display: inline-flex; align-items: center; cursor: pointer; }
+.scan-view { position: relative; overflow: hidden; border-radius: var(--radius); background: #000; margin-bottom: 10px; max-height: 280px; }
+.scan-view video { display: block; width: 100%; max-height: 280px; object-fit: cover; }
+.scan-line { position: absolute; left: 8%; right: 8%; top: 50%; height: 2px; background: var(--brand); box-shadow: 0 0 8px var(--brand); animation: scan-sweep 1.8s ease-in-out infinite alternate; }
+@keyframes scan-sweep { from { transform: translateY(-70px); } to { transform: translateY(70px); } }
+.scan-drop { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 16px; text-align: center; color: var(--muted); margin-bottom: 10px; outline: none; }
+.scan-drop:focus, .scan-drop.over { border-color: var(--brand); color: var(--ink); background: var(--brand-50); }
+.scan-manual { display: flex; gap: 8px; margin-bottom: 10px; }
+.scan-manual input { flex: 1; min-width: 0; }
+.scan-msg { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--line-2); color: var(--ink-2); }
+.scan-msg.bad { background: var(--danger-bg); color: var(--danger); }
+.scan-result:empty { display: none; }
+.scan-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: grid; gap: 8px; }
+.scan-card h3 { margin: 0; font-size: 1.05rem; }
+.scan-card .scan-code { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; color: var(--muted); }
+.scan-card .scan-stock { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.scan-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.scan-actions a { text-decoration: none; }
+.scan-new { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+.scan-new .full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .scan-new { grid-template-columns: 1fr; } }
+.barcode-tag { display: block; font-family: ui-monospace, Consolas, monospace; font-size: .8rem; color: var(--ink-2); }
+.link-btn.barcode-btn { font-size: .72rem; padding: 0; }

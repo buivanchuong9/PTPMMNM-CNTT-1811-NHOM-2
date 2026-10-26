@@ -32,6 +32,8 @@ enum Permission: string
     case DieuChinhGia = 'dieu_chinh_gia';
     case DatGiaGoc = 'dat_gia_goc';
     case QuanLyDoiXe = 'quan_ly_doi_xe';
+    case GanMaVach = 'gan_ma_vach';
+    case DuyetDeXuatHang = 'duyet_de_xuat_hang';
     // ── Nhân sự kho ──
     case QuanLyNhanVien = 'quan_ly_nhan_vien';
     // ── Quản trị hệ thống (chỉ ADMIN) ──
@@ -69,6 +71,8 @@ enum Permission: string
             self::QuanLyTaiKhoan => 'Quản lý tài khoản',
             self::PhanQuyen => 'Phân quyền chức năng',
             self::QuanLyDoiXe => 'Quản lý đội xe & tài xế của kho mình',
+            self::GanMaVach => 'Gán mã vạch, đề xuất mặt hàng mới',
+            self::DuyetDeXuatHang => 'Duyệt đề xuất mặt hàng mới',
         };
     }
 
@@ -100,6 +104,8 @@ enum Permission: string
             self::QuanLyMatHang => 'Thêm mặt hàng, đơn vị tính',
             self::QuanLyTaiKhoan => 'Tạo tài khoản, đổi kho / vai trò, khoá tài khoản',
             self::PhanQuyen => 'Bật/tắt chức năng cho từng vai trò',
+            self::GanMaVach => 'Gán mã vạch cho mặt hàng, và gửi đề xuất mặt hàng mới khi quét ra mã chưa có trong hệ thống (mọi tài khoản có quyền xem đều tra cứu được bằng cách quét)',
+            self::DuyetDeXuatHang => 'Chấp nhận (kèm giá gốc, thuế) hoặc từ chối đề xuất mặt hàng mới của quản lý kho',
             self::QuanLyDoiXe => 'Thêm, sửa xe và tài xế của kho mình; phản hồi chuyến chưa thấy hàng; xác nhận mất hàng và trừ điểm, lương tài xế',
         };
     }
@@ -109,9 +115,9 @@ enum Permission: string
         return match ($this) {
             self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe, self::XemDoiXe => 'Xem & tra cứu',
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
-            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia, self::QuanLyDoiXe => 'Tác nghiệp kho',
+            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia, self::QuanLyDoiXe, self::GanMaVach => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
-            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc => 'Quản trị hệ thống',
+            self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc, self::DuyetDeXuatHang => 'Quản trị hệ thống',
         };
     }
 
@@ -122,7 +128,7 @@ enum Permission: string
     public function operational(): bool
     {
         return in_array($this, [
-            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet, self::DieuChinhGia, self::QuanLyDoiXe,
+            self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet, self::DieuChinhGia, self::QuanLyDoiXe, self::GanMaVach,
         ], true);
     }
 
@@ -136,7 +142,7 @@ enum Permission: string
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu => self::XemPhieu,
             self::KiemKeThucHien, self::KiemKeDuyet => self::XemKiemKe,
             self::ThemLo => self::XemTonKho,
-            self::QuanLyNhanVien => self::XemDanhMuc,
+            self::QuanLyNhanVien, self::GanMaVach => self::XemDanhMuc,
             self::QuanLyDoiXe => self::XemDoiXe,
             default => null,
         };
@@ -145,7 +151,7 @@ enum Permission: string
     /** Chức năng hệ thống: chỉ ADMIN dùng, không giao cho quản lý / nhân viên. */
     public function adminOnly(): bool
     {
-        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc], true);
+        return in_array($this, [self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc, self::DuyetDeXuatHang], true);
     }
 
     /** Quyền mặc định của vai trò (khi chưa có dòng trong phan_quyen_vai_tro). */

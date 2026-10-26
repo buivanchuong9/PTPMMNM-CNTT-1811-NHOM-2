@@ -28,6 +28,33 @@ use StockFlow\Service\VoucherService;
 final class DemoSeed
 {
     public const PASSWORD = 'demo1234';
+    /** SKU của 30 mặt hàng demo. */
+    private const SKUS = ['BOX-S', 'BOX-M', 'BOX-L', 'TAPE-48', 'BUBBLE', 'PE-BAG', 'LBL-A6', 'STRETCH', 'PALLET', 'STRAP', 'GLOVE', 'CUTTER', 'PHN-A15', 'PHN-A25', 'EARBUD', 'CHG-65W', 'CAB-USBC', 'PWR-20K',
+        'SPK-BT', 'WATCH-S', 'MLK-1L', 'NDL-PK', 'CFE-3IN1', 'TEA-GRN', 'SOAP-500', 'DET-3KG', 'VIT-C', 'MASK-50', 'OIL-1L', 'SGR-1KG'];
+
+    /** Mã vạch EAN-13 mẫu của một SKU: đầu số 893 (Việt Nam) + 9 số cố định theo SKU + số kiểm tra. Cùng SKU luôn ra cùng mã. */
+    public static function barcode(string $sku): string
+    {
+        $body = '893' . str_pad((string)(crc32('stockflow:' . $sku) % 1000000000), 9, '0', STR_PAD_LEFT);
+        $sum = 0;
+        foreach (str_split($body) as $i => $d) {
+            $sum += (int)$d * ($i % 2 ? 3 : 1);
+        }
+        return $body . (10 - $sum % 10) % 10;
+    }
+
+    /** Gán mã vạch mẫu cho các mặt hàng demo chưa có mã (không đụng mặt hàng đã có mã hay mặt hàng khác). Chạy lại an toàn. @return int số mặt hàng được gán */
+    public static function backfillBarcodes(Db $db): int
+    {
+        $n = 0;
+        foreach ($db->all('SELECT id, ma_hang FROM mat_hang WHERE ma_vach IS NULL') as $r) {
+            if (in_array($r['ma_hang'], self::SKUS, true)) {
+                $db->exec('UPDATE mat_hang SET ma_vach = ? WHERE id = ?', [self::barcode($r['ma_hang']), $r['id']]);
+                $n++;
+            }
+        }
+        return $n;
+    }
 
     public static function run(Db $db, bool $force): int
     {
@@ -147,6 +174,7 @@ final class DemoSeed
             if (isset($money[$sku])) {   // giá gốc + thuế do quản trị đặt; giá bán do quản lý từng kho đặt bên dưới
                 $pricing->setCost($admin, $id, $money[$sku][0], $money[$sku][2], 'Giá gốc khởi tạo');
             }
+            $db->exec('UPDATE mat_hang SET ma_vach = ? WHERE id = ?', [self::barcode($sku), $id]);
             $item[$sku] = ['id' => $id, 'batches' => $batches, 'hub' => end($defs[array_search($sku, array_column($defs, 0))])];
         }
 

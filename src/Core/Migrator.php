@@ -92,6 +92,7 @@ final class Migrator
                 $log[] = "✔ Đã thêm cột $table.$column";
             }
         }
+        $this->ensureBarcodeIndex();
         $this->backfillDriverWarehouses();
         if ($this->widenTripStatus()) {
             $log[] = '✔ Đã thêm trạng thái LOST cho chuyen_van_chuyen.trang_thai';
@@ -109,6 +110,7 @@ final class Migrator
         ['mat_hang', 'gia_ban', 'integer NOT NULL DEFAULT 0'],
         ['mat_hang', 'thue_suat', 'integer NOT NULL DEFAULT 10'],
         ['mat_hang', 'gia_von', 'integer NOT NULL DEFAULT 0'],
+        ['mat_hang', 'ma_vach', 'varchar(64) NULL'],
         ['lich_su_gia', 'kho_id', 'integer NULL'],
         ['chi_tiet_phieu_nhap_xuat', 'don_gia', 'integer NULL'],
         ['chi_tiet_phieu_nhap_xuat', 'thue_suat', 'integer NOT NULL DEFAULT 0'],
@@ -118,6 +120,16 @@ final class Migrator
         ['tai_xe', 'kho_id', 'integer NULL'],
         ['that_thoat_hang', 'loai', "varchar(12) NOT NULL DEFAULT 'MAT_CHUYEN'"],
     ];
+
+    /** Mã vạch không trùng giữa các mặt hàng (nhiều mặt hàng chưa có mã vẫn được: NULL không tính trùng). */
+    private function ensureBarcodeIndex(): void
+    {
+        if ($this->db->isSqlite()) {
+            $this->db->raw('CREATE UNIQUE INDEX IF NOT EXISTS mat_hang_ma_vach_uq ON mat_hang (ma_vach)');
+        } elseif (!$this->db->value("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'mat_hang' AND index_name = 'mat_hang_ma_vach_uq'")) {
+            $this->db->raw('CREATE UNIQUE INDEX mat_hang_ma_vach_uq ON mat_hang (ma_vach)');
+        }
+    }
 
     /** Tài xế cũ chưa có kho quản lý: lấy kho gốc của xe đang phụ trách, hoặc của xe họ chạy chuyến gần nhất. Chạy lại an toàn. */
     private function backfillDriverWarehouses(): void

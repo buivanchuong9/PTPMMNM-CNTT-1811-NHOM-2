@@ -86,7 +86,7 @@ final class VoucherController extends Controller
         $ids = $this->warehouseIdsFor($user, $perm);
         return $this->render('vouchers/form', $user, 'new-' . strtolower($type->value), [
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($ids),
-            'idem' => bin2hex(random_bytes(16)), 'selected' => $r->int('warehouse'),
+            'idem' => bin2hex(random_bytes(16)), 'selected' => $r->int('warehouse'), 'prefillItem' => $r->int('item'),
             'partnerNames' => array_column($this->db->all('SELECT ten FROM doi_tac WHERE loai = ? AND hoat_dong ORDER BY ten', [$type === VoucherType::Receipt ? 'SUPPLIER' : 'CUSTOMER']), 'ten'),
             'suppliers' => $type === VoucherType::Receipt ? $this->db->all("SELECT id, ma, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten") : [],
         ] + $this->pickFilterData(), $type->label() . ' mới');
@@ -321,7 +321,7 @@ final class VoucherController extends Controller
         $from = $this->warehouseIdsFor($user, Permission::LapPhieuDieuChuyen);
         return $this->render('transfers/form', $user, 'new-transfer', [
             'from' => $this->warehouseRows($from), 'to' => $this->warehouseRows($this->allActiveIds()),
-            'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($from), 'idem' => bin2hex(random_bytes(16)),
+            'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($from), 'idem' => bin2hex(random_bytes(16)), 'prefillItem' => $r->int('item'),
         ] + $this->pickFilterData(), 'Điều chuyển mới');
     }
 
