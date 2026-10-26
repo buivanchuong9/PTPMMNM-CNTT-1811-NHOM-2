@@ -194,6 +194,7 @@ function type_chip(string $type): string
 function icon(string $name): string
 {
     static $paths = [
+        'scan' => '<path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><path d="M8 9v6M12 9v6M16 9v6"/>',
         'bell' => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
         'home' =>'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
         'box' => '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',

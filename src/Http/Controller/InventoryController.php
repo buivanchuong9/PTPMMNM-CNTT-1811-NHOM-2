@@ -158,7 +158,7 @@ final class InventoryController extends Controller
             'priceHist' => $byBatch ? [] : $this->pricing->historyForMany(array_map(fn($x) => (int)$x['id'], $rows), $this->auth->allows($user, Permission::DatGiaGoc) ? null : (int)$user->warehouseId),
             'items' => $items, 'units' => $this->catalog->units(),
             'canRequest' => $user->warehouseId !== null && $this->auth->allows($user, Permission::LapPhieuDieuChuyen),
-            'canAddBatch' => $this->auth->allows($user, Permission::ThemLo),
+            'canAddBatch' => $this->auth->allows($user, Permission::ThemLo), 'canBarcode' => $this->auth->allows($user, Permission::GanMaVach),
         ], 'Hàng hoá');
     }
 

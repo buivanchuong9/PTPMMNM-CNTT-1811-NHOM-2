@@ -42,6 +42,13 @@ final class App
         $r->get('/inventory', [C\InventoryController::class, 'index']);
         $r->post('/items/price', [C\InventoryController::class, 'price']);
         $r->post('/items/cost', [C\InventoryController::class, 'cost']);
+        $r->get('/scan/lookup', [C\ScanController::class, 'lookup']);
+        $r->get('/proposals', [C\ProposalController::class, 'index']);
+        $r->post('/proposals', [C\ProposalController::class, 'store']);
+        $r->post('/proposals/{id}/approve', [C\ProposalController::class, 'approve']);
+        $r->post('/proposals/{id}/reject', [C\ProposalController::class, 'reject']);
+        $r->post('/proposals/{id}/cancel', [C\ProposalController::class, 'cancel']);
+        $r->post('/items/barcode', [C\ScanController::class, 'setBarcode']);
         $r->get('/settings', [C\SettingsController::class, 'index']);
         $r->post('/settings/profile', [C\SettingsController::class, 'profile']);
         $r->post('/settings/password', [C\SettingsController::class, 'password']);

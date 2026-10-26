@@ -23,6 +23,7 @@ $groups = [
         'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],
         'partners' => ['/partners', 'users', 'Đối tác & nhà cung cấp', [P::XemDanhMuc]],
         'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::XemDoiXe]],
+        'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
     ],
     'Quản trị hệ thống' => [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
@@ -56,6 +57,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <link rel="stylesheet" href="/assets/css/ui.css">
 <link rel="stylesheet" href="/assets/css/dark.css">
 <link rel="stylesheet" href="/assets/css/dialog.css">
+<link rel="stylesheet" href="/assets/css/scan.css">
 </head>
 <body class="app-shell<?= !empty($compact) ? ' compact' : '' ?>">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -79,6 +81,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
     <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>
   <div class="topuser">
+    <?php $canScan = $auth->allows($user, P::XemTonKho) || $auth->allows($user, P::XemDanhMuc); if ($canScan): ?><button class="icon-btn" type="button" data-scan-open title="Quét mã vạch" aria-label="Quét mã vạch"><?= icon('scan') ?></button><?php endif; ?>
     <?php $nTasks = $notifications['tasks'] ?? []; $nAct = $notifications['activity'] ?? ['new' => 0, 'list' => []];
           $notifTotal = array_sum(array_column($nTasks, 'count')) + (int)$nAct['new']; ?>
     <div class="notif" data-notif>
@@ -125,6 +128,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
   </main>
   </div>
 </div>
+<?php if ($canScan) { require __DIR__ . '/../partials/scan_dialog.php'; } ?>
 <?php if ($flash): ?>
 <dialog id="notice-dlg" class="dlg dlg-notice <?= $hasErr ? 'is-err' : 'is-ok' ?>" aria-labelledby="notice-t" data-auto="<?= $hasErr ? 0 : 3200 ?>">
   <div class="nt-icon" aria-hidden="true">
@@ -142,5 +146,6 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <script src="/assets/js/dialog-fx.js" defer></script>
 <script src="/assets/js/app.js" defer></script>
 <script src="/assets/js/address.js" defer></script>
+<?php if ($canScan): ?><script src="/assets/js/scan.js" defer></script><?php endif; ?>
 </body>
 </html>
