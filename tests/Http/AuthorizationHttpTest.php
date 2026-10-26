@@ -13,7 +13,7 @@ $port = random_int(18000, 18999);
 $sessions = sys_get_temp_dir() . '/sf-sess-' . bin2hex(random_bytes(4));
 mkdir($sessions, 0700);
 $server = proc_open([PHP_BINARY, '-d', "session.save_path=$sessions", '-S', "127.0.0.1:$port", '-t', dirname(__DIR__, 2) . '/public', dirname(__DIR__, 2) . '/public/index.php'],
-    [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+    [1 => ['file', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'w'], 2 => ['file', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'w']], $pipes);
 register_shutdown_function(function () use ($server, $sessions) {
     proc_terminate($server);
     foreach (glob("$sessions/*") ?: [] as $s) {
@@ -100,6 +100,7 @@ truthy(!str_contains($a->req('GET', '/history')['body'], $vb['ma']), 'lịch s�
 truthy(!str_contains($a->req('GET', '/reports/stock.csv')['body'], "B{$f->tag}"), 'báo cáo CSV không có dữ liệu kho B');
 
 section('Cùng tài khoản thao tác đúng kho của mình: hoạt động và idempotent');
+$f->db->insert("INSERT INTO doi_tac (loai, ma, ten) VALUES ('CUSTOMER', ?, 'Khách')", ['KH' . $f->tag]);   // khách có sẵn: không qua bước 2 nhập thông tin khách mới
 $idem = bin2hex(random_bytes(16));
 $post = ['csrf' => $csrf, 'type' => 'ISSUE', 'warehouse_id' => $f->wa, 'idem' => $idem, 'line' => ["{$f->it['x']['item']}:{$f->it['x']['batch']}"], 'qty' => ['5'], 'partner' => 'Khách'];
 $r1 = $a->req('POST', '/vouchers', $post);

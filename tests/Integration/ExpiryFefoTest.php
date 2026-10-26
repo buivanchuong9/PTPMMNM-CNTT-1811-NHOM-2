@@ -103,3 +103,5 @@ throws(fn() => $q->expandAutoLots($f->wa, [$item . ':auto'], ['999999']), Domain
 throws(fn() => $q->expandAutoLots($f->wa, [$item . ':auto'], ['0']), DomainError::class, 'số lượng không hợp lệ ⇒ báo lỗi');
 [$ks2, $qs2] = $q->expandAutoLots($f->wa, [$item . ':auto', $item . ':auto'], ['3', '4']);
 same(array_sum(array_map('intval', $qs2)), 7, 'hai dòng cùng mặt hàng được cộng lại rồi chia');
+
+finish();
