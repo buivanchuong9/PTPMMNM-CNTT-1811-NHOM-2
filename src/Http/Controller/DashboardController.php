@@ -16,7 +16,7 @@ use StockFlow\Service\StockQuery;
 
 final class DashboardController extends Controller
 {
-    public function __construct(View $view, Session $session, Authorizer $auth, private StockQuery $query, private NavBadges $badges, private ChangeTracker $changes, private \StockFlow\Service\NotificationService $notifications)
+    public function __construct(View $view, Session $session, Authorizer $auth, private StockQuery $query, private NavBadges $badges, private ChangeTracker $changes, private \StockFlow\Service\NotificationService $notifications, private \StockFlow\Service\PricingService $pricing)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -36,6 +36,23 @@ final class DashboardController extends Controller
         return new Response('{}', 200, ['Content-Type' => 'application/json; charset=utf-8']);
     }
 
+    /**
+     * Giá trị tồn kho theo giá gốc (số lượng × giá gốc) của từng kho và tổng — chỉ tổng quan của quản trị.
+     * @param list<array<string,mixed>> $warehouses các kho hiển thị ở tổng quan
+     * @return array{total:int,missing:int,rows:list<array{code:string,name:string,value:int}>}
+     */
+    private function stockValue(User $user, array $warehouses): array
+    {
+        $by = [];
+        $missing = 0;   // dòng tồn chưa có giá gốc
+        foreach ($this->pricing->valuation($this->auth->visibleWarehouseIds($user)) as $s) {
+            $by[(int)$s['kho_id']] = ($by[(int)$s['kho_id']] ?? 0) + (int)$s['so_luong'] * (int)$s['gia_von'];
+            $missing += (int)$s['gia_von'] > 0 ? 0 : 1;
+        }
+        $rows = array_map(fn($w) => ['code' => (string)$w['ma'], 'name' => (string)($w['ten'] ?? ''), 'value' => $by[(int)$w['id']] ?? 0], $warehouses);
+        return ['total' => array_sum($by), 'missing' => $missing, 'rows' => $rows];
+    }
+
     public function index(Request $r, array $p, ?User $user): Response
     {
         if (!$this->auth->allows($user, Permission::XemTongQuan)) {
@@ -48,6 +65,7 @@ final class DashboardController extends Controller
             }
             $this->need($user, Permission::XemTongQuan);
         }
-        return $this->render('dashboard/index', $user, 'dashboard', ['d' => $this->query->dashboard($user)], 'Tổng quan');
+        $d = $this->query->dashboard($user);
+        return $this->render('dashboard/index', $user, 'dashboard', ['d' => $d, 'value' => $user->isAdmin ? $this->stockValue($user, $d['warehouses']) : null], 'Tổng quan');
     }
 }

@@ -111,6 +111,18 @@ function n(int|string|null $v): string
     return number_format((int)$v, 0, ',', '.');
 }
 
+/** Số tiền gọn cho ô thống kê: 4.521.300.000 → «4,52 tỷ», 38.500.000 → «38,5 triệu», số nhỏ giữ nguyên. */
+function vnd_short(int $v): string
+{
+    if ($v >= 1_000_000_000) {
+        return rtrim(rtrim(number_format($v / 1_000_000_000, 2, ',', '.'), '0'), ',') . ' tỷ';
+    }
+    if ($v >= 1_000_000) {
+        return rtrim(rtrim(number_format($v / 1_000_000, 1, ',', '.'), '0'), ',') . ' triệu';
+    }
+    return n($v);
+}
+
 /** Quy đổi số lượng ra kiện (thùng đóng sẵn) theo quy cách đóng gói: 130 với 24/kiện → "5 kiện + 10 lẻ". Quy cách 1 (bán lẻ) → chuỗi rỗng. */
 function pack_label(int $qty, int $pack): string
 {
