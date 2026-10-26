@@ -7,7 +7,7 @@
 [![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![MySQL](https://img.shields.io/badge/MySQL%208%2B%20·%20MariaDB%2010.4%2B-4479A1?logo=mysql&logoColor=white)](#-cài-đặt-và-chạy)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#-cấu-trúc-mã-nguồn)
-[![Tests](https://img.shields.io/badge/tests-485%20unit%20%2B%20integration-ee4d2d)](#-kiểm-thử)
+[![Kiểm thử](https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2/actions/workflows/test.yml/badge.svg)](https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT-fbbf24)](LICENSE)
 
 **[Tính năng](#-tính-năng) · [Cài đặt và chạy](#-cài-đặt-và-chạy) · [Vai trò](#-vai-trò-và-phân-quyền) · [Quy trình](#-quy-trình-nghiệp-vụ) · [Kiến trúc](#-kiến-trúc) · [Kiểm thử](#-kiểm-thử)**
