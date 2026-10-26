@@ -15,7 +15,11 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
   <a class="kpi" href="/inventory"><span class="kpi-ic"><?= icon('layers') ?></span><b data-count="<?= (int)$d['units'] ?>"><?= n($d['units']) ?></b><span>Đơn vị đang tồn</span></a>
   <a class="kpi kpi-warn" href="/vouchers?status=DRAFT"><span class="kpi-ic"><?= icon('file') ?></span><b data-count="<?= (int)$d['drafts'] ?>"><?= n($d['drafts']) ?></b><span>Phiếu chờ xác nhận</span></a>
   <a class="kpi kpi-ok" href="/vouchers?status=CONFIRMED"><span class="kpi-ic"><?= icon('check') ?></span><b data-count="<?= (int)$d['confirmed_today'] ?>"><?= n($d['confirmed_today']) ?></b><span>Đã xác nhận hôm nay</span></a>
+  <?php if ($value): ?>
+  <a class="kpi kpi-info" href="/valuation" title="<?= e(n($value['total'])) ?> đ theo giá gốc"><span class="kpi-ic"><?= icon('scale') ?></span><b><?= e(vnd_short($value['total'])) ?></b><span>Giá trị tồn kho (giá gốc, mọi kho)</span></a>
+  <?php else: ?>
   <a class="kpi kpi-warn" href="/inventory?stock=low"><span class="kpi-ic"><?= icon('box') ?></span><b data-count="<?= (int)$d['low_count'] ?>"><?= n($d['low_count']) ?></b><span>Mặt hàng sắp hết</span></a>
+  <?php endif; ?>
 </section>
 
 <div class="grid-2">
@@ -30,6 +34,19 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
     </ul>
   </section>
 
+  <?php if ($value): ?>
+  <section class="card">
+    <div class="card-head"><h2>Giá trị tồn theo kho</h2><a href="/valuation">Chi tiết →</a></div>
+    <?php if (!$value['rows']): ?><p class="empty">Chưa có kho nào.</p><?php endif; ?>
+    <ul class="rows">
+    <?php foreach ($value['rows'] as $r): ?>
+      <li><span><b><?= e($r['code']) ?></b> <span class="muted"><?= e($r['name']) ?></span><br><small class="muted"><?= $value['total'] > 0 ? round($r['value'] / $value['total'] * 100) : 0 ?>% tổng giá trị tồn</small></span>
+        <span class="tag tag-info" title="<?= e(n($r['value'])) ?> đ"><?= e(vnd_short($r['value'])) ?> đ</span></li>
+    <?php endforeach; ?>
+    </ul>
+    <?php if ($value['missing']): ?><p class="muted small pad"><?= n($value['missing']) ?> dòng tồn chưa có giá gốc nên chưa tính vào tổng.</p><?php endif; ?>
+  </section>
+  <?php else: ?>
   <section class="card">
     <div class="card-head"><h2>Sắp hết hàng</h2><a href="/inventory?stock=low">Xem tất cả →</a></div>
     <?php if (!$d['low']): ?><p class="empty">Không có mặt hàng nào dưới định mức.</p><?php endif; ?>
@@ -40,6 +57,7 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
     <?php endforeach; ?>
     </ul>
   </section>
+  <?php endif; ?>
 </div>
 
 <?php if ($user->isAdmin): ?>
