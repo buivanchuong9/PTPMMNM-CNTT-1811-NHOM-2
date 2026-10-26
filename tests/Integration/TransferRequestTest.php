@@ -56,3 +56,5 @@ $id3 = $svc->create($f->keeperB, $f->wa, [$f->line('x', 3)], '', null)['id'];
 throws(fn() => $svc->cancel($f->keeperA, $id3, ''), Forbidden::class, 'người ngoài kho nhận không huỷ được');
 $svc->cancel($f->keeperB, $id3, 'không cần nữa');
 same($svc->find($id3)['trang_thai'], 'CANCELLED', 'người lập huỷ được');
+
+finish();

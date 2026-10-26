@@ -106,7 +106,9 @@ final class VoucherController extends Controller
     public function store(Request $r, array $p, ?User $user): Response
     {
         $type = VoucherType::tryFrom($r->str('type')) ?? VoucherType::Receipt;
-        $this->need($user, $type === VoucherType::Receipt ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);
+        $perm = $type === VoucherType::Receipt ? Permission::LapPhieuNhap : Permission::LapPhieuXuat;
+        $this->need($user, $perm);
+        $this->auth->require($user, (int)$r->int('warehouse_id'), $perm);   // kho ngoài phạm vi ⇒ 403 ngay, trước cả bước nhập khách hàng / kiểm tra tồn
         if ($type === VoucherType::Issue && ($step = $this->customerStep($r, $user)) !== null) {
             return $step;
         }
@@ -328,6 +330,7 @@ final class VoucherController extends Controller
     public function storeTransfer(Request $r, array $p, ?User $user): Response
     {
         $this->need($user, Permission::LapPhieuDieuChuyen);
+        $this->auth->require($user, (int)$r->int('from_wh'), Permission::LapPhieuDieuChuyen);   // kho đi ngoài phạm vi ⇒ 403 trước khi đọc tồn
         return $this->act(function () use ($r, $user) {
             [$keys, $qtys] = $this->query->expandAutoLots((int)$r->int('from_wh'), $r->arr('line'), $r->arr('qty'));
             $lines = StockRules::normalizeLines($keys, $qtys);

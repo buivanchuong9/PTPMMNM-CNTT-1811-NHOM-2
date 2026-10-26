@@ -45,3 +45,5 @@ same($svc->all($f->approverA)['activity']['new'], 0, 'quản lý kho không có 
 $svc->markActivitySeen($f->admin);
 same($svc->activity($f->admin)['new'], 0, 'đóng chuông ⇒ hết số mới');
 same($svc->activity($f->admin)['list'][0]['fresh'], false, 'dòng cũ không còn đánh dấu mới');
+
+finish();

@@ -42,6 +42,7 @@
 | ↩️ | **Sửa sai = đảo phiếu** | Phiếu đã ghi sổ không sửa được. Hệ thống lập phiếu điều chỉnh ngược (mỗi phiếu chỉ đảo được một lần). Điều chuyển thì đảo cả hai đầu cùng lúc. |
 | 📖 | **Sổ phát sinh & đối chiếu** | Tra cứu lịch sử theo kho, mặt hàng, lô, thời gian. Trang **Đối chiếu** so số dư hiện hành với tổng sổ và báo `KHỚP` hoặc `LỆCH`. |
 | 📦 | **Hàng hoá** | Danh mục loại hàng, đơn vị tính, mặt hàng, **quy cách lô** (một thùng gồm bao nhiêu đơn vị), lô và **hạn dùng**, định mức tồn tối thiểu, nhà cung cấp của từng mặt hàng. |
+| 🔎 | **Mã vạch** | Mỗi mặt hàng có một mã vạch (không trùng). Nút quét ở thanh trên cùng đọc mã bằng **camera, ảnh tải lên hoặc ảnh dán (Ctrl+V)** ngay trên trình duyệt: máy chủ chỉ nhận dãy số, không nhận và không lưu ảnh. Quét trúng mặt hàng thì chọn **nhập / xuất / điều chuyển**. Quản lý kho quét ra mã chưa có thì gửi **đề xuất mặt hàng mới**, Admin chấp nhận (đặt giá gốc) hoặc từ chối kèm lý do. |
 | 🤝 | **Đối tác** | Nhà cung cấp và khách hàng. Gắn mặt hàng với nhà cung cấp, có thể ngừng hoạt động thay vì xoá. |
 | 🚛 | **Đội xe & tài xế** | Xe có biển số, loại xe, kho gốc, tài xế phụ trách. Theo dõi xe đang đứng ở kho nào hoặc đang chạy tới đâu. Mục riêng "Tài xế chưa thấy đâu" cho các chuyến kho đến báo chưa nhận được hàng, và danh sách chuyến gần đây. |
 | 📊 | **Tổng quan & báo cáo** | Thẻ thống kê, biểu đồ nhập xuất 14 ngày, luồng theo kho 30 ngày, cảnh báo **sắp hết hàng**, phiếu chờ xác nhận. Xuất **CSV**: tồn kho, sổ phát sinh, đối chiếu. |
@@ -162,14 +163,14 @@ Một tài khoản cấp cao quản lý nhiều tài khoản con. Tài khoản c
 | **Quản lý kho** (`MANAGER`, mỗi kho đúng 1) | Xác nhận, huỷ, điều chỉnh phiếu. Duyệt kiểm kê. Nhận hàng điều chuyển. Đối chiếu, báo cáo. Thêm nhân viên cho kho mình. **Chỉ trong kho mình.** |
 | **Nhân viên kho** (`STAFF`, mỗi kho nhiều) | Lập phiếu nhập, xuất, điều chuyển (nháp). Nhận hàng điều chuyển. Mở đợt kiểm kê và nhập số đếm. **Chỉ trong kho mình.** |
 
-Hệ thống có **23 chức năng** chia thành 4 nhóm. Admin bật hoặc tắt từng chức năng cho Quản lý và Nhân viên ở trang **Phân quyền chức năng**:
+Hệ thống có **28 chức năng** chia thành 4 nhóm. Admin bật hoặc tắt từng chức năng cho Quản lý và Nhân viên ở trang **Phân quyền chức năng**:
 
 | Nhóm | Chức năng |
 |---|---|
 | **Xem & tra cứu** | Tổng quan · Tồn kho · Phiếu nhập xuất · Lịch sử phát sinh · Đối chiếu · Báo cáo & CSV · Danh mục · Kiểm kê |
-| **Tác nghiệp kho** | Lập phiếu nhập · Lập phiếu xuất · Lập phiếu điều chuyển · Xác nhận / huỷ phiếu · Nhận hàng điều chuyển · Sửa sai (phiếu điều chỉnh) · Kiểm kê: thực hiện · Kiểm kê: duyệt · Thêm lô hàng |
+| **Tác nghiệp kho** | Lập phiếu nhập · Lập phiếu xuất · Lập phiếu điều chuyển · Xác nhận / huỷ phiếu · Nhận hàng điều chuyển · Sửa sai (phiếu điều chỉnh) · Kiểm kê: thực hiện · Kiểm kê: duyệt · Thêm lô hàng · Gán mã vạch / đề xuất hàng mới |
 | **Nhân sự kho** | Thêm nhân viên kho |
-| **Quản trị hệ thống** *(chỉ Admin)* | Quản lý kho · Mặt hàng & đơn vị tính · Tài khoản · Phân quyền · Đội xe & tài xế |
+| **Quản trị hệ thống** *(chỉ Admin)* | Quản lý kho · Mặt hàng & đơn vị tính · Tài khoản · Phân quyền · Đội xe & tài xế · Duyệt đề xuất mặt hàng mới |
 
 Hai quy tắc giữ cho phân quyền luôn hợp lý:
 
@@ -272,7 +273,7 @@ Nguyên tắc thiết kế:
 - **Controller mỏng, Service dày.** Mọi thao tác ghi đều đi qua service. Dữ liệu mẫu cũng vậy, nên luôn nhất quán với quy tắc nghiệp vụ.
 - **Domain thuần.** `StockRules`, `VoucherType`, `Permission`, `AccountRole` không chạm CSDL nên dễ kiểm thử.
 
-### Cơ sở dữ liệu (21 bảng)
+### Cơ sở dữ liệu (27 bảng)
 
 ```mermaid
 erDiagram
@@ -297,10 +298,11 @@ erDiagram
 | Nhóm | Bảng |
 |---|---|
 | Tổ chức & tài khoản | `kho` · `nguoi_dung` · `phan_quyen_vai_tro` · `cai_dat` |
-| Danh mục | `danh_muc` · `don_vi_tinh` · `mat_hang` · `lo_hang` · `doi_tac` · `mat_hang_nha_cung_cap` |
+| Danh mục | `danh_muc` · `don_vi_tinh` · `mat_hang` (có `ma_vach`) · `lo_hang` · `doi_tac` · `mat_hang_nha_cung_cap` · `de_xuat_mat_hang` |
+| Giá | `gia_ban_kho` · `lich_su_gia` |
 | Chứng từ & tồn | `phieu_nhap_xuat` · `chi_tiet_phieu_nhap_xuat` · `ton_kho` · `so_phat_sinh` · `bo_dem` |
 | Kiểm kê | `dot_kiem_ke` · `chi_tiet_kiem_ke` |
-| Vận chuyển | `xe` · `tai_xe` · `chuyen_van_chuyen` |
+| Vận chuyển | `xe` · `tai_xe` · `chuyen_van_chuyen` · `that_thoat_hang` · `yeu_cau_chuyen_hang` · `yeu_cau_chuyen_hang_dong` |
 | Nhật ký | `nhat_ky` (ai làm gì, lúc nào) |
 
 ### Các lớp bảo vệ dữ liệu
@@ -376,13 +378,13 @@ erDiagram
 php bin/stockflow test
 ```
 
-Bộ test tự viết (không cần PHPUnit), chạy trên CSDL riêng `stockflow_test` và tự xoá sạch, dựng lại mỗi lần. Không đụng dữ liệu thật.
+Tổng cộng **852 test**, đều đạt. Bộ test tự viết (không cần PHPUnit), chạy trên CSDL riêng `stockflow_test` và tự xoá sạch, dựng lại mỗi lần. Không đụng dữ liệu thật.
 
 | Nhóm | Số test | Nội dung |
 |---|:-:|---|
 | **Unit** | 67 | Quy tắc tồn, lõi HTTP (router, session, CSRF), địa chỉ Việt Nam |
-| **Integration** | 418 | Phân quyền, đội xe, kiểm kê, cài đặt, ảnh đại diện, điều chuyển, đồng thời… |
-| **Http** | | Gọi máy chủ PHP thật, POST thủ công bỏ qua giao diện: phân quyền theo kho, CSRF, duyệt mọi trang |
+| **Integration** | 642 | Phân quyền, đội xe, kiểm kê, cài đặt, ảnh đại diện, điều chuyển, đồng thời, giá, mã vạch và đề xuất hàng mới… |
+| **Http** | 143 | Gọi máy chủ PHP thật, POST thủ công bỏ qua giao diện: phân quyền theo kho, CSRF, duyệt mọi trang |
 
 Đối chiếu với các yêu cầu nghiệp vụ trọng yếu:
 
@@ -400,7 +402,7 @@ Bộ test tự viết (không cần PHPUnit), chạy trên CSDL riêng `stockflo
 | Kiểm kê từ mở đợt đến lập phiếu điều chỉnh | `StockCountTest` |
 | Điều chuyển liên kho, tồn khớp sổ | `ScenarioTest` |
 
-> Trên Windows, hai file test `Http/` có thể không tự dừng vì dùng đường dẫn `/dev/null` khi bật máy chủ. Nếu gặp, chạy riêng từng file Unit và Integration qua `php bin/stockflow test`. Muốn chạy lẻ một file thì phải trỏ vào CSDL kiểm thử, ví dụ `DB_NAME=stockflow_test php tests/Integration/FleetTest.php` (test từ chối chạy trên CSDL có tên không chứa `test`).
+> Các test `Http/` chạy được cả trên Windows (tự dùng `NUL` thay cho `/dev/null`). Muốn chạy lẻ một file thì phải trỏ vào CSDL kiểm thử, ví dụ `DB_NAME=stockflow_test php tests/Integration/FleetTest.php` (test từ chối chạy trên CSDL có tên không chứa `test`). Ánh xạ 5 phép thử bắt buộc của đề tài và hai tình huống demo xem ở [docs/PHEP-THU-VA-TINH-HUONG.md](docs/PHEP-THU-VA-TINH-HUONG.md). Thư viện và dữ liệu bên thứ ba xem ở [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 <img src="docs/images/divider.svg" width="100%" height="6" alt="">
 

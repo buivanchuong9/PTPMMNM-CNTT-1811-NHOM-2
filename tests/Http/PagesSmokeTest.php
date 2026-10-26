@@ -22,12 +22,15 @@ $xferDraft = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 1)], '
 $xferGo = $ts->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 2)], '', null)['voucher'];
 $ts->dispatch($f->approverA, (int)$xferGo['id'], (int)$f->db->value('SELECT id FROM xe WHERE kho_goc_id = ?', [$f->wa]), true);
 $xferGoIn = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($xferGo);
+// xe đầu đang chạy nên kho A cần thêm một xe + tài xế sẵn sàng để phiếu nháp còn chọn được xe
+$spareDriver = $fleet->addDriver($f->approverA, 'Tài xế dự phòng', (string)random_int(100000000000, 999999999999), '0912345679');
+$fleet->addVehicle($f->approverA, '30H-' . random_int(100, 999) . '.' . random_int(10, 99), 'Xe tải 1 tấn', $f->wa, $spareDriver);
 
 $port = random_int(19000, 19999);
 $sessions = sys_get_temp_dir() . '/sf-sess-' . bin2hex(random_bytes(4));
 mkdir($sessions, 0700);
 $server = proc_open([PHP_BINARY, '-d', "session.save_path=$sessions", '-S', "127.0.0.1:$port", '-t', dirname(__DIR__, 2) . '/public', dirname(__DIR__, 2) . '/public/index.php'],
-    [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+    [1 => ['file', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'w'], 2 => ['file', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'w']], $pipes);
 register_shutdown_function(function () use ($server, $sessions) {
     proc_terminate($server);
     foreach (glob("$sessions/*") ?: [] as $s) { @unlink($s); }
@@ -72,7 +75,9 @@ foreach ($pages as $p) {
 }
 same($get('/items')[0], 303, 'trang «Mặt hàng & lô» cũ chuyển sang «Hàng hoá» (/inventory)');
 [, $dash] = $get('/');
-truthy(str_contains($dash, 'Từng kho: tồn') && str_contains($dash, 'A' . $f->tag) && str_contains($dash, 'B' . $f->tag), 'tổng quan liệt kê từng kho: tồn và xuất nhập');
+truthy(str_contains($dash, 'Nhập – xuất theo kho') && str_contains($dash, 'A' . $f->tag) && str_contains($dash, 'B' . $f->tag), 'tổng quan có biểu đồ nhập – xuất theo từng kho');
+[, $rep] = $get('/reports');
+truthy(str_contains($rep, 'Từng kho: tồn') && str_contains($rep, 'A' . $f->tag) && str_contains($rep, 'B' . $f->tag), 'trang Báo cáo liệt kê từng kho: tồn và xuất nhập');
 foreach (['/vouchers/new?type=RECEIPT', '/vouchers/new?type=ISSUE', '/transfers/new'] as $p) {
     same($get($p)[0], 403, "admin GET $p ⇒ 403 (không lập phiếu)");
 }
@@ -120,7 +125,7 @@ same($get('/scan/lookup?code=ab')[0], 422, 'mã quá ngắn ⇒ 422');
 truthy($st === 200 && $noPhpError($pp) && !str_contains($pp, 'approve-dlg'), 'quản lý kho vào được trang Đề xuất hàng mới, không có nút duyệt');
 [, $form] = $get('/vouchers/new?type=RECEIPT&item=' . $f->it['x']['item']);
 truthy(str_contains($form, 'data-prefill="[[&quot;' . $f->it['x']['item'] . ':'), 'mở phiếu từ màn hình quét: mặt hàng được chọn sẵn');
-[, $inv] = $get('/inventory');
+[, $inv] = $get('/inventory?q=' . $f->it['x']['ma_hang']);   // lọc theo SKU để không phụ thuộc phân trang
 truthy(str_contains($inv, $bc) && str_contains($inv, 'data-scan-assign'), 'trang Hàng hoá hiện mã vạch và nút gán mã cho quản lý');
 truthy(str_contains($inv, 'id="scan-dlg"') && str_contains($inv, 'data-scan-open'), 'có nút và hộp thoại quét mã trên mọi trang');
 $login($f->keeperA->username);
@@ -128,7 +133,7 @@ same($get('/proposals')[0], 403, 'nhân viên không vào được trang Đề x
 [$st, $json] = $get('/scan/lookup?code=' . $bc);
 $j = json_decode($json, true);
 truthy($st === 200 && ($j['canAssign'] ?? true) === false, 'nhân viên quét được nhưng không có quyền gán mã');
-[, $inv] = $get('/inventory');
+[, $inv] = $get('/inventory?q=' . $f->it['x']['ma_hang']);
 truthy(!str_contains($inv, 'data-scan-assign'), 'nhân viên không thấy nút gán mã vạch');
 $login($f->both->username);
 [$st, $pp] = $get('/proposals');
@@ -136,7 +141,7 @@ truthy($st === 200 && $noPhpError($pp) && str_contains($pp, 'approve-dlg'), 'adm
 [, $json] = $get('/scan/lookup?code=' . $bc);
 $j = json_decode($json, true);
 truthy(($j['found'] ?? false) && $j['actions'] === [] && $j['canAssign'] === false, 'admin quét chỉ xem thông tin, không có nút tác nghiệp');
-[, $inv] = $get('/inventory');
+[, $inv] = $get('/inventory?q=' . $f->it['x']['ma_hang']);
 truthy(str_contains($inv, $bc) && !str_contains($inv, 'data-scan-assign'), 'admin xem được mã vạch nhưng không có nút gán');
 
 $login($f->approverA->username);

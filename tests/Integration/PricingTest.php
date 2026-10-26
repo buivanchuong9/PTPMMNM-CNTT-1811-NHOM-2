@@ -111,3 +111,5 @@ foreach ($ps->valuation([$f->wa, $f->wb]) as $r) {
     }
 }
 same([$val[$f->wa], $val[$f->wb]], [10 * 150, 23 * 150], 'giá trị tồn sau điều chuyển: A 10 × 150, B 23 × 150');
+
+finish();
