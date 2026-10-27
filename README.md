@@ -86,6 +86,12 @@ Dùng cho **cả máy mới lẫn sau mỗi lần `git pull`**, chạy lại bao
 
 > ⚠️ Khi `update` hoặc `db-sync` đang chạy, **đừng tắt terminal hay kill tiến trình php**. Nếu bị ngắt giữa lúc nạp lại, dữ liệu vẫn nằm trong `.local/backup-…/` (mỗi bảng một file `.ndjson`).
 
+> 🍎 **MacBook:** không có XAMPP thì cài bằng Homebrew: `brew install php mysql git && brew services start mysql`. MySQL của Homebrew có sẵn `root` không mật khẩu nên khớp cấu hình mặc định. Dùng MAMP hoặc đặt mật khẩu cho `root` thì chạy `php bin/stockflow db-config`.
+
+### 🔁 Lấy dữ liệu giống máy gốc
+
+Sau khi `git pull`, chạy `php bin/stockflow restore` rồi `php bin/stockflow serve`. Máy chưa có cấu hình thì `restore` tự tạo (Windows, Mac đều được).
+
 ### 4️⃣ Chạy web
 
 ```bash

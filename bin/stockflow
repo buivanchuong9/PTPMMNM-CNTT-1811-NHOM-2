@@ -183,6 +183,7 @@ function cmdBackup(): int
 function cmdRestore(array $argv): int
 {
     $file = DataBackup::path();
+    ensureDefaultConfig();
     DataBackup::read($file);   // báo lỗi sớm nếu file thiếu/hỏng, trước khi đụng vào CSDL
     $config = Config::database();
     if (SchemaSync::ensureDatabase($config)) {
