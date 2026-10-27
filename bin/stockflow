@@ -8,6 +8,7 @@ declare(strict_types=1);
 require __DIR__ . '/../src/bootstrap.php';
 
 use StockFlow\Core\Config;
+use StockFlow\Core\DataBackup;
 use StockFlow\Core\Db;
 use StockFlow\Core\Migrator;
 use StockFlow\Core\SchemaSync;
@@ -23,6 +24,8 @@ Cách dùng: bin/stockflow <lệnh>
   migrate     tạo/cập nhật bảng (chạy lại an toàn)
   seed        nạp dữ liệu mẫu (3 kho, 30 mặt hàng, ≥200 dòng phát sinh); bỏ qua nếu đã có dữ liệu
   setup       db-sync + seed (như update nhưng không đụng cấu hình / git hook)
+  backup      XUẤT toàn bộ dữ liệu ra database/backup/stockflow-data.json.gz (commit + push để bạn bè dùng chung)
+  restore     NẠP dữ liệu từ file đó vào MySQL máy này (GHI ĐÈ dữ liệu hiện có; tự lưu bản cũ vào .local/). --yes bỏ qua hỏi lại
   serve       chạy web tại http://127.0.0.1:8080  (PORT=9000 để đổi cổng)
   test        chạy toàn bộ kiểm thử (cần CSDL cho integration/http)
 
@@ -167,6 +170,54 @@ function autoSyncDatabase(): void
     }
 }
 
+function cmdBackup(): int
+{
+    $counts = (new DataBackup(connect()))->export(DataBackup::path());
+    echo '✔ Đã xuất ' . array_sum($counts) . ' dòng của ' . count($counts) . ' bảng → ' . DataBackup::FILE . "
+";
+    echo "  Tiếp theo: git add database/backup && git commit && git push. Bạn bè pull về rồi chạy: php bin/stockflow restore
+";
+    return 0;
+}
+
+function cmdRestore(array $argv): int
+{
+    $file = DataBackup::path();
+    DataBackup::read($file);   // báo lỗi sớm nếu file thiếu/hỏng, trước khi đụng vào CSDL
+    $config = Config::database();
+    if (SchemaSync::ensureDatabase($config)) {
+        echo "✔ Đã tạo database `{$config['database']}`
+";
+    }
+    $db = connect();
+    if (!in_array('--yes', $argv, true) && (int)$db->value('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()') > 0) {
+        if (!stream_isatty(STDIN)) {
+            fwrite(STDERR, "✘ Sẽ GHI ĐÈ dữ liệu hiện có. Thêm --yes để xác nhận.
+");
+            return 2;
+        }
+        echo "⚠ Dữ liệu hiện có trong `{$config['database']}` sẽ bị thay bằng dữ liệu từ file. Gõ 'yes' để tiếp tục: ";
+        if (trim((string)fgets(STDIN)) !== 'yes') {
+            echo "Đã huỷ, không đổi gì.
+";
+            return 1;
+        }
+    }
+    $safe = Config::root() . '/.local/truoc-khi-restore-' . date('Ymd-His') . '.json.gz';
+    @mkdir(dirname($safe), 0700, true);
+    if ($db->value('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()')) {
+        (new DataBackup($db))->export($safe);
+        echo '→ Đã lưu dữ liệu cũ vào ' . str_replace(Config::root() . '/', '', $safe) . "
+";
+    }
+    echo implode("
+", (new DataBackup($db))->restore($file)), "
+";
+    echo "✔ Xong: dữ liệu đã giống máy gốc. Chạy web: php bin/stockflow serve
+";
+    return 0;
+}
+
 function cmdServe(): int
 {
     $port = getenv('PORT') ?: '8080';
@@ -226,6 +277,8 @@ try {
         'db-sync' => cmdDbSync($argv),
         'setup' => cmdDbSync($argv) ?: cmdSeed($argv),
         'update' => cmdUpdate($argv),
+        'backup' => cmdBackup(),
+        'restore' => cmdRestore($argv),
         'serve' => cmdServe(),
         'test' => (function () { passthru('php ' . escapeshellarg(Config::root() . '/tests/run.php'), $rc); return $rc; })(),
         default => (function () { echo USAGE; return 0; })(),
