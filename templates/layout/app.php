@@ -5,37 +5,59 @@ use StockFlow\Domain\Permission as P;
 $groups = [
     'Tác nghiệp' => [
         'dashboard' => ['/', 'home', 'Tổng quan', [P::XemTongQuan]],
-        'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập', [P::LapPhieuNhap]],
-        'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', [P::LapPhieuXuat]],
-        'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
-        'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
-        'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
-        'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
+        // mục có con (phần tử thứ 5): bấm mở trang cha, bấm mũi tên ▾ để xổ / gập các mục con; mục con lọc theo quyền riêng
+        'vouchers' => ['/vouchers', 'file', 'Phiếu', [P::XemPhieu], [
+            'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập', [P::LapPhieuNhap]],
+            'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', [P::LapPhieuXuat]],
+            'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
+            'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
+            'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
+        ]],
     ],
-    'Tra cứu & báo cáo' => [
-        'inventory' => ['/inventory', 'box', 'Hàng hoá', [P::XemTonKho]],
+    'Tra cứu' => [
+        'inventory' => ['/inventory', 'box', 'Hàng hoá', [P::XemTonKho], [
+            'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
+            'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
+        ]],
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
-        'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
-        'reports' => ['/reports', 'chart', 'Báo cáo', [P::XemBaoCao]],
-        'valuation' => ['/valuation', 'scale', 'Giá trị tồn & doanh thu', [P::XemBaoCao]],
+        'valuation' => ['/valuation', 'scale', 'Vốn kho', [P::XemBaoCao], [
+            'money-in' => ['/money/in', 'in', 'Tiền nhập', [P::XemBaoCao]],
+            'money-out' => ['/money/out', 'out', 'Tiền xuất', [P::XemBaoCao]],
+            'money-profit' => ['/money/profit', 'chart', 'Tiền lãi', [P::XemBaoCao]],
+        ]],
     ],
     'Danh mục' => [
-        'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc]],
-        'partners' => ['/partners', 'users', 'Đối tác & nhà cung cấp', [P::XemDanhMuc]],
-        'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::XemDoiXe]],
-        'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
+        'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc], [
+            'partners' => ['/partners', 'users', 'Đối tác & nhà cung cấp', [P::XemDanhMuc]],
+            'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::XemDoiXe]],
+        ]],
     ],
     'Quản trị hệ thống' => [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
         'roles' => ['/roles', 'shield', 'Phân quyền chức năng', [P::PhanQuyen]],
     ],
 ];
-$groups['Tài khoản'] = ['settings' => ['/settings', 'settings', 'Cài đặt', []]];
+$groups['Báo cáo & tài khoản'] = ['reports' => ['/reports', 'chart', 'Báo cáo', [P::XemBaoCao]], 'settings' => ['/settings', 'settings', 'Cài đặt', []]];
+$canSee = fn(array $e) => $e[3] === [] || array_filter($e[3], fn($perm) => $auth->allows($user, $perm));
 foreach ($groups as $label => $entries) {
-    $groups[$label] = array_filter($entries, fn($e) => $e[3] === [] || array_filter($e[3], fn($perm) => $auth->allows($user, $perm)));
+    $kept = [];
+    foreach ($entries as $key => $e) {
+        $kids = array_filter($e[4] ?? [], $canSee);
+        if ($canSee($e)) {
+            $e[4] = $kids;
+            $kept[$key] = $e;
+        } else {
+            $kept += $kids;   // không xem được mục cha thì các mục con đứng riêng
+        }
+    }
+    $groups[$label] = $kept;
     if (!$groups[$label]) {
         unset($groups[$label]);
     }
+}
+if (isset($groups['Báo cáo & tài khoản']) && !isset($groups['Báo cáo & tài khoản']['reports'])) {   // không xem được Báo cáo ⇒ nhóm chỉ còn Cài đặt
+    $groups['Tài khoản'] = $groups['Báo cáo & tài khoản'];
+    unset($groups['Báo cáo & tài khoản']);
 }
 // Dòng mô tả dưới tên: vai trò + kho được gắn (tài khoản cấp cao thấy mọi kho)
 $whLabel = $myWarehouse ? $myWarehouse['ma'] . ' — ' . $myWarehouse['ten'] : 'Tất cả các kho';
@@ -62,23 +84,23 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <body class="app-shell<?= !empty($compact) ? ' compact' : '' ?>">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <?php if (!empty($welcome)): ?>
-<div class="welcome" id="welcome" aria-hidden="true" title="Bấm để bỏ qua">
+<?php $hour = (int)gmdate('G', time() + 7 * 3600); $greet = $hour < 11 ? 'Chào buổi sáng' : ($hour < 13 ? 'Chào buổi trưa' : ($hour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối')); ?>
+<div class="welcome" id="welcome" aria-hidden="true">
   <div class="welcome-stage">
-    <div class="welcome-stack">
-      <i class="welcome-pallet"></i>
-      <i class="wbox" style="--x:0;--y:0;--d:.2s;--r:-8deg"></i><i class="wbox" style="--x:1;--y:0;--d:.35s;--r:6deg"></i><i class="wbox" style="--x:2;--y:0;--d:.5s;--r:-5deg"></i>
-      <i class="wbox" style="--x:.5;--y:1;--d:.75s;--r:7deg"></i><i class="wbox" style="--x:1.5;--y:1;--d:.9s;--r:-6deg"></i>
-      <i class="wbox top" style="--x:1;--y:2;--d:1.15s;--r:4deg"><?php if ($user->avatar): ?><img src="<?= e($user->avatarUrl()) ?>" alt=""><?php else: ?><span><?= e($user->initials()) ?></span><?php endif; ?></i>
+    <div class="welcome-logo">
+      <svg class="welcome-ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="56"/></svg>
+      <img src="/assets/img/logo.png" alt="" width="88" height="88">
     </div>
-    <p class="welcome-text">Xin chào, <b><?= e($user->fullName) ?></b></p>
+    <p class="welcome-text"><?= $greet ?>, <b><?= e($user->fullName) ?></b></p>
+    <p class="welcome-sub"><?= e($myWarehouse ? $myWarehouse['ma'] . ' — ' . $myWarehouse['ten'] : 'Tất cả các kho') ?></p>
   </div>
 </div>
 <?php endif; ?>
 <header class="topbar">
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
-  <a class="brand" href="/"><img src="/assets/img/logo-mark.png" alt="" width="40" height="40"><span><?= app_brand() ?></span></a>
+  <a class="brand" href="/" aria-label="<?= e(strip_tags(app_brand())) ?> — Tổng quan" title="Tổng quan"><img src="/assets/img/logo-mark.png" alt="" width="40" height="40"></a>
   <form class="topsearch" action="/history" method="get" role="search">
-    <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu nhập xuất, SKU, số lô…" aria-label="Tìm kiếm nhanh">
+    <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>
   <div class="topuser">
     <?php $canScan = $auth->allows($user, P::XemTonKho) || $auth->allows($user, P::XemDanhMuc); if ($canScan): ?><button class="icon-btn" type="button" data-scan-open title="Quét mã vạch" aria-label="Quét mã vạch"><?= icon('scan') ?></button><?php endif; ?>
@@ -88,33 +110,61 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
       <button class="icon-btn notif-btn" type="button" data-notif-toggle aria-haspopup="true" aria-expanded="false" aria-label="Thông báo" title="Thông báo"><?= icon('bell') ?><b class="notif-count" data-notif-count<?= $notifTotal ? '' : ' hidden' ?>><?= $notifTotal > 99 ? '99+' : $notifTotal ?></b></button>
       <div class="notif-pop" data-notif-pop hidden>
         <p class="notif-head">Thông báo</p>
-        <ul class="notif-list" data-notif-list>
-          <?php foreach ($nTasks as $nt): ?>
-          <li><a href="<?= e($nt['href']) ?>" class="notif-item tone-<?= e($nt['tone']) ?>"><i class="notif-dot" aria-hidden="true"></i><span><b><?= e($nt['title']) ?></b><small><?= e($nt['note']) ?></small></span><em><?= n($nt['count']) ?></em></a></li>
-          <?php endforeach; ?>
-        </ul>
-        <p class="notif-sub" data-notif-activity-head<?= $nAct['list'] ? '' : ' hidden' ?>>Hoạt động mới của các kho</p>
-        <ul class="notif-list notif-activity" data-notif-activity>
-          <?php foreach ($nAct['list'] as $ac): ?>
-          <li><a href="<?= e($ac['href']) ?>" class="notif-item<?= $ac['fresh'] ? ' fresh' : '' ?>"><i class="notif-dot" aria-hidden="true"></i><span><b><?= e($ac['who']) ?></b><small><?= e($ac['text']) ?></small></span><em class="when"><?= e($ac['at']) ?></em></a></li>
-          <?php endforeach; ?>
-        </ul>
-        <p class="notif-empty" data-notif-empty<?= $nTasks || $nAct['list'] ? ' hidden' : '' ?>>Không có việc nào đang chờ bạn.</p>
+        <div class="notif-cols">
+          <section class="notif-col notif-act">
+            <p class="notif-col-head">Hoạt động mới<em data-notif-n="act"<?= $nAct['new'] ? '' : ' hidden' ?>><?= n($nAct['new']) ?></em></p>
+            <ul class="notif-list notif-activity" data-notif-activity>
+              <?php foreach ($nAct['list'] as $ac): ?>
+              <li><a href="<?= e($ac['href']) ?>" class="notif-item<?= $ac['fresh'] ? ' fresh' : '' ?>"><i class="notif-dot" aria-hidden="true"></i><span><b><?= e($ac['who']) ?></b><small><?= e($ac['text']) ?></small></span><em class="when"><?= e($ac['at']) ?></em></a></li>
+              <?php endforeach; ?>
+            </ul>
+            <p class="notif-empty" data-notif-empty="act"<?= $nAct['list'] ? ' hidden' : '' ?>>Chưa có hoạt động nào</p>
+          </section>
+          <section class="notif-col notif-tasks">
+            <p class="notif-col-head">Việc cần làm<em data-notif-n="tasks"<?= $nTasks ? '' : ' hidden' ?>><?= n(array_sum(array_column($nTasks, 'count'))) ?></em></p>
+            <ul class="notif-list" data-notif-list>
+              <?php foreach ($nTasks as $nt): ?>
+              <li><a href="<?= e($nt['href']) ?>" class="notif-item tone-<?= e($nt['tone']) ?>"><i class="notif-dot" aria-hidden="true"></i><span><b><?= e($nt['title']) ?></b><small><?= e($nt['note']) ?></small></span><em><?= n($nt['count']) ?></em></a></li>
+              <?php endforeach; ?>
+            </ul>
+            <p class="notif-empty" data-notif-empty="tasks"<?= $nTasks ? ' hidden' : '' ?>>Không có việc nào đang chờ bạn</p>
+          </section>
+        </div>
       </div>
     </div>
     <button class="icon-btn theme-toggle" type="button" data-theme-toggle aria-label="Đổi giao diện sáng / tối" title="Đổi giao diện sáng / tối"><?= str_replace('class="icon"', 'class="icon ic-sun"', icon('sun')) ?><?= str_replace('class="icon"', 'class="icon ic-moon"', icon('moon')) ?></button>
-    <a class="avatar" href="/settings" title="Cài đặt tài khoản" aria-label="Cài đặt tài khoản"><?php if ($user->avatar): ?><img src="<?= e($user->avatarUrl()) ?>" alt=""><?php else: ?><?= e($user->initials()) ?><?php endif; ?></a>
-    <span class="who" title="<?= e($myWarehouse ? 'Địa chỉ kho: ' . ($myWarehouse['dia_chi'] ?: '—') : 'Tài khoản cấp cao: thấy và thao tác ở mọi kho') ?>"><b><?= e($user->fullName) ?></b><small><em class="role-badge role-<?= e(strtolower($user->role->value)) ?>"><?= e($user->role->label()) ?></em><span class="who-wh"><?= e($myWarehouse ? $whLabel : 'Tất cả các kho') ?></span></small></span>
-    <form method="post" action="/logout"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="icon-btn" title="Đăng xuất" aria-label="Đăng xuất"><?= icon('logout') ?></button></form>
+    <?php $avatarInner = $user->avatar ? '<img src="' . e($user->avatarUrl()) . '" alt="">' : e($user->initials()); ?>
+    <div class="acct" data-acct>
+      <button class="acct-btn" type="button" data-acct-toggle aria-haspopup="true" aria-expanded="false" aria-label="Tài khoản" title="<?= e($user->fullName) ?>"><span class="avatar"><?= $avatarInner ?></span><svg class="acct-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="acct-pop" data-acct-pop hidden>
+        <div class="acct-head"><span class="avatar"><?= $avatarInner ?></span><span><b><?= e($user->fullName) ?></b><small>@<?= e($user->username) ?></small></span></div>
+        <dl class="acct-info">
+          <dt>Vai trò</dt><dd><em class="role-badge role-<?= e(strtolower($user->role->value)) ?>"><?= e($user->role->label()) ?></em></dd>
+          <dt>Kho</dt><dd><?= e($myWarehouse ? $whLabel : 'Tất cả các kho') ?></dd>
+          <?php if ($myWarehouse && $myWarehouse['dia_chi']): ?><dt>Địa chỉ</dt><dd><?= e($myWarehouse['dia_chi']) ?></dd><?php endif; ?>
+        </dl>
+        <a class="acct-link" href="/settings"><?= icon('settings') ?>Cài đặt tài khoản</a>
+        <form method="post" action="/logout"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="acct-link acct-out"><?= icon('logout') ?>Đăng xuất</button></form>
+      </div>
+    </div>
   </div>
 </header>
 <div class="shell">
   <aside class="sidebar" id="sidebar">
+    <?php $navBadges ??= []; $navNew ??= [];
+    $navLink = function (string $key, string $href, string $ic, string $text, string $tail = '') use ($active, $navBadges, $navNew): string {   // một mục menu + số nhỏ (cần xử lý / thay đổi mới)
+        $pa = (int)($navBadges[$key] ?? 0);
+        $pn = (int)($navNew[$key] ?? 0);
+        $pills = $pa || $pn ? '<span class="nav-pills">' . ($pn ? '<b class="nav-new" title="' . n($pn) . ' thay đổi mới">' . ($pn > 99 ? '+99' : '+' . $pn) . '</b>' : '') . ($pa ? '<b class="nav-badge" title="Cần xử lý">' . n($pa) . '</b>' : '') . '</span>' : '';
+        return '<a href="' . e($href) . '" data-nav="' . e($key) . '"' . ($key === $active ? ' class="active" aria-current="page"' : '') . '>' . icon($ic) . '<span>' . e($text) . '</span>' . $pills . $tail . '</a>';
+    }; ?>
     <nav aria-label="Điều hướng chính">
       <?php foreach ($groups as $label => $items): ?>
       <p class="nav-group"><?= e($label) ?></p>
-        <?php foreach ($items as $key => [$href, $ic, $text]): ?>
-      <a href="<?= e($href) ?>" data-nav="<?= e((string)$key) ?>"<?= $key === $active ? ' class="active" aria-current="page"' : '' ?>><?= icon($ic) ?><span><?= e($text) ?></span><?php $pa = (int)($navBadges[$key] ?? 0); $pn = (int)($navNew[$key] ?? 0); if ($pa || $pn): ?><span class="nav-pills"><?php if ($pn): ?><b class="nav-new" title="<?= n($pn) ?> thay đổi mới"><?= $pn > 99 ? '+99' : '+' . $pn ?></b><?php endif; ?><?php if ($pa): ?><b class="nav-badge" title="Cần xử lý"><?= n($pa) ?></b><?php endif; ?></span><?php endif; ?></a>
+        <?php foreach ($items as $key => $entry): [$href, $ic, $text] = $entry; $kids = $entry[4] ?? []; ?>
+        <?php if ($kids): ?><div class="nav-tree<?= $key === $active || isset($kids[$active]) ? ' open' : '' ?>" data-nav-tree><?php endif; ?>
+      <?= $navLink($key, $href, $ic, $text, $kids ? '<i class="nav-caret" data-nav-caret aria-hidden="true"></i>' : '') ?>
+        <?php if ($kids): ?><div class="nav-sub"><?php foreach ($kids as $ck => [$chref, $cic, $ctext]): ?><?= $navLink($ck, $chref, $cic, $ctext) ?><?php endforeach; ?></div></div><?php endif; ?>
         <?php endforeach; ?>
       <?php endforeach; ?>
     </nav>

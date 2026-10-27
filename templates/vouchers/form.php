@@ -18,7 +18,7 @@ $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
     <?php else: ?>
     <label>Khách hàng<input name="partner" maxlength="120" list="partner-list" autocomplete="off" placeholder="Chọn khách hàng có sẵn hoặc gõ tên khách mới…"><datalist id="partner-list"><?php foreach ($partnerNames ?? [] as $pn): ?><option value="<?= e($pn) ?>"><?php endforeach; ?></datalist></label>
     <?php endif; ?>
-    <label>Ghi chú<input name="note" maxlength="255" placeholder="Số phiếu nhập xuất gốc, lý do…"></label>
+    <label>Ghi chú<input name="note" maxlength="255" placeholder="Số phiếu gốc, lý do…"></label>
   </div>
   <?php $checkStock = !$isIn; $newLots = $isIn; $autoLots = !$isIn; require __DIR__ . '/../partials/lines.php'; ?>
   <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Huỷ</a></div>

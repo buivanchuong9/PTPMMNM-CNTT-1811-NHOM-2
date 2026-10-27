@@ -92,7 +92,7 @@ final class HistoryController extends Controller
         $this->need($user, Permission::XemBaoCao);
         $rows = array_map(fn($m) => [$m['id'], $m['ngay_ghi_so'], $m['voucher_code'], $m['loai'], $m['wh_code'], $m['ma_hang'], $m['so_lo'], $m['bien_dong'], $m['ton_sau'], $m['ly_do'] ?: $m['ghi_chu']],
             $this->query->history($this->auth->visibleWarehouseIds($user), $this->filters($r), 5000));
-        return Response::csv('so-phat-sinh-' . gmdate('Ymd') . '.csv', ['#', 'Thời gian (UTC)', 'Phiếu nhập xuất', 'Loại', 'Kho', 'SKU', 'Lô', 'Biến động', 'Tồn sau', 'Lý do/Ghi chú'], $rows);
+        return Response::csv('so-phat-sinh-' . gmdate('Ymd') . '.csv', ['#', 'Thời gian (UTC)', 'Phiếu', 'Loại', 'Kho', 'SKU', 'Lô', 'Biến động', 'Tồn sau', 'Lý do/Ghi chú'], $rows);
     }
 
     public function exportReconcile(Request $r, array $p, ?User $user): Response

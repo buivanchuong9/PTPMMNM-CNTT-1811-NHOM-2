@@ -332,3 +332,74 @@ a.pg:hover { background: var(--brand-50); border-color: var(--brand-100); color:
 
 .total-row td { background: var(--panel) !important; border-top: 2px solid var(--line); }
 .flow-note { margin: 0; padding: 10px 18px 14px; }
+
+/* ── Trang đăng nhập (bản làm lại): ảnh trong khung bo góc, logo nhỏ + tên, ô nhập có biểu tượng, chọn nhanh tài khoản dùng thử ── */
+.login-aside { margin: 14px 0 14px 14px; border-radius: 24px; box-shadow: 0 20px 50px -30px rgba(17, 24, 39, .45); }
+.login .login-card { max-width: 420px; }
+@media (prefers-reduced-motion: no-preference) { .login .login-card { animation: login-in .5s cubic-bezier(.2, .7, .2, 1) both; } }
+@keyframes login-in { from { opacity: 0; transform: translateY(12px); } }
+.login-head { margin-bottom: 26px; }
+.login-mark { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
+.login-mark img { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; box-shadow: 0 6px 14px -6px rgba(150, 14, 28, .55); }
+.login-mark > span > b { display: block; font-size: 1.05rem; line-height: 1.2; color: var(--l-ink); white-space: nowrap; }
+.login-mark > span > b b { color: var(--brand); }
+.login-mark small { display: block; font-size: .78rem; color: var(--l-muted); }
+.login-head h1 { font-size: 2rem; font-weight: 750; letter-spacing: -.025em; }
+.login-head p { font-size: .95rem; }
+
+.login .in-ic { position: relative; display: block; }
+.login .in-ic > .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--l-muted); pointer-events: none; transition: color .15s; }
+.login .in-ic:focus-within > .icon { color: var(--brand); }
+.login .login-form .in-ic input:not([type=hidden]) { min-height: 48px; padding-left: 44px; border-radius: 10px; font-size: .95rem; }
+.login .login-form input::placeholder { color: color-mix(in srgb, var(--l-muted) 70%, transparent); font-weight: 400; }
+.login .caps-warn { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: var(--warn); }
+.login .caps-warn[hidden] { display: none; }
+.login .caps-warn .icon { width: 15px; height: 15px; }
+
+.login .login-form button[type=submit] { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; border-radius: 10px; font-size: 1rem; }
+.login .login-arrow { width: 18px; height: 18px; transition: transform .2s; }
+.login .login-form button[type=submit]:hover .login-arrow { transform: translateX(3px); }
+.login .login-form button.busy .login-arrow { display: none; }
+.login .login-form button.busy::after { content: ""; width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, .45); border-top-color: #fff; border-radius: 50%; animation: login-spin .7s linear infinite; }
+.login .login-form button.busy:disabled { background: var(--brand) !important; border-color: var(--brand) !important; color: #fff !important; opacity: .9; }
+@keyframes login-spin { to { transform: rotate(360deg); } }
+
+.login .demo-accounts { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--l-line); }
+.login .demo-title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 10px; font-weight: 650; color: var(--l-ink); }
+.login .demo-title small { font-weight: 500; color: var(--l-muted); font-size: .78rem; }
+.login .demo-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.login .demo-pick .demo-chip, .login .demo-pick .demo-chip:hover, .login .demo-pick .demo-chip:focus { all: unset; box-sizing: border-box; display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--l-line); border-radius: 10px; background: var(--surface); cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+.login .demo-pick .demo-chip:hover { border-color: var(--brand); transform: translateY(-1px); }
+.login .demo-pick .demo-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.login .demo-pick .demo-chip.on { border-color: var(--brand); background: var(--brand-50); }
+.login .demo-chip b { font-size: .86rem; color: var(--l-ink); }
+.login .demo-chip small { font-size: .74rem; color: var(--l-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.login .demo-more { margin: 10px 0 0; font-size: .78rem; color: var(--l-muted); }
+.login .demo-more code { font-size: .74rem; }
+
+/* Cỡ chữ toàn hệ thống to hơn một chút cho dễ đọc: gốc 17px (mọi cỡ tính theo rem to lên ~6%), chữ thường 15px, chữ trong bảng 14.5px */
+html { font-size: 17px; }
+body { font-size: 15px; }
+.dense { font-size: 14.5px; }
+
+/* Trang đăng nhập vừa khít một màn hình laptop: trang cao đúng bằng màn hình, ảnh đứng yên; màn thấp thì form gọn lại,
+   còn không đủ chỗ nữa thì chỉ cột form cuộn (không kéo cả trang lên xuống) */
+@media (min-width: 901px) {
+  .login { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+  .login-main { overflow-y: auto; overscroll-behavior: contain; padding-block: 24px; }
+  .login .login-card { margin-block: auto; }
+}
+@media (min-width: 901px) and (max-height: 800px) {
+  .login-mark { margin-bottom: 18px; }
+  .login-mark img { width: 38px; height: 38px; border-radius: 10px; }
+  .login-head { margin-bottom: 16px; }
+  .login-head h1 { font-size: 1.65rem; margin-bottom: 4px; }
+  .login .login-form { gap: 12px; }
+  .login .login-form label { gap: 5px; }
+  .login .login-form .in-ic input:not([type=hidden]) { min-height: 44px; }
+  .login .login-form button[type=submit] { min-height: 46px; margin-top: 2px; }
+  .login .demo-accounts { margin-top: 18px; padding-top: 12px; }
+  .login .demo-title { margin-bottom: 8px; }
+  .login .demo-pick .demo-chip, .login .demo-pick .demo-chip:hover, .login .demo-pick .demo-chip:focus { padding: 8px 10px; }
+  .login .demo-more { display: none; }
+}

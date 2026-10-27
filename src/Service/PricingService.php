@@ -188,11 +188,96 @@ final class PricingService
      */
     public function sales(array $warehouseIds, ?string $from, ?string $to): array
     {
+        return $this->flow('ISSUE', $warehouseIds, $from, $to);
+    }
+
+    /** Cộng tiền theo kho cho một loại phiếu (ISSUE / RECEIPT) đã xác nhận trong khoảng ngày. */
+    private function flow(string $type, array $warehouseIds, ?string $from, ?string $to): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($warehouseIds), '?'));
+        $args = [$type, ...$warehouseIds];
+        $time = $this->timeRange($from, $to, $args);
+        return $this->db->all(
+            "SELECT v.kho_id, w.ma AS wh_code, w.ten AS wh_name, COUNT(DISTINCT v.id) AS phieu, SUM(l.so_luong) AS so_luong,
+                    SUM(l.so_luong * COALESCE(l.don_gia, 0)) AS doanh_thu,
+                    SUM(ROUND(l.so_luong * COALESCE(l.don_gia, 0) * l.thue_suat / 100.0)) AS thue,
+                    SUM(l.so_luong * l.gia_von) AS gia_von
+             FROM phieu_nhap_xuat v JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = v.id JOIN kho w ON w.id = v.kho_id
+             WHERE v.loai = ? AND v.trang_thai = 'CONFIRMED' AND v.kho_id IN ($in)
+               AND NOT EXISTS (SELECT 1 FROM phieu_nhap_xuat a WHERE a.dieu_chinh_cho_id = v.id)$time
+             GROUP BY v.kho_id, w.ma, w.ten ORDER BY w.ma",
+            $args
+        );
+    }
+
+    /**
+     * Từng phiếu NHẬP (RECEIPT) hoặc XUẤT (ISSUE) đã xác nhận kèm tiền: tiền hàng chưa thuế, thuế GTGT, giá gốc hàng (để tính lãi phiếu xuất).
+     * Phiếu đã bị điều chỉnh đảo không tính. Mới xác nhận trước. $q: tìm theo mã phiếu hoặc đối tác.
+     * @param list<int> $warehouseIds
+     * @return list<array<string,mixed>>
+     */
+    public function voucherMoney(string $type, array $warehouseIds, ?string $from, ?string $to, string $q = ''): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($warehouseIds), '?'));
+        $args = [$type, ...$warehouseIds];
+        $time = $this->timeRange($from, $to, $args);
+        if ($q !== '') {
+            $time .= ' AND (v.ma LIKE ? OR v.doi_tac LIKE ?)';
+            array_push($args, '%' . $q . '%', '%' . $q . '%');
+        }
+        return $this->db->all(
+            "SELECT v.id, v.ma, v.ngay_xac_nhan, v.doi_tac, w.ma AS wh_code, w.ten AS wh_name, COUNT(l.id) AS dong, SUM(l.so_luong) AS so_luong,
+                    SUM(l.so_luong * COALESCE(l.don_gia, 0)) AS tien,
+                    SUM(ROUND(l.so_luong * COALESCE(l.don_gia, 0) * l.thue_suat / 100.0)) AS thue,
+                    SUM(l.so_luong * l.gia_von) AS gia_von
+             FROM phieu_nhap_xuat v JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = v.id JOIN kho w ON w.id = v.kho_id
+             WHERE v.loai = ? AND v.trang_thai = 'CONFIRMED' AND v.kho_id IN ($in)
+               AND NOT EXISTS (SELECT 1 FROM phieu_nhap_xuat a WHERE a.dieu_chinh_cho_id = v.id)$time
+             GROUP BY v.id, v.ma, v.ngay_xac_nhan, v.doi_tac, w.ma, w.ten ORDER BY v.ngay_xac_nhan DESC, v.id DESC",
+            $args
+        );
+    }
+
+    /**
+     * Lãi gộp theo từng mặt hàng từ phiếu XUẤT đã xác nhận (trừ phiếu bị điều chỉnh đảo): số bán, tiền hàng chưa thuế, giá gốc hàng bán.
+     * Chỉ tính dòng có ghi đơn giá — dòng lập trước khi có giá không có doanh thu nên sẽ làm lãi âm sai. Lãi nhiều trước.
+     * @param list<int> $warehouseIds
+     * @return list<array<string,mixed>>
+     */
+    public function profitByItem(array $warehouseIds, ?string $from, ?string $to, string $q = ''): array
+    {
         if ($warehouseIds === []) {
             return [];
         }
         $in = implode(',', array_fill(0, count($warehouseIds), '?'));
         $args = $warehouseIds;
+        $time = $this->timeRange($from, $to, $args);
+        if ($q !== '') {
+            $time .= ' AND (i.ma_hang LIKE ? OR i.ten LIKE ?)';
+            array_push($args, '%' . $q . '%', '%' . $q . '%');
+        }
+        return $this->db->all(
+            "SELECT i.id, i.ma_hang, i.ten, u.ma AS unit, COUNT(DISTINCT v.id) AS phieu, SUM(l.so_luong) AS so_luong,
+                    SUM(l.so_luong * l.don_gia) AS tien, SUM(l.so_luong * l.gia_von) AS gia_von,
+                    SUM(l.so_luong * l.don_gia) - SUM(l.so_luong * l.gia_von) AS lai
+             FROM phieu_nhap_xuat v JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = v.id
+             JOIN mat_hang i ON i.id = l.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
+             WHERE v.loai = 'ISSUE' AND v.trang_thai = 'CONFIRMED' AND v.kho_id IN ($in) AND COALESCE(l.don_gia, 0) > 0
+               AND NOT EXISTS (SELECT 1 FROM phieu_nhap_xuat a WHERE a.dieu_chinh_cho_id = v.id)$time
+             GROUP BY i.id, i.ma_hang, i.ten, u.ma ORDER BY lai DESC, i.ma_hang",
+            $args
+        );
+    }
+
+    /** Điều kiện khoảng ngày (giờ Việt Nam, UTC+7) trên ngày xác nhận phiếu; thêm tham số vào $args. */
+    private function timeRange(?string $from, ?string $to, array &$args): string
+    {
         $time = '';
         if ($from) {
             $time .= ' AND v.ngay_xac_nhan >= ?';
@@ -202,17 +287,7 @@ final class PricingService
             $time .= ' AND v.ngay_xac_nhan < ?';
             $args[] = gmdate('Y-m-d H:i:s', strtotime("$to 00:00:00 UTC") + 17 * 3600);
         }
-        return $this->db->all(
-            "SELECT v.kho_id, w.ma AS wh_code, w.ten AS wh_name, COUNT(DISTINCT v.id) AS phieu, SUM(l.so_luong) AS so_luong,
-                    SUM(l.so_luong * COALESCE(l.don_gia, 0)) AS doanh_thu,
-                    SUM(ROUND(l.so_luong * COALESCE(l.don_gia, 0) * l.thue_suat / 100.0)) AS thue,
-                    SUM(l.so_luong * l.gia_von) AS gia_von
-             FROM phieu_nhap_xuat v JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = v.id JOIN kho w ON w.id = v.kho_id
-             WHERE v.loai = 'ISSUE' AND v.trang_thai = 'CONFIRMED' AND v.kho_id IN ($in)
-               AND NOT EXISTS (SELECT 1 FROM phieu_nhap_xuat a WHERE a.dieu_chinh_cho_id = v.id)$time
-             GROUP BY v.kho_id, w.ma, w.ten ORDER BY w.ma",
-            $args
-        );
+        return $time;
     }
 
     private function reason(string $reason): string

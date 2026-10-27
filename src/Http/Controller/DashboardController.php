@@ -27,10 +27,10 @@ final class DashboardController extends Controller
         return new Response(json_encode(['badges' => (object)$this->badges->for($user), 'news' => (object)$this->changes->counts($user), 'notifications' => $this->notifications->all($user)]), 200, ['Content-Type' => 'application/json; charset=utf-8']);
     }
 
-    /** Quản trị đóng chuông ⇒ đánh dấu đã xem hoạt động mới. */
+    /** Đóng chuông ⇒ đánh dấu đã xem hoạt động mới. */
     public function notificationsSeen(Request $r, array $p, ?User $user): Response
     {
-        if ($user->isAdmin) {
+        if ($user) {
             $this->notifications->markActivitySeen($user);
         }
         return new Response('{}', 200, ['Content-Type' => 'application/json; charset=utf-8']);

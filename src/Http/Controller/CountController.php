@@ -129,7 +129,7 @@ final class CountController extends Controller
         $id = (int)$p['id'];
         return $this->act(function () use ($user, $id) {
             $res = $this->counts->approve($user, $id);
-            $this->session->flash('ok', $res['already'] ? 'Đợt kiểm kê đã được xác nhận trước đó — không lập thêm phiếu nhập xuất.'
+            $this->session->flash('ok', $res['already'] ? 'Đợt kiểm kê đã được xác nhận trước đó — không lập thêm phiếu.'
                 : ($res['adjusted'] === 0 ? 'Sổ sách khớp thực tế — không cần phiếu điều chỉnh.'
                     : 'Đã lập phiếu điều chỉnh ' . $res['voucher']['ma'] . ' (' . $res['adjusted'] . ' dòng, chênh lệch ròng ' . signed($res['net']) . ').'));
         }, '', "/counts/$id");

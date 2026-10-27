@@ -8,7 +8,7 @@
   <div><b><?= $ok ? 'KHỚP — tồn đối chiếu được với sổ phát sinh' : 'LỆCH — ' . n($res['mismatches']) . ' điểm không khớp' ?></b><br><span class="muted">Đã kiểm tra <?= n($res['checked']) ?> vị trí (kho · hàng · lô).</span></div>
 </div>
 <?php if ($res['voucher_mismatches']): ?>
-<section class="card flush"><div class="card-head pad"><h2>Dòng phiếu nhập xuất không khớp sổ</h2></div><div class="table-wrap"><table class="dense"><thead><tr><th>Phiếu nhập xuất</th><th>Dòng</th><th class="num">SL phiếu</th><th class="num">Sổ</th></tr></thead><tbody>
+<section class="card flush"><div class="card-head pad"><h2>Dòng phiếu không khớp sổ</h2></div><div class="table-wrap"><table class="dense"><thead><tr><th>Phiếu</th><th>Dòng</th><th class="num">SL phiếu</th><th class="num">Sổ</th></tr></thead><tbody>
 <?php foreach ($res['voucher_mismatches'] as $m): ?><tr><td><?= e($m['ma']) ?></td><td><?= (int)$m['line_id'] ?></td><td class="num"><?= n($m['so_luong']) ?></td><td class="num"><?= $m['bien_dong'] === null ? '—' : n($m['bien_dong']) ?></td></tr><?php endforeach; ?>
 </tbody></table></div></section>
 <?php endif; ?>

@@ -93,6 +93,9 @@ final class App
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);
         $r->get('/valuation', [C\ValuationController::class, 'index']);
+        $r->get('/money/in', [C\ValuationController::class, 'moneyIn']);
+        $r->get('/money/out', [C\ValuationController::class, 'moneyOut']);
+        $r->get('/money/profit', [C\ValuationController::class, 'moneyProfit']);
         $r->get('/reports/stock.csv', [C\HistoryController::class, 'exportStock']);
         $r->get('/reports/movements.csv', [C\HistoryController::class, 'exportMovements']);
         $r->get('/reports/reconcile.csv', [C\HistoryController::class, 'exportReconcile']);

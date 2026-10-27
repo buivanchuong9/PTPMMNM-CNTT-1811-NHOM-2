@@ -2,14 +2,12 @@
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Màn chào sau đăng nhập (thùng hàng xếp lên pallet): gỡ khỏi trang khi chạy xong, hoặc khi bấm / nhấn phím để bỏ qua.
+  // Màn chào sau đăng nhập (logo + vòng đỏ, rồi kéo màn lên): không bỏ qua được, gỡ khỏi trang khi chạy xong
   const welcome = document.getElementById('welcome');
   if (welcome) {
     const done = () => welcome.remove();
     welcome.addEventListener('animationend', (e) => { if (e.target === welcome) done(); });
-    welcome.addEventListener('click', done);
-    document.addEventListener('keydown', done, { once: true });
-    setTimeout(done, 4000);
+    setTimeout(done, 4000);   // chốt an toàn nếu trình duyệt không phát animationend
   }
 
   // Nhận hàng điều chuyển: gõ số thực nhận thì hiện ngay «thiếu N»; vượt số trên phiếu thì báo đỏ
@@ -285,7 +283,17 @@
       return wh && stock[wh] ? stock[wh][k] ?? 0 : null; // null: chưa chọn kho
     };
     const lotTag = (i) => (i.lot ? ` <small class="tag tag-muted">Lô ${esc(i.lot)}${i.exp ? ' · HSD ' + esc(i.exp) : ''}</small>` : '');
-    const stockText = (i) => { const s = stockOf(i.k); return s === null ? '' : `Tồn ${vn.format(s)} ${esc(i.unit)}`; };
+    const stockText = (i) => {
+      if (i.k.endsWith(':new')) {   // phiếu nhập hàng theo lô: cộng mọi lô của mặt hàng
+        const wh = whSelect ? whSelect.value : '';
+        if (!wh) return '';
+        const m = stock[wh] || {}, item = i.k.split(':')[0] + ':';
+        const n = Object.entries(m).reduce((a, [k, v]) => (k.startsWith(item) ? a + v : a), 0);
+        return `Tồn ${vn.format(n)} ${esc(i.unit)} · ${(i.lots || []).length} lô`;
+      }
+      const s = stockOf(i.k);
+      return s === null ? '' : `Tồn ${vn.format(s)} ${esc(i.unit)}`;
+    };
 
     const open = (on) => { list.hidden = !on; search.setAttribute('aria-expanded', on ? 'true' : 'false'); };
     const render = () => {
@@ -311,15 +319,45 @@
     };
     window.addEventListener('resize', () => { if (!list.hidden) fit(); });
 
+    // Phiếu nhập hàng theo lô: dòng có khoá «hàng:new» còn tồn lưu theo «hàng:lô» ⇒ tra theo lô đang chọn / đang gõ.
+    // Lô đã có ⇒ tồn của lô đó; lô mới ⇒ 0; chưa ghi lô ⇒ tổng tồn mọi lô của mặt hàng.
+    const rowStock = (tr) => {
+      if (!tr.dataset.k.endsWith(':new')) return stockOf(tr.dataset.k);
+      const wh = whSelect ? whSelect.value : '';
+      if (!wh) return null;
+      const m = stock[wh] || {}, item = tr.dataset.k.split(':')[0] + ':';
+      const lotNo = (tr.querySelector('input[name="lot_no[]"]')?.value || '').trim().toUpperCase();
+      const opt = [...(tr.querySelector('.lot-existing')?.options || [])].find((o) => o.value && o.value.toUpperCase() === lotNo);
+      if (opt) return m[opt.dataset.k] ?? 0;
+      if (lotNo) return 0;
+      return itemTotal(tr);
+    };
+    const itemTotal = (tr) => {   // tổng tồn mọi lô của mặt hàng ở kho đang chọn
+      const m = stock[whSelect ? whSelect.value : ''] || {}, item = tr.dataset.k.split(':')[0] + ':';
+      return Object.entries(m).reduce((a, [k, v]) => (k.startsWith(item) ? a + v : a), 0);
+    };
+    // Dòng nhập hàng theo lô: ghi «còn N» vào từng lô trong ô chọn, cột tồn hiện số của lô đang chọn + tổng mọi lô
+    const showLotStock = (tr, s, cell) => {
+      const wh = whSelect ? whSelect.value : '';
+      const m = stock[wh] || {}, total = itemTotal(tr), sel = tr.querySelector('.lot-existing');
+      if (sel) {
+        [...sel.options].forEach((o) => { o.textContent = o.value ? `${o.dataset.label} · còn ${vn.format(m[o.dataset.k] ?? 0)}` : (wh ? `Chọn lô có sẵn… (tổng ${vn.format(total)})` : 'Chọn lô có sẵn…'); });
+      }
+      const lotNo = (tr.querySelector('input[name="lot_no[]"]')?.value || '').trim();
+      if (s === null) cell.textContent = '—';
+      else if (!lotNo) cell.innerHTML = `<b>${vn.format(total)}</b><small class="stock-sub">tổng các lô</small>`;
+      else cell.innerHTML = `<b>${vn.format(s)}</b><small class="stock-sub">${s === 0 && !sel?.value ? 'lô mới' : 'lô ' + esc(lotNo)}</small><small class="stock-sub">tổng các lô ${vn.format(total)}</small>`;
+    };
     const refresh = () => {
       const trs = [...body.rows];
       let total = 0;
       trs.forEach((tr) => {
         const raw = tr.querySelector('input[data-qty]').value.trim();
-        const s = stockOf(tr.dataset.k), cell = tr.querySelector('.stock-cell'), err = tr.querySelector('.row-err');
+        const s = rowStock(tr), cell = tr.querySelector('.stock-cell'), err = tr.querySelector('.row-err');
         const qty = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
         total += qty;
-        cell.textContent = s === null ? '—' : vn.format(s);
+        if (tr.dataset.k.endsWith(':new')) showLotStock(tr, s, cell);
+        else cell.textContent = s === null ? '—' : vn.format(s);
         let msg = '';
         if (raw === '' && tr._alloc && !picker._submitting) msg = '';   // dòng chọn lô còn trống: nhắc nhẹ, không tô đỏ
         else if (!/^\d+$/.test(raw) || qty < 1) msg = raw.startsWith('-') ? 'Không được nhập số âm' : 'Số lượng phải là số nguyên dương';
@@ -367,7 +405,7 @@
         const lotCells = !picker.dataset.newlots ? '' : (newLot
           ? '<div class="lot-in">'
             + ((i.lots || []).length ? '<label><small>Lô có sẵn</small><select class="lot-existing" aria-label="Chọn lô có sẵn"><option value="">Chọn lô có sẵn…</option>'
-              + i.lots.map((l) => `<option value="${esc(l.lot)}" data-iso="${esc(l.iso || '')}">${esc(l.lot)}${l.exp ? ' · HSD ' + esc(l.exp) : ''}</option>`).join('') + '</select></label>' : '')
+              + i.lots.map((l) => { const lb = esc(l.lot) + (l.exp ? ' · HSD ' + esc(l.exp) : ''); return `<option value="${esc(l.lot)}" data-k="${esc(l.k || '')}" data-iso="${esc(l.iso || '')}" data-label="${lb}">${lb}</option>`; }).join('') + '</select></label>' : '')
             + '<label><small>Số lô</small><input type="text" name="lot_no[]" required maxlength="40" pattern="[A-Za-z0-9._\\-]{1,40}" placeholder="VD: L2611A" autocomplete="off" aria-label="Số lô"></label>'
             + '<label><small>Hạn dùng (ghi trên hàng)</small><input type="date" name="exp[]" required aria-label="Hạn dùng"></label></div>'
           : '<input type="hidden" name="lot_no[]" value=""><input type="hidden" name="exp[]" value="">');
@@ -428,6 +466,7 @@
         const tr = pre.closest('tr'), opt = pre.selectedOptions[0];
         tr.querySelector('input[name="lot_no[]"]').value = pre.value;
         tr.querySelector('input[name="exp[]"]').value = pre.value ? (opt.dataset.iso || '') : '';
+        refresh();   // cột «Tồn tại kho» đổi theo lô vừa chọn
         return;
       }
       const cb = ev.target.closest('.lot-chip input');
@@ -648,11 +687,17 @@
   };
 
   // Hộp thoại (<dialog>): nút [data-dialog-open] mở form; điền sẵn kho từ data-wh / data-wh-label
+  // Giữ phần đang nhập dở: lỡ bấm ra ngoài / Esc / ✕ chỉ ẩn hộp; mở lại đúng hộp đó (cùng nút, cùng dòng) thì còn nguyên.
+  // Chỉ nút «Huỷ» hoặc gửi form mới xoá; mở cho dòng khác thì điền mới như thường.
+  const draftKey = (open) => JSON.stringify(open.dataset);   // mọi data-* của nút mở (fill, lots, hist…) ⇒ khác dòng là khác khoá
+  document.addEventListener('submit', (ev) => { const dlg = ev.target.closest('dialog'); if (dlg) dlg._draft = null; }, true);
   document.addEventListener('click', (ev) => {
     const open = ev.target.closest('[data-dialog-open]');
     if (open) {
       const dlg = document.getElementById(open.dataset.dialogOpen);
+      if (dlg && dlg.showModal && dlg._draft && dlg._draft === draftKey(open)) { dlg.showModal(); return; }
       if (dlg && dlg.showModal) {
+        dlg._draft = draftKey(open);
         const wh = dlg.querySelector('[name=warehouse_id]');
         if (wh && open.dataset.wh !== undefined) wh.value = open.dataset.wh;   // nút không khai báo data-wh (VD «Mở đợt kiểm kê») giữ nguyên kho cố định của tài khoản
         const label = dlg.querySelector('[data-dlg-wh]');
@@ -681,7 +726,13 @@
       }
       return;
     }
-    if (ev.target.closest('[data-dialog-close]')) { ev.target.closest('dialog')?.close(); return; }
+    const shut = ev.target.closest('[data-dialog-close]');
+    if (shut) {
+      const dlg = shut.closest('dialog');
+      if (dlg && shut.getAttribute('aria-label') !== 'Đóng') dlg._draft = null;   // ✕ (aria-label «Đóng») chỉ ẩn; «Huỷ» thì bỏ phần nhập dở
+      dlg?.close();
+      return;
+    }
     if (ev.target instanceof HTMLDialogElement) ev.target.close(); // bấm ra ngoài hộp thoại
   });
 
@@ -802,15 +853,15 @@
     let box = link.querySelector('.nav-pills'), b = box?.querySelector('.' + cls);
     const text = !n || n < 1 ? '' : (cls === 'nav-new' ? '+' + (n > 99 ? 99 : n) : String(n));
     if (!text) { b?.remove(); if (box && !box.children.length) box.remove(); return; }
-    if (!box) { box = document.createElement('span'); box.className = 'nav-pills'; link.appendChild(box); }
+    if (!box) { box = document.createElement('span'); box.className = 'nav-pills'; link.insertBefore(box, link.querySelector('.nav-caret')); }   // số đứng trước mũi tên ▾ (nếu có)
     if (!b) { b = document.createElement('b'); b.className = cls; b.title = cls === 'nav-new' ? 'Thay đổi mới' : 'Cần xử lý'; cls === 'nav-new' ? box.prepend(b) : box.appendChild(b); }
     if (b.textContent !== text) { b.textContent = text; b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
   };
   const setNavBadge = (link, n, news) => { setNavPill(link, 'nav-badge', n); setNavPill(link, 'nav-new', news); };
   // Chuông thông báo: bấm để mở danh sách, bấm một dòng để sang đúng trang cần làm; danh sách do /api/badges làm tươi.
-  // Quản trị còn có «Hoạt động mới của các kho»: đóng chuông ⇒ coi như đã xem, số trên chuông về 0.
+  // «Hoạt động mới» (quản trị: mọi kho; tài khoản kho: kho mình): đóng chuông ⇒ coi như đã xem, số trên chuông về 0.
   const notifRoot = () => document.querySelector('[data-notif]');
-  let notifNew = 0;   // số hoạt động mới chưa xem (quản trị)
+  let notifNew = 0;   // số hoạt động mới chưa xem
   const renderNotifs = (data) => {
     const root = notifRoot();
     if (!root || !data) return;
@@ -821,10 +872,15 @@
     const text = total > 99 ? '99+' : String(total);
     badge.hidden = total === 0;
     if (badge.textContent !== text) { badge.textContent = text; badge.classList.remove('bump'); void badge.offsetWidth; badge.classList.add('bump'); }
+    // hai cột: trái «Hoạt động mới», phải «Việc cần làm» (việc gấp đã được xếp lên trước)
+    const acts = act.list || [];
+    root.querySelector('[data-notif-activity]').innerHTML = acts.map((x) => `<li><a href="${esc(x.href)}" class="notif-item${x.fresh ? ' fresh' : ''}"><i class="notif-dot" aria-hidden="true"></i><span><b>${esc(x.who)}</b><small>${esc(x.text)}</small></span><em class="when">${esc(x.at)}</em></a></li>`).join('');
     root.querySelector('[data-notif-list]').innerHTML = tasks.map((x) => `<li><a href="${esc(x.href)}" class="notif-item tone-${esc(x.tone)}"><i class="notif-dot" aria-hidden="true"></i><span><b>${esc(x.title)}</b><small>${esc(x.note)}</small></span><em>${vn.format(x.count)}</em></a></li>`).join('');
-    root.querySelector('[data-notif-activity]').innerHTML = (act.list || []).map((x) => `<li><a href="${esc(x.href)}" class="notif-item${x.fresh ? ' fresh' : ''}"><i class="notif-dot" aria-hidden="true"></i><span><b>${esc(x.who)}</b><small>${esc(x.text)}</small></span><em class="when">${esc(x.at)}</em></a></li>`).join('');
-    root.querySelector('[data-notif-activity-head]').hidden = !(act.list || []).length;
-    root.querySelector('[data-notif-empty]').hidden = tasks.length > 0 || (act.list || []).length > 0;
+    const head = (k, n) => { const el = root.querySelector(`[data-notif-n="${k}"]`); el.hidden = !n; el.textContent = vn.format(n); };
+    head('act', notifNew);
+    head('tasks', tasks.reduce((s, x) => s + (x.count || 0), 0));
+    root.querySelector('[data-notif-empty="act"]').hidden = acts.length > 0;
+    root.querySelector('[data-notif-empty="tasks"]').hidden = tasks.length > 0;
   };
   const closeNotif = () => {
     const root = notifRoot();
@@ -833,7 +889,7 @@
     if (pop.hidden) return;
     pop.hidden = true;
     root.querySelector('[data-notif-toggle]').setAttribute('aria-expanded', 'false');
-    if (notifNew > 0 && window.fetch) {   // đã xem hoạt động mới ⇒ dời mốc «đã xem» (chỉ quản trị có hoạt động mới)
+    if (notifNew > 0 && window.fetch) {   // đã xem hoạt động mới ⇒ dời mốc «đã xem»
       const fd = new FormData();
       fd.set('csrf', document.querySelector('input[name="csrf"]')?.value || '');
       fetch('/api/notifications/seen', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).then(() => window.refreshBadges && window.refreshBadges(true)).catch(() => {});
@@ -855,6 +911,26 @@
     }
   });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeNotif(); });
+  // Menu có mục con: bấm mũi tên ▾ chỉ gập / mở nhánh, không chuyển trang
+  document.addEventListener('click', (ev) => {
+    const caret = ev.target.closest('[data-nav-caret]');
+    if (!caret) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    caret.closest('[data-nav-tree]').classList.toggle('open');
+  }, true);
+  // Khung tài khoản: bấm ảnh đại diện để mở / đóng; bấm ra ngoài hoặc Esc thì đóng
+  const setAcct = (open) => {
+    const root = document.querySelector('[data-acct]');
+    if (!root) return;
+    root.querySelector('[data-acct-pop]').hidden = !open;
+    root.querySelector('[data-acct-toggle]').setAttribute('aria-expanded', String(open));
+  };
+  document.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-acct-toggle]')) setAcct(document.querySelector('[data-acct-pop]').hidden);
+    else if (!ev.target.closest('[data-acct-pop]') || ev.target.closest('a')) setAcct(false);
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') setAcct(false); });
 
   // Tự làm tươi số nhỏ: mỗi 30 giây và mỗi lần quay lại thẻ trình duyệt — thấy ngay khi người khác lập / xác nhận / huỷ phiếu
   if (document.querySelector('.sidebar nav a[data-nav]') && window.fetch) {
@@ -875,31 +951,18 @@
     window.refreshBadges = refreshBadges;
   }
 
-  // Bảng rộng hơn màn hình: hai dải ‹ › chạy dọc hai mép bảng (từ đầu đến cuối danh sách), di chuột tới mép thì hiện ra, bấm là bảng trượt sang bên kia
+  // Bảng rộng hơn màn hình: lăn chuột dọc khi trỏ trong bảng ⇒ bảng trượt ngang; hết mép trái/phải thì trả lại cho trang cuộn dọc
   const initHScroll = () => {
     document.querySelectorAll('.table-wrap').forEach((wrap) => {
-      if (wrap.dataset.hs || wrap.closest('dialog') || !wrap.parentElement) return;
+      if (wrap.dataset.hs || wrap.closest('dialog')) return;
       wrap.dataset.hs = '1';
-      const nav = document.createElement('div');
-      nav.className = 'hscroll';
-      nav.innerHTML = '<button type="button" class="hs-btn hs-left" aria-label="Kéo bảng sang trái" title="Kéo sang trái"><span>‹</span></button><button type="button" class="hs-btn hs-right" aria-label="Kéo bảng sang phải" title="Kéo sang phải"><span>›</span></button>';
-      wrap.parentElement.classList.add('hs-host');
-      wrap.parentElement.insertBefore(nav, wrap);
-      const left = nav.querySelector('.hs-left'), right = nav.querySelector('.hs-right');
-      const sync = () => {
+      wrap.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // phóng to, hoặc touchpad đã cuộn ngang sẵn
         const max = wrap.scrollWidth - wrap.clientWidth;
-        nav.hidden = max <= 4;
-        Object.assign(nav.style, { top: wrap.offsetTop + 'px', left: wrap.offsetLeft + 'px', width: wrap.offsetWidth + 'px', height: wrap.offsetHeight + 'px' });   // phủ đúng khung bảng
-        left.hidden = wrap.scrollLeft <= 4;
-        right.hidden = wrap.scrollLeft >= max - 4;
-      };
-      const go = (dir) => wrap.scrollBy({ left: dir * Math.max(240, wrap.clientWidth * 0.75), behavior: 'smooth' });
-      left.addEventListener('click', () => go(-1));
-      right.addEventListener('click', () => go(1));
-      wrap.addEventListener('scroll', sync, { passive: true });
-      window.addEventListener('resize', sync);
-      new ResizeObserver(sync).observe(wrap);
-      sync();
+        if (max <= 4 || (e.deltaY < 0 && wrap.scrollLeft <= 0) || (e.deltaY > 0 && wrap.scrollLeft >= max - 1)) return;
+        e.preventDefault();
+        wrap.scrollLeft += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;   // deltaMode 1: Firefox tính theo dòng
+      }, { passive: false });
     });
   };
   // Thanh danh mục dài: hai mũi tên nằm TRONG thanh, cùng hàng với các tab (trái ‹ · phải ›); mỗi lần bấm trượt khoảng 75% chiều rộng
@@ -926,9 +989,57 @@
       sync();
     });
   };
-  new MutationObserver(() => { initHScroll(); initTabScroll(); }).observe(document.body, { childList: true, subtree: true });
+  // Cuộn xuống quá đầu bảng: một bản sao hàng tên cột ghim ngay dưới thanh trên cùng (như Freeze Panes của Excel).
+  // Không dùng position: sticky được vì .table-wrap cuộn ngang nên sticky chỉ bám trong khung bảng.
+  const heads = new Set();
+  let headRaf = 0;
+  const placeHeads = () => { headRaf = 0; heads.forEach((f) => f()); };
+  const queueHeads = () => { if (!headRaf) headRaf = requestAnimationFrame(placeHeads); };
+  const initStickyHead = () => {
+    document.querySelectorAll('.table-wrap').forEach((wrap) => {
+      const table = wrap.querySelector(':scope > table');
+      if (wrap.dataset.sh || wrap.closest('dialog') || !table || !table.tHead) return;
+      wrap.dataset.sh = '1';
+      const box = document.createElement('div');
+      box.className = 'float-head';
+      box.hidden = true;
+      box.inert = true;
+      box.setAttribute('aria-hidden', 'true');
+      const clone = table.cloneNode(false);
+      clone.removeAttribute('id');
+      box.appendChild(clone);
+      document.body.appendChild(box);
+      let sized = 0;   // độ rộng bảng lần đo cột gần nhất; đổi thì đo lại
+      const place = () => {
+        if (!wrap.isConnected) { box.remove(); heads.delete(place); return; }
+        const bar = document.querySelector('.topbar');
+        const top = Math.max(bar ? bar.getBoundingClientRect().bottom : 0, 0);
+        const r = wrap.getBoundingClientRect(), hh = table.tHead.offsetHeight;
+        const show = wrap.offsetParent !== null && r.top < top && r.bottom - hh * 2 > top;
+        box.hidden = !show;
+        if (!show) return;
+        if (sized !== table.offsetWidth || !clone.tHead) {   // chép lại hàng tiêu đề + độ rộng từng cột
+          sized = table.offsetWidth;
+          clone.replaceChildren(table.tHead.cloneNode(true));
+          clone.style.width = sized + 'px';
+          const src = table.tHead.querySelectorAll('th, td'), dst = clone.tHead.querySelectorAll('th, td');
+          src.forEach((c, i) => { const w = c.getBoundingClientRect().width + 'px'; Object.assign(dst[i].style, { width: w, minWidth: w, maxWidth: w }); });
+        }
+        Object.assign(box.style, { top: top + 'px', left: r.left + 'px', width: wrap.clientWidth + 'px' });
+        box.scrollLeft = wrap.scrollLeft;
+      };
+      heads.add(place);
+      wrap.addEventListener('scroll', queueHeads, { passive: true });
+      new ResizeObserver(() => { sized = 0; queueHeads(); }).observe(table);
+      queueHeads();
+    });
+  };
+  document.addEventListener('scroll', queueHeads, { capture: true, passive: true });   // capture: bắt cả khi <main> là khung cuộn
+  window.addEventListener('resize', queueHeads);
 
-  const initPage = (swapped) => { initHScroll(); initTabScroll(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
+  new MutationObserver(() => { initHScroll(); initTabScroll(); initStickyHead(); queueHeads(); }).observe(document.body, { childList: true, subtree: true });
+
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
@@ -956,9 +1067,11 @@
             if (a.classList.contains('active') !== on) a.classList.toggle('active', on);
             if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
           });
+          const trees = nav.querySelectorAll('[data-nav-tree]'), fresh = freshNav.querySelectorAll('[data-nav-tree]');
+          trees.forEach((t, i) => { if (fresh[i]?.classList.contains('open')) t.classList.add('open'); });   // sang trang con / trang cha ⇒ mở nhánh (không tự gập)
         } else nav.innerHTML = freshNav.innerHTML;                                   // quyền đổi nên menu đổi: thay cả khối
       }
-      ['.topuser .who', '.topuser .avatar'].forEach((q) => { const a = document.querySelector(q), b = doc.querySelector(q); if (a && b && a.outerHTML !== b.outerHTML) a.replaceWith(document.importNode(b, true)); });
+      ['.topuser [data-acct]'].forEach((q) => { const a = document.querySelector(q), b = doc.querySelector(q); if (a && b && a.outerHTML !== b.outerHTML) a.replaceWith(document.importNode(b, true)); });
       document.body.classList.toggle('compact', doc.body.classList.contains('compact'));
       document.getElementById('notice-dlg')?.remove();                               // thông báo kết quả thao tác nằm ngoài <main>
       const nd = doc.getElementById('notice-dlg');

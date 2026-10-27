@@ -4,9 +4,13 @@ $draft = $v['trang_thai'] === 'DRAFT';
 $cancelled = $v['trang_thai'] === 'CANCELLED';
 if ($isXfer) {   // hành trình hàng điều chuyển: lập → xuất kho đi (trừ kho đi) → kho đến nhận (cộng kho đến)
     $recvAt = $v['loai'] === 'TRANSFER_IN' ? ($v['trang_thai'] === 'CONFIRMED' ? [$v['ngay_xac_nhan'], $v['approver_name']] : [null, null]) : [null, null];
+    // kho nằm ngay dưới bước của nó: kho đi dưới «Xuất kho đi», kho đến dưới «Kho đến nhận»
+    $here = [$v['wh_code'], $v['wh_name']];
+    $there = [$v['cp_code'], $v['cp_name']];
+    [$fromWh, $toWh] = $v['loai'] === 'TRANSFER_OUT' ? [$here, $there] : [$there, $here];
     $steps = $v['loai'] === 'TRANSFER_OUT'
-        ? [['Lập phiếu', $v['ngay_tao'], $v['creator_name']], ['Xuất kho đi', $v['ngay_xac_nhan'], $v['approver_name']], ['Kho đến nhận', null, null]]
-        : [['Xuất kho đi', $v['ngay_tao'], $v['creator_name']], ['Đang vận chuyển', null, null], ['Kho đến nhận', $recvAt[0], $recvAt[1]]];
+        ? [['Lập phiếu', $v['ngay_tao'], $v['creator_name']], ['Xuất kho đi', $v['ngay_xac_nhan'], $v['approver_name'], $fromWh], ['Kho đến nhận', null, null, $toWh]]
+        : [['Xuất kho đi', $v['ngay_tao'], $v['creator_name'], $fromWh], ['Đang vận chuyển', null, null], ['Kho đến nhận', $recvAt[0], $recvAt[1], $toWh]];
     $stage = match (true) {
         $cancelled => -1,
         $v['loai'] === 'TRANSFER_OUT' => $draft ? 1 : (($v['pair_status'] ?? '') === 'CONFIRMED' ? 3 : 2),
@@ -42,11 +46,11 @@ $cancelEntry = null;
 foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)) { $cancelEntry = $a; } }
 ?>
 <header class="page-head vhead">
-  <div><p class="crumb"><a href="/vouchers">← Phiếu nhập xuất</a></p>
-    <h1><?= e($v['ma']) ?> <?= voucher_status_tag($v) ?> <?= type_chip($v['loai']) ?></h1>
-    <p class="muted"><span class="wh-code"><?= e($v['wh_code']) ?></span> <?= e($v['wh_name']) ?>
+  <div><p class="crumb"><a href="/vouchers">← Phiếu</a></p>
+    <h1><?php [$typeLabel, $typeTone] = TYPE_LABELS[$v['loai']] ?? [$v['loai'], 'adj']; ?><span class="type-big type-<?= e($typeTone) ?>"><?= icon(['in' => 'in', 'out' => 'out', 'xfer' => 'truck'][$typeTone] ?? 'scale') ?><?= e($typeLabel) ?></span> <?= e($v['ma']) ?> <?= voucher_status_tag($v) ?></h1>
+    <p class="muted"><?php if (!$isXfer || $stage < 0): ?><span class="wh-code"><?= e($v['wh_code']) ?></span> <?= e($v['wh_name']) ?>
       <?php if ($v['cp_code']): ?> <span class="arrow"><?= $v['loai'] === 'TRANSFER_IN' ? '←' : '→' ?></span> <span class="wh-code"><?= e($v['cp_code']) ?></span> <?= e($v['cp_name']) ?><?php endif; ?>
-      · <?= e(dt($v['ngay_tao'])) ?></p></div>
+      · <?php endif; ?><?= e(dt($v['ngay_tao'])) ?></p></div>
   <?php if ($v['trang_thai'] === 'CONFIRMED' && $v['loai'] !== 'ADJUSTMENT'): ?>
   <div class="actions"><a class="btn" href="/vouchers/<?= (int)$v['id'] ?>/print" target="_blank" rel="noopener"><?= icon('printer') ?>In phiếu</a></div>
   <?php endif; ?>
@@ -63,10 +67,10 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
 </header>
 
 <?php if ($stage >= 0): ?>
-<ol class="flow" aria-label="Tiến trình phiếu nhập xuất">
-  <?php foreach ($steps as $i => [$label, $at, $by]): $cls = $i < $stage ? 'done' : ($i === $stage ? 'current' : ''); ?>
-  <li class="<?= $cls ?>"><span class="dot"><?= $i < $stage ? icon('check') : $i + 1 ?></span>
-    <span><b><?= e($label) ?></b><?php if ($at): ?><small><?= e(dt_short($at)) ?> · <?= e($by) ?></small><?php elseif ($i === $stage): ?><small>đang chờ</small><?php endif; ?></span></li>
+<ol class="flow" aria-label="Tiến trình phiếu">
+  <?php foreach ($steps as $i => $step): [$label, $at, $by] = $step; $sw = $step[3] ?? null; $cls = $i < $stage ? 'done' : ($i === $stage ? 'current' : ''); ?>
+  <li class="<?= $cls ?>" style="--i:<?= $i ?>"<?= $by ? ' title="' . e($by) . '"' : '' ?>><span class="dot"><?= $i < $stage ? icon('check') : $i + 1 ?></span>
+    <span><b><?= e($label) ?></b><?php if ($sw && $sw[0]): ?><span class="flow-wh"><span class="wh-code"><?= e($sw[0]) ?></span><small><?= e($sw[1]) ?></small></span><?php endif; ?><?php if ($at): ?><small><?= e(dt_short($at)) ?></small><?php elseif ($i === $stage): ?><small>Đang chờ</small><?php endif; ?></span></li>
   <?php endforeach; ?>
 </ol>
 <?php else: ?>

@@ -72,7 +72,7 @@ final class VoucherController extends Controller
             'counts' => $this->repo->statusCounts($scope),
             'type' => $type, 'status' => $status, 'q' => $q, 'wh' => $wh,
             'warehouses' => $this->warehouseRows($ids),
-        ], 'Phiếu nhập xuất');
+        ], 'Phiếu');
     }
 
     public function create(Request $r, array $p, ?User $user): Response
@@ -143,7 +143,7 @@ final class VoucherController extends Controller
                 $this->session->flash('ok', 'Đã lưu «' . $r->str('partner') . '» vào danh sách khách hàng.');
             }
             if (!$res['created']) {
-                $this->session->flash('ok', 'Yêu cầu này đã được ghi nhận trước đó — không tạo thêm phiếu nhập xuất.');
+                $this->session->flash('ok', 'Yêu cầu này đã được ghi nhận trước đó — không tạo thêm phiếu.');
             }
             return '/vouchers/' . $res['voucher']['id'];
         }, 'Đã lập phiếu nháp. Kiểm tra rồi bấm Xác nhận để ghi sổ.', '/vouchers/new?type=' . $type->value);
@@ -287,7 +287,7 @@ final class VoucherController extends Controller
                 $res = $this->vouchers->confirm($user, $id);
             }
             if ($res['already']) {
-                $this->session->flash('ok', 'Phiếu nhập xuất đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
+                $this->session->flash('ok', 'Phiếu đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
                 return null;
             }
             return "/vouchers/$id/print?fresh=1";   // vừa ghi sổ ⇒ mở luôn phiếu để in và ký
