@@ -194,7 +194,7 @@ $issues = count($missing);
           <?php elseif ($t['trang_thai'] === 'DELIVERED'): ?><span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế</span>
           <?php elseif ($t['sai_lech'] !== ''): ?><span class="tag tag-danger">Chưa nhận được hàng</span><br><small><?= e(preg_replace('/^Chưa nhận được hàng: /u', '', $t['sai_lech'])) ?></small>
           <?php else: ?><span class="muted">Chưa nhận</span><?php endif; ?></td>
-        <td><?= $t['trang_thai'] === 'LOST' ? '<span class="tag tag-danger">Đã mất hàng</span>' : ($t['trang_thai'] === 'DELIVERED' ? ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Đã giao — thiếu hàng</span>' : '<span class="tag tag-ok">Đã giao</span>') : ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Chưa thấy hàng</span>' : '<span class="tag tag-info">Đang vận chuyển</span>')) ?></td>
+        <td><?= $t['trang_thai'] === 'RECALLED' ? '<span class="tag tag-warn">Đã thu hồi</span>' : ($t['trang_thai'] === 'LOST' ? '<span class="tag tag-danger">Đã mất hàng</span>' : ($t['trang_thai'] === 'DELIVERED' ? ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Đã giao — thiếu hàng</span>' : '<span class="tag tag-ok">Đã giao</span>') : ($t['sai_lech'] !== '' ? '<span class="tag tag-warn">Chưa thấy hàng</span>' : '<span class="tag tag-info">Đang vận chuyển</span>'))) ?></td>
       </tr>
     <?php endforeach; if (!$trips): ?><tr><td colspan="7" class="empty"><?= $filtered ? 'Không có chuyến nào khớp bộ lọc.' : 'Chưa có chuyến điều chuyển nào có thông tin xe.' ?></td></tr><?php endif; ?>
     </tbody></table></div>

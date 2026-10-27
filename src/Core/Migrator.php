@@ -95,7 +95,7 @@ final class Migrator
         $this->ensureBarcodeIndex();
         $this->backfillDriverWarehouses();
         if ($this->widenTripStatus()) {
-            $log[] = '✔ Đã thêm trạng thái LOST cho chuyen_van_chuyen.trang_thai';
+            $log[] = '✔ Đã thêm trạng thái LOST, RECALLED cho chuyen_van_chuyen.trang_thai';
         }
         if ($n = $this->moveDefaultPrices()) {
             $log[] = "✔ Đã chuyển giá bán mặc định cũ thành giá riêng của $n dòng (kho × mặt hàng)";
@@ -140,17 +140,17 @@ final class Migrator
                         WHERE kho_id IS NULL AND EXISTS (SELECT 1 FROM chuyen_van_chuyen c WHERE c.tai_xe_id = tai_xe.id)');
     }
 
-    /** MySQL: bảng chuyến cũ chưa có trạng thái LOST (mất hàng) ⇒ mở rộng enum tại chỗ. SQLite chỉ dựng đúng từ đầu (CHECK không sửa được). */
+    /** MySQL: bảng chuyến cũ chưa có trạng thái LOST (mất hàng) / RECALLED (thu hồi chuyến) ⇒ mở rộng enum tại chỗ. SQLite chỉ dựng đúng từ đầu (CHECK không sửa được). */
     private function widenTripStatus(): bool
     {
         if ($this->db->isSqlite()) {
             return false;
         }
         $type = (string)$this->db->value("SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'chuyen_van_chuyen' AND column_name = 'trang_thai'");
-        if ($type === '' || str_contains($type, 'LOST')) {
+        if ($type === '' || str_contains($type, 'RECALLED')) {
             return false;
         }
-        $this->db->raw("ALTER TABLE chuyen_van_chuyen MODIFY trang_thai enum('IN_TRANSIT','DELIVERED','LOST') NOT NULL DEFAULT 'IN_TRANSIT'");
+        $this->db->raw("ALTER TABLE chuyen_van_chuyen MODIFY trang_thai enum('IN_TRANSIT','DELIVERED','LOST','RECALLED') NOT NULL DEFAULT 'IN_TRANSIT'");
         return true;
     }
 

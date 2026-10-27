@@ -608,6 +608,7 @@
     dlg.showModal();
     no.focus();   // mặc định focus «Huỷ bỏ» để Enter không vô tình xác nhận thao tác nguy hiểm
   });
+  document.addEventListener('click', (ev) => { if (ev.target.closest('[data-print]')) window.print(); });
   document.addEventListener('click', (ev) => {
     const el = ev.target.closest('[data-confirm]');
     if (!el) return;
@@ -874,19 +875,21 @@
     window.refreshBadges = refreshBadges;
   }
 
-  // Bảng rộng hơn màn hình: hai nút ‹ › nổi giữa màn hình, bấm là bảng tự trượt sang bên kia (không phải lướt xuống tìm thanh cuộn)
+  // Bảng rộng hơn màn hình: hai dải ‹ › chạy dọc hai mép bảng (từ đầu đến cuối danh sách), di chuột tới mép thì hiện ra, bấm là bảng trượt sang bên kia
   const initHScroll = () => {
     document.querySelectorAll('.table-wrap').forEach((wrap) => {
       if (wrap.dataset.hs || wrap.closest('dialog') || !wrap.parentElement) return;
       wrap.dataset.hs = '1';
       const nav = document.createElement('div');
       nav.className = 'hscroll';
-      nav.innerHTML = '<button type="button" class="hs-btn hs-left" aria-label="Kéo bảng sang trái" title="Kéo sang trái">‹</button><button type="button" class="hs-btn hs-right" aria-label="Kéo bảng sang phải" title="Kéo sang phải">›</button>';
+      nav.innerHTML = '<button type="button" class="hs-btn hs-left" aria-label="Kéo bảng sang trái" title="Kéo sang trái"><span>‹</span></button><button type="button" class="hs-btn hs-right" aria-label="Kéo bảng sang phải" title="Kéo sang phải"><span>›</span></button>';
+      wrap.parentElement.classList.add('hs-host');
       wrap.parentElement.insertBefore(nav, wrap);
       const left = nav.querySelector('.hs-left'), right = nav.querySelector('.hs-right');
       const sync = () => {
         const max = wrap.scrollWidth - wrap.clientWidth;
         nav.hidden = max <= 4;
+        Object.assign(nav.style, { top: wrap.offsetTop + 'px', left: wrap.offsetLeft + 'px', width: wrap.offsetWidth + 'px', height: wrap.offsetHeight + 'px' });   // phủ đúng khung bảng
         left.hidden = wrap.scrollLeft <= 4;
         right.hidden = wrap.scrollLeft >= max - 4;
       };

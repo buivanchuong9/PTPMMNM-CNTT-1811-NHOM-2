@@ -38,6 +38,14 @@ same(pack_label(7, 24), '7 lẻ', 'chưa đủ một kiện');
 same(pack_label(50, 1), '', 'quy cách 1 ⇒ không quy đổi');
 same(pack_label(0, 24), '', 'hết hàng ⇒ không quy đổi');
 
+section('Số tiền bằng chữ (phiếu in)');
+same(vnd_words(4428000), 'Bốn triệu bốn trăm hai mươi tám nghìn đồng', '4.428.000 đ');
+same(vnd_words(1005), 'Một nghìn không trăm lẻ năm đồng', 'lẻ + không trăm khi có nhóm lớn hơn');
+same(vnd_words(21), 'Hai mươi mốt đồng', 'hai mươi mốt');
+same(vnd_words(115), 'Một trăm mười lăm đồng', 'mười lăm');
+same(vnd_words(2000000000), 'Hai tỷ đồng', 'tỷ');
+same(vnd_words(0), 'Không đồng', '0 đồng');
+
 section('User');
 same((new User(1, 'x', 'Hoàng Gia Khánh (giám sát)', AccountRole::Staff, 1))->initials(), 'K', 'chữ cái đầu bỏ phần trong ngoặc');
 finish();

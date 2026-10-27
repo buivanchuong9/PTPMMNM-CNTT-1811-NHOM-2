@@ -73,6 +73,14 @@ foreach ($pages as $p) {
     same($status, 200, "admin GET $p ⇒ 200");
     truthy($noPhpError($body), "admin GET $p: không lộ lỗi PHP");
 }
+// phiếu in để ký: chỉ phiếu đã ghi sổ; phiếu xuất có tiền + bằng chữ + 3 ô ký, điều chuyển có xe / tài xế
+$issuePrint = $f->draftIssue($f->wa, 'x', 1);
+$f->c->get(\StockFlow\Service\VoucherService::class)->confirm($f->approverA, (int)$issuePrint['id']);
+[$st, $pr] = $get("/vouchers/{$issuePrint['id']}/print");
+truthy($st === 200 && $noPhpError($pr) && str_contains($pr, 'Phiếu xuất kho') && str_contains($pr, 'Người nhận hàng') && str_contains($pr, 'data-print'), 'phiếu xuất đã ghi sổ: trang in có tiêu đề, nút in, ô ký người nhận');
+[$st, $pr] = $get("/vouchers/{$xferGo['id']}/print");
+truthy($st === 200 && $noPhpError($pr) && str_contains($pr, 'Tài xế nhận hàng') && str_contains($pr, 'Giá gốc') && !str_contains($pr, 'Thuế GTGT'), 'phiếu điều chuyển đi đã ghi sổ: có ô ký tài xế, ghi giá gốc và tổng giá trị, không có thuế');
+same($get("/vouchers/{$xferDraft['id']}/print")[0], 303, 'phiếu nháp chưa in được ⇒ chuyển về trang phiếu');
 same($get('/items')[0], 303, 'trang «Mặt hàng & lô» cũ chuyển sang «Hàng hoá» (/inventory)');
 [, $dash] = $get('/');
 truthy(str_contains($dash, 'Nhập – xuất theo kho') && str_contains($dash, 'A' . $f->tag) && str_contains($dash, 'B' . $f->tag), 'tổng quan có biểu đồ nhập – xuất theo từng kho');

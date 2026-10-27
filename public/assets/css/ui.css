@@ -542,14 +542,18 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .link-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Nút kéo bảng ngang: nổi giữa màn hình, chỉ hiện khi bảng còn phần bị che */
-.hscroll { position: sticky; top: 45%; height: 0; z-index: 6; pointer-events: none; }
+.hs-host { position: relative; }
+.hscroll { position: absolute; z-index: 6; pointer-events: none; }
 .hscroll[hidden] { display: none; }
-.hs-btn { position: absolute; top: -22px; box-sizing: border-box; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-  font-size: 28px; line-height: 1; padding: 0 0 4px !important; cursor: pointer; pointer-events: auto; box-shadow: 0 8px 22px rgba(17, 24, 39, .28); display: grid; place-items: center; }
-.hs-btn[hidden] { display: none; }
-.hs-btn:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
-.hs-left { left: 8px; }
-.hs-right { right: 8px; }
+.hscroll .hs-btn { all: unset; position: absolute; top: 0; bottom: 0; box-sizing: border-box; width: 44px; display: block; cursor: pointer; pointer-events: auto; opacity: 0; transition: opacity .15s; }
+.hscroll .hs-btn[hidden] { display: none; }
+.hscroll .hs-btn:hover, .hscroll .hs-btn:focus-visible { opacity: 1; box-shadow: none; transform: none; }
+.hscroll .hs-left, .hscroll .hs-left:hover { left: 0; background: linear-gradient(90deg, rgba(17, 24, 39, .06), transparent); }
+.hscroll .hs-right, .hscroll .hs-right:hover { right: 0; background: linear-gradient(270deg, rgba(17, 24, 39, .06), transparent); }
+/* mũi tên luôn nằm giữa phần đang nhìn thấy của dải, kể cả khi danh sách dài phải cuộn xuống */
+.hscroll .hs-btn span { position: sticky; top: 45vh; display: grid; place-items: center; width: 32px; height: 32px; margin: 0 6px; border-radius: 50%; background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted); border: 1px solid var(--line); font-size: 22px; line-height: 1; padding-bottom: 2px; box-sizing: border-box; transition: background .15s, color .15s; }
+.hscroll .hs-btn:hover span { background: var(--surface); color: var(--ink); }
+@media (hover: none) { .hscroll .hs-btn { opacity: .85; } .hscroll .hs-left, .hscroll .hs-right { background: none; } }
 
 /* Mũi tên trượt thanh danh mục: nằm trong thanh, cùng hàng với các tab, luôn tròn đều */
 .ts-btn { flex: none; position: static; box-sizing: border-box; width: 34px; height: 34px; min-width: 34px; min-height: 34px; margin: 0; padding: 0 0 2px !important; border-radius: 50%;
@@ -570,3 +574,13 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .req-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-left: 6px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); vertical-align: middle; text-decoration: none; }
 .req-btn .icon { width: 15px; height: 15px; }
 .req-btn:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+/* Bảng hàng hoá: SKU + Tên hàng dính bên trái khi kéo ngang để xem các kho, kéo lại thì trở về cột */
+.sticky-2 { --c1: 112px; }
+.sticky-2 thead tr:first-child th:nth-child(-n+2), .sticky-2 tbody td:nth-child(-n+2) { position: sticky; left: 0; z-index: 2; background: var(--surface); }
+.sticky-2 thead tr:first-child th:nth-child(-n+2) { z-index: 4; background: var(--panel); }
+.sticky-2 thead tr:first-child th:nth-child(1), .sticky-2 tbody td:nth-child(1) { min-width: var(--c1); width: var(--c1); max-width: var(--c1); }
+.sticky-2 thead tr:first-child th:nth-child(2), .sticky-2 tbody td:nth-child(2) { left: var(--c1); min-width: 210px; max-width: 260px; white-space: normal; box-shadow: 6px 0 8px -6px rgba(17, 24, 39, .22); }
+.sticky-2 tbody tr:hover > td:nth-child(-n+2) { background: var(--panel); }
+.sticky-2 tbody tr.is-new > td:nth-child(-n+2) { background: color-mix(in srgb, var(--info, #0369a1) 9%, var(--surface)); }
+@media (max-width: 700px) { .sticky-2 { --c1: 84px; } .sticky-2 thead tr:first-child th:nth-child(2), .sticky-2 tbody td:nth-child(2) { min-width: 150px; } }
