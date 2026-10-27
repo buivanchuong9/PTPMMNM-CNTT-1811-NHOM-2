@@ -116,6 +116,8 @@ Mật khẩu chung của mọi tài khoản mẫu: **`demo1234`**
 | `migrate` | Tạo hoặc cập nhật bảng (chạy lại an toàn) |
 | `seed [--force]` | Nạp dữ liệu mẫu. Bỏ qua nếu đã có dữ liệu |
 | `setup` | `db-sync` + `seed` (như `update` nhưng không đụng cấu hình và git hook) |
+| `backup` | Xuất toàn bộ dữ liệu ra `database/backup/stockflow-data.json.gz` (commit + push để cả nhóm dùng chung) |
+| `restore [--yes]` | Nạp dữ liệu từ file đó, **ghi đè** dữ liệu máy này (bản cũ tự lưu vào `.local/`) |
 | `serve` | Chạy web tại `http://127.0.0.1:8080` |
 | `test` | Chạy toàn bộ kiểm thử trên CSDL `stockflow_test` |
 
