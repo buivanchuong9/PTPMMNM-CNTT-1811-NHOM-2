@@ -76,7 +76,7 @@ function audit_label(string $action): string
     static $map = [
         'voucher.create' => 'Lập phiếu', 'voucher.confirm' => 'Xác nhận & ghi sổ', 'voucher.cancel' => 'Huỷ phiếu', 'voucher.correct' => 'Lập phiếu điều chỉnh',
         'transfer.create' => 'Lập phiếu điều chuyển', 'transfer.dispatch' => 'Xuất kho đi', 'transfer.vehicle' => 'Chọn xe & tài xế',
-        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.loss' => 'Xác nhận mất hàng', 'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm, lương tài xế', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
+        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.loss' => 'Xác nhận mất hàng', 'transfer.recall' => 'Thu hồi chuyến', 'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm, lương tài xế', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
     ];
     return $map[$action] ?? $action;
 }
@@ -132,6 +132,46 @@ function pack_label(int $qty, int $pack): string
     $full = intdiv($qty, $pack);
     $rest = $qty % $pack;
     return trim(($full > 0 ? n($full) . ' kiện' : '') . ($rest > 0 ? ($full > 0 ? ' + ' : '') . n($rest) . ' lẻ' : ''));
+}
+
+/** Số tiền bằng chữ cho chứng từ in: 4428000 → «Bốn triệu bốn trăm hai mươi tám nghìn đồng». */
+function vnd_words(int $v): string
+{
+    if ($v <= 0) {
+        return 'Không đồng';
+    }
+    $d = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    $three = function (int $x, bool $full) use ($d): string {   // $full: còn nhóm lớn hơn phía trước ⇒ đọc đủ «không trăm»
+        [$h, $t, $u] = [intdiv($x, 100), intdiv($x % 100, 10), $x % 10];
+        $out = [];
+        if ($h > 0 || $full) {
+            $out[] = $d[$h] . ' trăm';
+        }
+        if ($t > 1) {
+            $out[] = $d[$t] . ' mươi';
+        } elseif ($t === 1) {
+            $out[] = 'mười';
+        } elseif ($u > 0 && ($h > 0 || $full)) {
+            $out[] = 'lẻ';
+        }
+        if ($u > 0) {
+            $out[] = $u === 1 && $t > 1 ? 'mốt' : ($u === 5 && $t > 0 ? 'lăm' : $d[$u]);
+        }
+        return implode(' ', $out);
+    };
+    $units = ['', ' nghìn', ' triệu', ' tỷ'];
+    $groups = [];
+    for ($i = 0; $v > 0; $i++, $v = intdiv($v, 1000)) {
+        $groups[] = $v % 1000;
+    }
+    $parts = [];
+    foreach (array_reverse($groups, true) as $i => $g) {
+        if ($g > 0) {
+            $parts[] = $three($g, $i < count($groups) - 1) . $units[$i % 4];
+        }
+    }
+    $text = implode(' ', $parts) . ' đồng';
+    return mb_strtoupper(mb_substr($text, 0, 1)) . mb_substr($text, 1);
 }
 
 /** Số có dấu: +5 / −3. */
@@ -224,6 +264,7 @@ function icon(string $name): string
         'users' => '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3 3 0 010 5.6M18 14.4c1.8.8 3 2.6 3 5.6"/>',
         'search' => '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
         'plus' => '<path d="M12 5v14M5 12h14"/>',
+        'printer' => '<path d="M7 9V3h10v6"/><path d="M7 17H5a1 1 0 01-1-1v-5a2 2 0 012-2h12a2 2 0 012 2v5a1 1 0 01-1 1h-2"/><path d="M7 14h10v7H7z"/>',
         'download' => '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',
         'alert' => '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.5"/>',
         'check' => '<path d="M5 12l4 4 10-10"/>',

@@ -339,7 +339,7 @@ CREATE TABLE IF NOT EXISTS chuyen_van_chuyen (
     tai_xe_id                 integer      NOT NULL,
     kho_di_id                 integer      NOT NULL,
     kho_den_id                integer      NOT NULL,
-    trang_thai                enum('IN_TRANSIT','DELIVERED','LOST') NOT NULL DEFAULT 'IN_TRANSIT',
+    trang_thai                enum('IN_TRANSIT','DELIVERED','LOST','RECALLED') NOT NULL DEFAULT 'IN_TRANSIT',
     tai_xe_xac_nhan_du_hang   boolean      NOT NULL DEFAULT FALSE,
     nguoi_giao_id             integer      NOT NULL,
     ngay_di                   timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,

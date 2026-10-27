@@ -281,16 +281,49 @@ final class VoucherController extends Controller
                 $res = $this->transfers->receiveChecked($user, $id, $received, $r->str('driver_match') === '1', $r->str('short_reason'), $r->str('short_note'));
                 if (!$res['already'] && $res['short']) {
                     $this->session->flash('ok', 'Đã nhận hàng — nhận thiếu ở ' . count($res['short']) . ' dòng, phần thiếu đã được ghi bằng phiếu điều chỉnh ' . ($res['adjustment']['ma'] ?? '') . ' và báo cho quản trị.');
-                    return null;
+                    return "/vouchers/$id/print?fresh=1";
                 }
             } else {
                 $res = $this->vouchers->confirm($user, $id);
             }
             if ($res['already']) {
                 $this->session->flash('ok', 'Phiếu nhập xuất đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
+                return null;
             }
-            return null;
+            return "/vouchers/$id/print?fresh=1";   // vừa ghi sổ ⇒ mở luôn phiếu để in và ký
         }, 'Đã xác nhận và ghi sổ phát sinh.', "/vouchers/$id");
+    }
+
+    /** Phiếu in (A4) để ký sau khi ghi sổ: nhập / xuất / điều chuyển. Phiếu nháp hoặc đã huỷ chưa có giá trị chứng từ nên không in. */
+    public function print(Request $r, array $p, ?User $user): Response
+    {
+        $this->need($user, Permission::XemPhieu);
+        $v = $this->repo->find((int)$p['id']);
+        $this->auth->requireVisible($user, (int)$v['kho_id']);
+        if ($v['trang_thai'] !== 'CONFIRMED' || $v['loai'] === 'ADJUSTMENT') {
+            $this->session->flash('err', 'Chỉ in được phiếu nhập, xuất, điều chuyển đã xác nhận và ghi sổ.');
+            return Response::redirect('/vouchers/' . (int)$v['id']);
+        }
+        $wh = $this->db->one('SELECT ma, ten, dia_chi FROM kho WHERE id = ?', [(int)$v['kho_id']]);
+        $partner = in_array($v['loai'], ['RECEIPT', 'ISSUE'], true) && $v['doi_tac'] !== ''
+            ? $this->db->one('SELECT ten, nguoi_lien_he, so_dien_thoai, dia_chi FROM doi_tac WHERE ten = ?', [$v['doi_tac']]) : null;
+        return $this->view->render('vouchers/print', [
+            'v' => $v, 'lines' => $this->withCost($this->repo->lines((int)$v['id'])), 'wh' => $wh, 'partner' => $partner, 'fresh' => $r->str('fresh') === '1',
+            'trip' => $trip = $this->fleet->tripOf($v), 'receipt' => $this->receiptOf($trip), 'user' => $user,
+        ], '');
+    }
+
+    /** Dòng điều chuyển cũ (lập trước khi lưu giá) chưa có đơn giá ⇒ dùng giá gốc hiện hành của mặt hàng. */
+    private function withCost(array $lines): array
+    {
+        foreach ($lines as &$l) {
+            if ($l['don_gia'] === null) {
+                $item = $this->db->one('SELECT thue_suat, gia_von FROM mat_hang WHERE id = ?', [(int)$l['mat_hang_id']]);
+                $l['don_gia'] = (int)($item['gia_von'] ?? 0);
+                $l['thue_suat'] = (int)($item['thue_suat'] ?? 0);
+            }
+        }
+        return $lines;
     }
 
     /** Kho đến báo CHƯA NHẬN ĐƯỢC HÀNG: chọn lý do, không cộng tồn, báo cho tài khoản cấp cao ở trang Đội xe. */
@@ -300,6 +333,20 @@ final class VoucherController extends Controller
         return $this->act(function () use ($r, $user, $id) {
             $this->transfers->reportNotReceived($user, $id, $r->str('missing_reason'), $r->str('missing_note'));
         }, 'Đã báo chưa nhận được hàng. Tồn kho chưa thay đổi — quản trị hệ thống sẽ thấy chuyến này ở trang Đội xe.', "/vouchers/$id");
+    }
+
+    /** Kho đi thu hồi chuyến khi xe còn trên đường (kho đến chưa nhận): cần lý do; hàng cộng lại kho đi, xe quay về. */
+    public function recall(Request $r, array $p, ?User $user): Response
+    {
+        $id = (int)$p['id'];
+        return $this->act(function () use ($r, $user, $id) {
+            $why = $r->str('reason');
+            if (!in_array($why, \StockFlow\Service\TransferService::RECALL_REASONS, true)) {
+                throw new DomainError('Chọn lý do thu hồi chuyến');
+            }
+            $note = trim($r->str('note'));
+            $this->transfers->recall($user, $id, $why . ($note !== '' ? ' — ' . $note : ''));
+        }, 'Đã thu hồi chuyến: hàng được cộng lại vào kho đi, xe quay về kho đi, phiếu nhận ở kho đến đã bị huỷ.', "/vouchers/$id");
     }
 
     public function cancel(Request $r, array $p, ?User $user): Response

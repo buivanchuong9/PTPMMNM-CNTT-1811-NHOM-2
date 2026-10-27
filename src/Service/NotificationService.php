@@ -19,7 +19,7 @@ final class NotificationService
     private const ACTIVITY = [
         'voucher.create' => 'lập phiếu', 'voucher.confirm' => 'xác nhận phiếu', 'voucher.cancel' => 'huỷ phiếu', 'voucher.correct' => 'lập phiếu điều chỉnh',
         'transfer.create' => 'lập phiếu điều chuyển', 'transfer.dispatch' => 'xuất kho điều chuyển', 'transfer.vehicle' => 'giao xe chở hàng', 'transfer.receive' => 'nhận hàng điều chuyển',
-        'transfer.short' => 'nhận thiếu hàng', 'transfer.missing' => 'báo chưa nhận được hàng', 'transfer.reply' => 'phản hồi chuyến hàng', 'transfer.loss' => 'xác nhận mất hàng', 'transfer.correct' => 'điều chỉnh điều chuyển',
+        'transfer.short' => 'nhận thiếu hàng', 'transfer.missing' => 'báo chưa nhận được hàng', 'transfer.reply' => 'phản hồi chuyến hàng', 'transfer.loss' => 'xác nhận mất hàng', 'transfer.recall' => 'thu hồi chuyến điều chuyển', 'transfer.correct' => 'điều chỉnh điều chuyển',
         'count.open' => 'mở đợt kiểm kê', 'count.submit' => 'nộp đợt kiểm kê chờ duyệt', 'count.approve' => 'duyệt đợt kiểm kê', 'count.reject' => 'trả lại đợt kiểm kê', 'count.cancel' => 'huỷ đợt kiểm kê',
         'request.create' => 'lập yêu cầu chuyển hàng', 'request.approve' => 'xác nhận yêu cầu chuyển hàng', 'request.accept' => 'chấp nhận yêu cầu chuyển hàng', 'request.reject' => 'từ chối yêu cầu chuyển hàng', 'request.cancel' => 'huỷ yêu cầu chuyển hàng',
         'item.create' => 'thêm mặt hàng', 'item.barcode' => 'đổi mã vạch mặt hàng', 'proposal.create' => 'đề xuất mặt hàng mới', 'proposal.approve' => 'duyệt đề xuất mặt hàng mới', 'proposal.reject' => 'từ chối đề xuất mặt hàng mới', 'item.update' => 'sửa mặt hàng', 'batch.create' => 'thêm lô hàng', 'category.create' => 'thêm danh mục',

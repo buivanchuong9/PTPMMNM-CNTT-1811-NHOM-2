@@ -45,6 +45,7 @@ final class TransferService
                     }
                 }
                 $this->validate($lines);
+                $lines = $this->costLines($lines);
                 $id = $this->repo->insert([
                     'loai' => VoucherType::TransferOut->value, 'kho_id' => $fromWh, 'kho_doi_ung_id' => $toWh,
                     'ghi_chu' => trim($note), 'khoa_chong_trung' => $idempotencyKey, 'nguoi_lap_id' => $user->id,
@@ -99,7 +100,8 @@ final class TransferService
             // Trừ kho đi → (điểm chèn lỗi cho test) → mở phiếu nhận ở kho đến (chưa cộng tồn).
             $this->ledger->post($outOps);
             Hooks::fire('transfer.between', ['out' => $outId]);
-            $inLines = array_map(fn($l) => ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => (int)$l['so_luong']], $outLines);
+            $inLines = array_map(fn($l) => ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => (int)$l['so_luong'],
+                'don_gia' => $l['don_gia'], 'thue_suat' => (int)$l['thue_suat'], 'gia_von' => (int)$l['gia_von']], $outLines);
             $inId = $this->repo->insert([
                 'loai' => VoucherType::TransferIn->value, 'kho_id' => $to, 'kho_doi_ung_id' => $from,
                 'phieu_nhap_xuat_lien_quan_id' => $outId, 'doi_tac' => $out['ma'], 'nguoi_lap_id' => $user->id,
@@ -193,6 +195,9 @@ final class TransferService
             return $res;
         });
     }
+
+    /** Lý do thu hồi chuyến khi xe còn trên đường. */
+    public const RECALL_REASONS = ['Chọn nhầm hàng / sai số lượng', 'Giao nhầm kho đến', 'Kho đến không còn nhu cầu', 'Xe gặp sự cố', 'Khác'];
 
     /** Lý do nhận THIẾU hàng (bắt buộc khi thực nhận ít hơn số trên phiếu). */
     public const SHORT_REASONS = ['Hàng vỡ / hư hỏng trong lúc vận chuyển', 'Hàng rơi mất trên đường', 'Tài xế giao thiếu', 'Kho đi xuất thiếu so với phiếu', 'Khác'];
@@ -380,6 +385,74 @@ final class TransferService
             return $adjOutId;
         });
         return ['voucher' => $this->repo->find($newId)];
+    }
+
+    /**
+     * THU HỒI CHUYẾN khi xe còn trên đường (kho đến chưa nhận): quản lý kho đi ghi lý do, hàng được cộng lại vào tồn kho đi bằng một phiếu điều chỉnh,
+     * phiếu đến bị huỷ, chuyến đóng RECALLED, xe quay về kho đi. Kho đến đã nhận hoặc đã báo «chưa nhận được hàng» thì không thu hồi được.
+     * @return array{voucher:array} phiếu điều chỉnh vừa lập ở kho đi
+     */
+    public function recall(User $user, int $outId, string $reason): array
+    {
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 200) {
+            throw new DomainError('Ghi lý do thu hồi chuyến (tối đa 200 ký tự)');
+        }
+        $peek = $this->repo->find($outId);
+        if ($peek['loai'] !== VoucherType::TransferOut->value) {
+            throw new DomainError('Chỉ thu hồi từ phiếu điều chuyển đi');
+        }
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
+        $adjId = $this->db->transaction(function () use ($user, $outId, $reason) {
+            $out = $this->repo->lock($outId);
+            $trip = $this->db->one('SELECT * FROM chuyen_van_chuyen WHERE phieu_di_id = ? FOR UPDATE', [$outId]);
+            if ($out['trang_thai'] !== 'CONFIRMED' || !$trip) {
+                throw new DomainError('Chỉ thu hồi được chuyến đã xuất kho và đang vận chuyển');
+            }
+            if ($trip['trang_thai'] !== 'IN_TRANSIT') {
+                throw new DomainError('Chuyến này đã đóng — không thu hồi được nữa');
+            }
+            $in = $this->repo->lock((int)$trip['phieu_den_id']);
+            if ($in['trang_thai'] !== 'DRAFT') {
+                throw new DomainError('Kho đến đã nhận hàng — không thu hồi được nữa');
+            }
+            if ($trip['sai_lech'] !== '') {
+                throw new DomainError('Kho đến đã báo «chưa nhận được hàng» — quản trị hệ thống đang xử lý chuyến này nên chưa thu hồi được');
+            }
+            if ($this->repo->correctionOf($outId)) {
+                throw new DomainError('Phiếu này đã được điều chỉnh');
+            }
+            $lines = array_map(fn($l) => [
+                'mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'],
+                'so_luong' => StockRules::reversalQty(VoucherType::TransferOut, (int)$l['so_luong']), 'ghi_chu' => 'Thu hồi ' . $out['ma'],
+            ], $this->repo->lines($outId));
+            $adjId = $this->repo->insert([
+                'loai' => VoucherType::Adjustment->value, 'trang_thai' => 'CONFIRMED', 'kho_id' => (int)$out['kho_id'],
+                'dieu_chinh_cho_id' => $outId, 'ly_do' => 'Thu hồi chuyến: ' . $reason, 'nguoi_lap_id' => $user->id,
+            ], $lines);
+            $adj = $this->repo->lock($adjId);
+            $ops = $this->repo->ops($adj, $this->repo->lines($adjId));
+            $this->ledger->lock($this->repo->lockKeys($ops));
+            $this->ledger->post($ops);
+            $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CANCELLED', ghi_chu = ? WHERE id = ?", [mb_substr('Kho đi thu hồi chuyến: ' . $reason, 0, 255), (int)$in['id']]);
+            $this->db->exec("UPDATE chuyen_van_chuyen SET trang_thai = 'RECALLED', sai_lech = ? WHERE id = ?", [mb_substr('Kho đi thu hồi chuyến: ' . $reason, 0, 255), (int)$trip['id']]);
+            $this->db->exec('UPDATE xe SET kho_hien_tai_id = ?, dang_den_kho_id = NULL WHERE id = ?', [(int)$out['kho_id'], (int)$trip['xe_id']]);
+            $this->audit->record($user->id, 'transfer.recall', 'voucher', $outId, "{$out['ma']} · xe quay về kho đi · $reason");
+            return $adjId;
+        });
+        return ['voucher' => $this->repo->find($adjId)];
+    }
+
+    /** Điều chuyển tính theo giá gốc chung của mọi kho: ghi giá gốc + thuế tại lúc lập phiếu lên từng dòng (để in phiếu không đổi khi giá gốc đổi sau này). */
+    private function costLines(array $lines): array
+    {
+        foreach ($lines as &$l) {
+            $item = $this->db->one('SELECT thue_suat, gia_von FROM mat_hang WHERE id = ?', [$l['mat_hang_id']]);
+            $l['thue_suat'] = (int)($item['thue_suat'] ?? 0);
+            $l['gia_von'] = (int)($item['gia_von'] ?? 0);
+            $l['don_gia'] = $l['gia_von'];
+        }
+        return $lines;
     }
 
     private function validate(array $lines): void

@@ -126,7 +126,9 @@ final class VoucherService
         }
         // Người có chức năng xác nhận, hoặc người được lập loại phiếu đó ở kho, đều được huỷ nháp.
         if (!$this->auth->can($user, (int)$peek['kho_id'], Permission::XacNhanPhieu)) {
-            $this->auth->require($user, (int)$peek['kho_id'], $peek['loai'] === VoucherType::Receipt->value ? Permission::LapPhieuNhap : Permission::LapPhieuXuat);
+            $this->auth->require($user, (int)$peek['kho_id'], match ($peek['loai']) {
+                VoucherType::Receipt->value => Permission::LapPhieuNhap, VoucherType::TransferOut->value => Permission::LapPhieuDieuChuyen, default => Permission::LapPhieuXuat,
+            });
         }
         $this->db->transaction(function () use ($user, $id) {
             $v = $this->repo->lock($id);

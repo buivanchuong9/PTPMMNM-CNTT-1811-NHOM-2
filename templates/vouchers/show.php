@@ -36,6 +36,8 @@ foreach ($lines as $pl) {
 }
 $headActions = $draft && !$isXfer && ($canApprove || $canDraft);
 $actionCard = $draft && $isXfer && ($canApprove || $canDraft);
+// kho đi còn thu hồi được chuyến khi xe chưa tới và kho đến chưa nhận / chưa báo thiếu
+$canRecall = $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'CONFIRMED' && $canApprove && $trip && $trip['trang_thai'] === 'IN_TRANSIT' && $trip['sai_lech'] === '' && !$correction;
 $cancelEntry = null;
 foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)) { $cancelEntry = $a; } }
 ?>
@@ -45,6 +47,9 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
     <p class="muted"><span class="wh-code"><?= e($v['wh_code']) ?></span> <?= e($v['wh_name']) ?>
       <?php if ($v['cp_code']): ?> <span class="arrow"><?= $v['loai'] === 'TRANSFER_IN' ? '←' : '→' ?></span> <span class="wh-code"><?= e($v['cp_code']) ?></span> <?= e($v['cp_name']) ?><?php endif; ?>
       · <?= e(dt($v['ngay_tao'])) ?></p></div>
+  <?php if ($v['trang_thai'] === 'CONFIRMED' && $v['loai'] !== 'ADJUSTMENT'): ?>
+  <div class="actions"><a class="btn" href="/vouchers/<?= (int)$v['id'] ?>/print" target="_blank" rel="noopener"><?= icon('printer') ?>In phiếu</a></div>
+  <?php endif; ?>
   <?php if ($headActions): ?>
   <div class="actions">
     <?php if ($canApprove): ?>
@@ -199,11 +204,24 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
         <dt>Tài xế</dt><dd><b><?= e($trip['tai_xe_ten']) ?></b><br><small class="muted">CCCD <?= e($trip['cccd']) ?><?= $trip['so_dien_thoai'] ? ' · ' . e($trip['so_dien_thoai']) : '' ?></small></dd>
         <dt>Xuất kho</dt><dd><?= e(dt($trip['ngay_di'])) ?> · <?= e($trip['giao_ten']) ?><br><span class="tag tag-ok">Tài xế xác nhận đủ hàng</span></dd>
         <dt>Kho đến</dt><dd>
-          <?php if ($trip['trang_thai'] === 'LOST'): ?><span class="tag tag-danger">Đã xác nhận mất hàng</span><br><small><?= e($trip['sai_lech']) ?></small>
+          <?php if ($trip['trang_thai'] === 'RECALLED'): ?><span class="tag tag-warn">Đã thu hồi chuyến</span><br><small><?= e(preg_replace('/^Kho đi thu hồi chuyến: /u', '', $trip['sai_lech'])) ?></small>
+          <?php elseif ($trip['trang_thai'] === 'LOST'): ?><span class="tag tag-danger">Đã xác nhận mất hàng</span><br><small><?= e($trip['sai_lech']) ?></small>
           <?php elseif ($trip['trang_thai'] === 'DELIVERED'): ?><?= $trip['sai_lech'] !== '' ? '<span class="tag tag-danger">Nhận thiếu</span>' : '<span class="tag tag-ok">Hàng đủ</span> <span class="tag tag-ok">Đúng tài xế, xe</span>' ?><br><small class="muted"><?= e(dt($trip['ngay_nhan'])) ?> · <?= e($trip['nhan_ten']) ?></small>
           <?php elseif ($trip['sai_lech'] !== ''): ?><span class="tag tag-danger">Chưa nhận được hàng</span><br><small><?= e($trip['sai_lech']) ?></small><br><small class="muted"><?= e($trip['nhan_ten'] ?? '') ?></small><?= $user->isAdmin ? '<br><a href="/fleet">Theo dõi ở Đội xe →</a>' : '' ?>
           <?php else: ?><span class="muted">Chưa nhận hàng</span><?php endif; ?></dd>
       </dl>
+    </section>
+    <?php endif; ?>
+
+    <?php if ($canRecall): ?>
+    <section class="card">
+      <h2>Thu hồi chuyến</h2>
+      <p class="muted small">Xe còn trên đường, kho đến chưa nhận. Thu hồi thì hàng được cộng lại vào kho <?= e($v['wh_code']) ?>, xe quay về kho này và phiếu nhận ở kho đến bị huỷ.</p>
+      <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/recall" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+        <label>Lý do<select name="reason" required><option value="">Chọn lý do…</option><?php foreach (\StockFlow\Service\TransferService::RECALL_REASONS as $rr): ?><option><?= e($rr) ?></option><?php endforeach; ?></select></label>
+        <label>Ghi chú (không bắt buộc)<input name="note" maxlength="100" autocomplete="off" placeholder="VD: khách đổi địa chỉ nhận"></label>
+        <button class="btn-danger btn-block" data-confirm="Bạn chắc chắn muốn thu hồi chuyến này? Xe <?= e($trip['bien_so']) ?> sẽ quay đầu về kho <?= e($v['wh_code']) ?>, hàng được cộng lại vào tồn kho và phiếu nhận ở kho đến bị huỷ." data-confirm-ok="Thu hồi, cho xe quay đầu"><?= icon('alert') ?>Thu hồi chuyến</button>
+      </form>
     </section>
     <?php endif; ?>
 
