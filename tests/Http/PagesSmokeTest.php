@@ -66,7 +66,7 @@ section('Chủ hệ thống (tài khoản cấp cao): xem thống kê mọi kho,
 $login($f->both->username);
 $pages = ['/', '/inventory', '/inventory?view=batch', '/inventory?q=' . $f->it['x']['ma_hang'], '/vouchers', '/vouchers?status=DRAFT', '/vouchers?type=TRANSFER_OUT&q=DC',
     "/vouchers/{$issue['id']}", "/vouchers/{$transfer['id']}", "/vouchers/{$pair['id']}", "/vouchers/{$xferDraft['id']}", "/vouchers/{$xferGo['id']}", "/vouchers/{$xferGoIn['id']}",
-    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles', '/fleet', '/fleet?q=a&kho=1&tt=off&ai=CONG_TY'];
+    '/counts', "/counts/$cid", '/history', '/history?type=TRANSFER_IN&from=2020-01-01&to=2099-01-01', '/reconcile', '/reports', '/valuation', '/money/in', '/money/out', '/money/profit', '/money/profit?q=x&range=1m', '/money/out?range=custom&from=2020-01-01&to=2099-01-01&q=P', '/warehouses', '/inventory?stock=low', '/inventory?stock=out', '/users', '/roles', '/fleet', '/fleet?q=a&kho=1&tt=off&ai=CONG_TY'];
 // (admin xem được Đội xe nhưng chỉ xem: không có form thêm xe)
 foreach ($pages as $p) {
     [$status, $body] = $get($p);
@@ -99,7 +99,7 @@ same($get('/vouchers/99999999')[0], 404, 'phiếu nhập xuất không tồn t�
 section('Quản lý kho A: tác nghiệp trong kho mình, không vào trang quản trị, không xem kho B');
 $login($f->approverA->username);
 foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouchers/new?type=ISSUE', '/transfers/new', "/vouchers/{$issue['id']}",
-          '/counts', "/counts/$cid", '/history', '/reconcile', '/reports', '/warehouses', '/inventory?stock=in'] as $p) {
+          '/counts', "/counts/$cid", '/history', '/reconcile', '/reports', '/valuation', '/money/in', '/money/out', '/money/profit', '/warehouses', '/inventory?stock=in'] as $p) {
     [$status, $body] = $get($p);
     same($status, 200, "quản lý GET $p ⇒ 200");
     truthy($noPhpError($body), "quản lý GET $p: không lộ lỗi PHP");

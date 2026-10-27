@@ -36,7 +36,6 @@
                    'margin_desc' => 'Lãi: cao → thấp', 'margin_asc' => 'Lãi: thấp → cao', 'none' => 'Chưa có giá bán'] as $k => $label): ?><option value="<?= e($k) ?>"<?= $priceSel === $k ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
   </select><?php endif; ?>
 </form>
-<?php if (!$byBatch && !$user->isAdmin && count($shown) > 1): ?><p class="muted small">Bảng hiển thị tồn của <b>tất cả các kho</b> (chỉ xem). Di chuột lên mã kho để biết quản lý kho cần liên hệ khi muốn nhờ chuyển hàng.</p><?php endif; ?>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense<?= $byBatch ? '' : ' sticky-2' ?>">
 <?php if ($byBatch): ?>
   <thead><tr><th>Kho</th><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Lô</th><th>Hạn dùng</th><th class="num">Tồn</th><th>Quy đổi</th><th>Cập nhật cuối</th></tr></thead>

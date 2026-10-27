@@ -14,7 +14,12 @@ use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
 use StockFlow\Service\PricingService;
 
-/** «Giá trị tồn & doanh thu»: trong kho có bao nhiêu hàng, đáng giá bao nhiêu (giá vốn / giá bán) và bán ra thu về bao nhiêu (kèm thuế, lãi gộp). */
+/**
+ * Hai trang báo cáo tiền:
+ *  - «Vốn kho» (/valuation): trong kho còn bao nhiêu hàng, đáng giá bao nhiêu (giá gốc / giá bán).
+ *  - mục con «Tiền nhập» (/money/in) và «Tiền xuất» (/money/out): từng phiếu đã xác nhận nhập / bán bao nhiêu tiền;
+ *    «Tiền lãi» (/money/profit): bán ra lãi bao nhiêu, theo từng mặt hàng.
+ */
 final class ValuationController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private PricingService $pricing, private Db $db)
@@ -30,9 +35,6 @@ final class ValuationController extends Controller
         $scope = $wh && in_array($wh, $visible, true) ? [$wh] : $visible;
         $catRaw = $r->str('category');
         $category = $catRaw === 'none' ? -1 : ((int)$catRaw ?: null);
-        $preset = date_range($r->str('range'));
-        [$from, $to] = $preset ?? [$r->str('from') ?: null, $r->str('to') ?: null];
-        $rangeSel = $preset ? $r->str('range') : (($r->str('range') === 'custom' || $from || $to) ? 'custom' : '');
 
         $stock = $this->pricing->valuation($scope, $category);
         $byWh = [];      // kho ⇒ tổng hợp
@@ -66,19 +68,73 @@ final class ValuationController extends Controller
         $totals = ['items' => count($byItem), 'qty' => array_sum(array_column($byItem, 'qty')), 'cost' => array_sum(array_column($byItem, 'cost')), 'sell' => array_sum(array_column($byItem, 'sell'))];
         [$itemRows, $pg] = Paginator::of(array_values($byItem), $r);
 
-        $sales = $this->pricing->sales($scope, $from, $to);
-        $salesTotal = ['phieu' => 0, 'so_luong' => 0, 'doanh_thu' => 0, 'thue' => 0, 'gia_von' => 0];
-        foreach ($sales as $s) {
-            foreach ($salesTotal as $k => $_) {
-                $salesTotal[$k] += (int)$s[$k];
-            }
-        }
         return $this->render('valuation/index', $user, 'valuation', [
             'totals' => $totals, 'byWh' => array_values($byWh), 'rows' => $itemRows, 'pg' => $pg, 'unpriced' => $unpriced,
-            'sales' => $sales, 'salesTotal' => $salesTotal,
             'wh' => $wh, 'category' => $catRaw, 'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
             'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
+        ], 'Vốn kho');
+    }
+
+    public function moneyIn(Request $r, array $p, ?User $user): Response
+    {
+        return $this->money($r, $user, 'in');
+    }
+
+    public function moneyOut(Request $r, array $p, ?User $user): Response
+    {
+        return $this->money($r, $user, 'out');
+    }
+
+    public function moneyProfit(Request $r, array $p, ?User $user): Response
+    {
+        $this->need($user, Permission::XemBaoCao);
+        $visible = $this->auth->visibleWarehouseIds($user);
+        $wh = $r->int('warehouse');
+        $scope = $wh && in_array($wh, $visible, true) ? [$wh] : $visible;
+        $preset = date_range($r->str('range'));
+        [$from, $to] = $preset ?? [$r->str('from') ?: null, $r->str('to') ?: null];
+        $rangeSel = $preset ? $r->str('range') : (($r->str('range') === 'custom' || $from || $to) ? 'custom' : '');
+        $q = trim($r->str('q'));
+
+        $all = $this->pricing->profitByItem($scope, $from, $to, $q);
+        $total = ['so_luong' => 0, 'tien' => 0, 'gia_von' => 0, 'lai' => 0];
+        foreach ($all as $row) {
+            foreach ($total as $k => $_) {
+                $total[$k] += (int)$row[$k];
+            }
+        }
+        [$rows, $pg] = Paginator::of($all, $r);
+        return $this->render('valuation/profit', $user, 'money-profit', [
+            'rows' => $rows, 'pg' => $pg, 'total' => $total, 'items' => count($all), 'best' => $all[0] ?? null, 'q' => $q,
+            'wh' => $wh, 'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
             'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to,
-        ], 'Giá trị tồn & doanh thu');
+        ], 'Tiền lãi');
+    }
+
+    /** Danh sách phiếu nhập (tiền chi ra) hoặc phiếu xuất (tiền thu về, kèm lãi) đã xác nhận, có dòng tổng cho cả bộ lọc. */
+    private function money(Request $r, ?User $user, string $dir): Response
+    {
+        $this->need($user, Permission::XemBaoCao);
+        $visible = $this->auth->visibleWarehouseIds($user);
+        $wh = $r->int('warehouse');
+        $scope = $wh && in_array($wh, $visible, true) ? [$wh] : $visible;
+        $preset = date_range($r->str('range'));
+        [$from, $to] = $preset ?? [$r->str('from') ?: null, $r->str('to') ?: null];
+        $rangeSel = $preset ? $r->str('range') : (($r->str('range') === 'custom' || $from || $to) ? 'custom' : '');
+        $q = trim($r->str('q'));
+
+        $all = $this->pricing->voucherMoney($dir === 'in' ? 'RECEIPT' : 'ISSUE', $scope, $from, $to, $q);
+        $total = ['phieu' => count($all), 'tien' => 0, 'thue' => 0, 'gia_von' => 0];
+        foreach ($all as $row) {
+            $total['tien'] += (int)$row['tien'];
+            $total['thue'] += (int)$row['thue'];
+            $total['gia_von'] += (int)$row['gia_von'];
+        }
+        [$rows, $pg] = Paginator::of($all, $r);
+        return $this->render('valuation/money', $user, 'money-' . $dir, [
+            'dir' => $dir, 'rows' => $rows, 'pg' => $pg, 'total' => $total, 'q' => $q,
+            'wh' => $wh, 'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
+            'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to,
+        ], $dir === 'in' ? 'Tiền nhập' : 'Tiền xuất');
     }
 }

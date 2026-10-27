@@ -27,7 +27,9 @@ $mineId = (int)$user->warehouseId;
       <td class="wrap" title="<?= e($sum) ?>"><?= e(mb_strimwidth($sum, 0, 90, '…')) ?><?= $q['ghi_chu'] !== '' ? '<br><small class="muted">' . e($q['ghi_chu']) . '</small>' : '' ?></td>
       <td><span class="tag tag-<?= e($tone) ?>"><?= e($label) ?></span>
         <?php if ($q['trang_thai'] === 'REJECTED'): ?><br><small class="warn-text"><?= e($q['xu_ly_ten']) ?> từ chối: <?= e($q['ly_do']) ?></small>
-        <?php elseif ($q['trang_thai'] === 'ACCEPTED' && $q['phieu_id']): ?><br><a href="/vouchers/<?= (int)$q['phieu_id'] ?>"><small>Phiếu <?= e($q['phieu_ma']) ?></small></a>
+        <?php elseif ($q['trang_thai'] === 'ACCEPTED' && $q['phieu_id']):   // mỗi kho chỉ xem phiếu của kho mình: kho nhận ⇒ phiếu nhận (DCN), kho cấp / quản trị ⇒ phiếu xuất (DCX)
+              [$vid, $vma] = $isNhan && !$isCap ? [$q['phieu_nhan_id'], $q['phieu_nhan_ma']] : [$q['phieu_id'], $q['phieu_ma']]; ?>
+          <br><?php if ($vid): ?><a href="/vouchers/<?= (int)$vid ?>"><small>Phiếu <?= e($vma) ?></small></a><?php else: ?><small class="muted">Kho cấp đang chuẩn bị xuất hàng</small><?php endif; ?>
         <?php elseif ($q['trang_thai'] === 'CANCELLED' && $q['ly_do'] !== ''): ?><br><small class="muted"><?= e($q['ly_do']) ?></small><?php endif; ?></td>
       <td class="nw"><?= e($q['lap_ten']) ?><?= $q['duyet_ten'] && (int)$q['nguoi_duyet_id'] !== (int)$q['nguoi_lap_id'] ? ' <span class="arrow">→</span> ' . e($q['duyet_ten']) : '' ?></td>
       <td class="muted"><?= e(dt($q['ngay_tao'])) ?></td>

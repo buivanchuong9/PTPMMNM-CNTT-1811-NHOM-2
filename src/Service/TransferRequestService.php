@@ -240,9 +240,10 @@ final class TransferRequestService
         }
     }
 
-    private const SELECT = 'SELECT y.*, wn.ma AS nhan_ma, wn.ten AS nhan_ten, wc.ma AS cap_ma, wc.ten AS cap_ten, lu.ho_ten AS lap_ten, du.ho_ten AS duyet_ten, xu.ho_ten AS xu_ly_ten, p.ma AS phieu_ma
+    private const SELECT = 'SELECT y.*, wn.ma AS nhan_ma, wn.ten AS nhan_ten, wc.ma AS cap_ma, wc.ten AS cap_ten, lu.ho_ten AS lap_ten, du.ho_ten AS duyet_ten, xu.ho_ten AS xu_ly_ten, p.ma AS phieu_ma, pn.id AS phieu_nhan_id, pn.ma AS phieu_nhan_ma
         FROM yeu_cau_chuyen_hang y JOIN kho wn ON wn.id = y.kho_nhan_id JOIN kho wc ON wc.id = y.kho_cap_id JOIN nguoi_dung lu ON lu.id = y.nguoi_lap_id
-        LEFT JOIN nguoi_dung du ON du.id = y.nguoi_duyet_id LEFT JOIN nguoi_dung xu ON xu.id = y.nguoi_xu_ly_id LEFT JOIN phieu_nhap_xuat p ON p.id = y.phieu_id';
+        LEFT JOIN nguoi_dung du ON du.id = y.nguoi_duyet_id LEFT JOIN nguoi_dung xu ON xu.id = y.nguoi_xu_ly_id LEFT JOIN phieu_nhap_xuat p ON p.id = y.phieu_id
+        LEFT JOIN phieu_nhap_xuat pn ON pn.phieu_nhap_xuat_lien_quan_id = p.id AND pn.loai = \'TRANSFER_IN\'';   // phiếu nhận ở kho nhận (có sau khi kho cấp xuất kho)
 
     private function lines(int $id): array
     {

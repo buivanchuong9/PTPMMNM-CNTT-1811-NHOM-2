@@ -83,7 +83,7 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
   <div class="kpi"><span class="kpi-ic"><?= icon('warehouse') ?></span><b><?= n($overview['kho']) ?></b><span>Kho đang hoạt động</span></div>
   <div class="kpi kpi-info"><span class="kpi-ic"><?= icon('users') ?></span><b><?= n($overview['tai_khoan']) ?></b><span>Tài khoản hoạt động<?= $overview['tai_khoan_khoa'] ? ' · ' . n($overview['tai_khoan_khoa']) . ' bị khoá' : '' ?></span></div>
   <div class="kpi kpi-ok"><span class="kpi-ic"><?= icon('box') ?></span><b><?= n($overview['mat_hang']) ?></b><span>Mặt hàng</span></div>
-  <div class="kpi kpi-warn"><span class="kpi-ic"><?= icon('file') ?></span><b><?= n($overview['phieu']) ?></b><span>Phiếu nhập xuất</span></div>
+  <div class="kpi kpi-warn"><span class="kpi-ic"><?= icon('file') ?></span><b><?= n($overview['phieu']) ?></b><span>Phiếu</span></div>
 </div>
 <section class="card">
   <div class="card-head"><h2>Tham số hệ thống</h2><span class="muted small">áp dụng cho mọi tài khoản</span></div>

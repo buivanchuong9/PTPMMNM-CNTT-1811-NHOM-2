@@ -33,7 +33,7 @@ $adminTitles = $titles($f->admin);
 same(in_array('Phiếu chờ xác nhận', $adminTitles, true), true, 'admin thấy phiếu nháp chờ xác nhận');
 same(in_array('Hàng điều chuyển chờ nhận', $adminTitles, true), true, 'admin thấy hàng điều chuyển chờ nhận');
 
-section('Hoạt động mới của các kho (chỉ quản trị)');
+section('Hoạt động mới: quản trị thấy mọi kho');
 $act0 = $svc->activity($f->admin);   // lần đầu: đặt mốc, chưa có gì «mới»
 same($act0['new'], 0, 'lần đầu mở chuông: không đổ lịch sử cũ thành mới');
 $f->c->get(TransferService::class)->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 2)], '', null);
@@ -41,9 +41,23 @@ $act1 = $svc->activity($f->admin);
 same($act1['new'], 1, 'nhân viên vừa lập phiếu điều chuyển ⇒ 1 hoạt động mới');
 same($act1['list'][0]['fresh'], true, 'dòng đầu được đánh dấu mới');
 same(str_starts_with($act1['list'][0]['href'], '/vouchers/'), true, 'bấm vào mở đúng phiếu');
-same($svc->all($f->approverA)['activity']['new'], 0, 'quản lý kho không có mục hoạt động của các kho');
 $svc->markActivitySeen($f->admin);
 same($svc->activity($f->admin)['new'], 0, 'đóng chuông ⇒ hết số mới');
 same($svc->activity($f->admin)['list'][0]['fresh'], false, 'dòng cũ không còn đánh dấu mới');
+
+section('Hoạt động mới: tài khoản kho chỉ thấy kho mình');
+$svc->activity($f->approverA);   // lần đầu: đặt mốc
+$svc->activity($f->approverB);
+$f->draftIssue($f->wa, 'x', 1);   // nhân viên kho A lập phiếu xuất ở kho A
+same($svc->activity($f->approverA)['new'], 1, 'quản lý kho A thấy việc nhân viên kho mình vừa làm');
+same($svc->activity($f->approverB)['new'], 0, 'quản lý kho B không thấy việc của kho A');
+$f->c->get(TransferService::class)->createDraft($f->keeperA, $f->wa, $f->wb, [$f->line('x', 1)], '', null);
+same($svc->activity($f->approverB)['new'], 1, 'phiếu điều chuyển từ kho A sang kho B ⇒ kho B cũng thấy');
+$svc->markActivitySeen($f->approverA);
+same($svc->activity($f->approverA)['new'], 0, 'quản lý kho đóng chuông ⇒ hết số mới');
+
+section('Việc gấp xếp trước việc theo dõi');
+$groups = array_column($svc->for($f->admin), 'group');
+same($groups, array_merge(array_filter($groups, fn($g) => $g === 'urgent'), array_filter($groups, fn($g) => $g !== 'urgent')), 'danh sách việc: «urgent» đứng trước «watch»');
 
 finish();

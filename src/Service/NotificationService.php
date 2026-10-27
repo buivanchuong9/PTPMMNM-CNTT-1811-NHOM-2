@@ -31,14 +31,15 @@ final class NotificationService
     private const ACTIVITY_PAGE = ['voucher' => '/vouchers/', 'count' => '/counts/', 'request' => '/requests', 'item' => '/inventory', 'proposal' => '/proposals', 'batch' => '/inventory', 'category' => '/inventory',
         'partner' => '/partners', 'warehouse' => '/warehouses', 'user' => '/users', 'vehicle' => '/fleet', 'driver' => '/fleet'];
 
-    /** Mọi thứ cho chuông: việc đang chờ + (chỉ quản trị) hoạt động mới của các kho. */
+    /** Mọi thứ cho chuông: việc đang chờ + hoạt động mới (quản trị: mọi kho; tài khoản kho: chỉ kho mình). */
     public function all(User $user): array
     {
-        return ['tasks' => $this->for($user), 'activity' => $user->isAdmin ? $this->activity($user) : ['new' => 0, 'list' => []]];
+        return ['tasks' => $this->for($user), 'activity' => $this->activity($user)];
     }
 
     /**
-     * Hoạt động của người khác trong nhật ký thao tác kể từ lần quản trị xem chuông gần nhất (mốc lưu ở cai_dat, như «đã xem» của menu).
+     * Hoạt động của người khác trong nhật ký thao tác kể từ lần xem chuông gần nhất (mốc lưu ở cai_dat, như «đã xem» của menu).
+     * Quản trị thấy mọi kho; tài khoản kho chỉ thấy việc do người cùng kho làm hoặc phiếu có dính tới kho mình (kể cả kho khác chuyển đến).
      * @return array{new:int,list:list<array{text:string,who:string,at:string,href:string,fresh:bool}>}
      */
     public function activity(User $user): array
@@ -50,12 +51,23 @@ final class NotificationService
         }
         $keys = array_keys(self::ACTIVITY);
         $in = implode(',', array_fill(0, count($keys), '?'));
+        $where = "(a.nguoi_dung_id IS NULL OR a.nguoi_dung_id <> ?) AND a.hanh_dong IN ($in)";
+        $args = [$user->id, ...$keys];
+        if (!$user->isAdmin) {
+            $scope = $this->auth->visibleWarehouseIds($user);
+            if (!$scope) {
+                return ['new' => 0, 'list' => []];
+            }
+            $wh = implode(',', array_fill(0, count($scope), '?'));
+            $where .= " AND (u.kho_id IN ($wh) OR (a.doi_tuong = 'voucher' AND EXISTS (SELECT 1 FROM phieu_nhap_xuat p WHERE p.id = a.doi_tuong_id AND (p.kho_id IN ($wh) OR p.kho_doi_ung_id IN ($wh)))))";
+            array_push($args, ...$scope, ...$scope, ...$scope);
+        }
         $rows = $this->db->all(
             "SELECT a.id, a.hanh_dong, a.doi_tuong, a.doi_tuong_id, a.chi_tiet, a.ngay_tao, u.ho_ten FROM nhat_ky a LEFT JOIN nguoi_dung u ON u.id = a.nguoi_dung_id
-             WHERE (a.nguoi_dung_id IS NULL OR a.nguoi_dung_id <> ?) AND a.hanh_dong IN ($in) ORDER BY a.id DESC LIMIT 15",
-            [$user->id, ...$keys]
+             WHERE $where ORDER BY a.id DESC LIMIT 15",
+            $args
         );
-        $new = (int)$this->db->value("SELECT COUNT(*) FROM nhat_ky WHERE id > ? AND (nguoi_dung_id IS NULL OR nguoi_dung_id <> ?) AND hanh_dong IN ($in)", [(int)$seen, $user->id, ...$keys]);
+        $new = (int)$this->db->value("SELECT COUNT(*) FROM nhat_ky a LEFT JOIN nguoi_dung u ON u.id = a.nguoi_dung_id WHERE a.id > ? AND $where", [(int)$seen, ...$args]);
         $list = array_map(function (array $a) use ($seen): array {
             $page = self::ACTIVITY_PAGE[$a['doi_tuong']] ?? '/history';
             $detail = trim((string)$a['chi_tiet']);
@@ -89,14 +101,18 @@ final class NotificationService
             : $this->db->exec("INSERT INTO cai_dat (pham_vi, doi_tuong_id, khoa, gia_tri) VALUES ('user', ?, 'bell.activity', ?)", [$user->id, (string)$id]);
     }
 
-    /** @return list<array{icon:string,tone:string,title:string,note:string,count:int,href:string}> */
+    /**
+     * group: «urgent» = cần làm ngay (đang chặn quy trình / có rủi ro), «watch» = theo dõi (biết để chuẩn bị, chưa phải làm ngay).
+     * Mặc định theo tone: info ⇒ watch, còn lại ⇒ urgent.
+     * @return list<array{icon:string,tone:string,group:string,title:string,note:string,count:int,href:string}>
+     */
     public function for(User $user): array
     {
         $scope = $this->auth->visibleWarehouseIds($user);
         $out = [];
-        $add = function (string $icon, string $tone, string $title, string $note, int $count, string $href) use (&$out): void {
+        $add = function (string $icon, string $tone, string $title, string $note, int $count, string $href, ?string $group = null) use (&$out): void {
             if ($count > 0) {
-                $out[] = ['icon' => $icon, 'tone' => $tone, 'title' => $title, 'note' => $note, 'count' => $count, 'href' => $href];
+                $out[] = ['icon' => $icon, 'tone' => $tone, 'group' => $group ?? ($tone === 'info' ? 'watch' : 'urgent'), 'title' => $title, 'note' => $note, 'count' => $count, 'href' => $href];
             }
         };
         $in = $scope ? implode(',', array_fill(0, count($scope), '?')) : '';
@@ -108,7 +124,7 @@ final class NotificationService
             }
             if ($user->isAdmin || $this->auth->allows($user, Permission::NhanHangDieuChuyen)) {
                 $n = (int)$this->db->value("SELECT COUNT(*) FROM phieu_nhap_xuat WHERE trang_thai = 'DRAFT' AND loai = 'TRANSFER_IN' AND kho_id IN ($in)", $scope);
-                $add('truck', 'info', 'Hàng điều chuyển chờ nhận', 'Hàng đang trên đường tới kho, chờ xác nhận nhận', $n, '/vouchers?type=TRANSFER_IN&status=DRAFT');
+                $add('truck', 'info', 'Hàng điều chuyển chờ nhận', 'Hàng đang trên đường tới kho, chờ xác nhận nhận', $n, '/vouchers?type=TRANSFER_IN&status=DRAFT', 'urgent');
                 // Kho đến đã báo chưa thấy hàng và quản trị đã phản hồi ⇒ báo cho kho đến đọc phản hồi.
                 $rows = $this->db->all(
                     "SELECT c.phieu_den_id FROM chuyen_van_chuyen c WHERE c.trang_thai = 'IN_TRANSIT' AND c.sai_lech <> '' AND c.kho_den_id IN ($in)
@@ -125,7 +141,7 @@ final class NotificationService
                 $by[$e['status']] = ($by[$e['status']] ?? 0) + 1;
             }
             $add('alert', 'bad', 'Hàng đã hết hạn', 'Còn tồn tại kho — cần xử lý, không được xuất đi', $by['expired'], '/inventory?view=batch&expiry=expired');
-            $add('clipboard', 'warn', 'Hàng sắp hết hạn trong 30 ngày tới', 'Lô gần hạn sẽ được xuất trước', $by['soon'], '/inventory?view=batch&expiry=soon');
+            $add('clipboard', 'warn', 'Hàng sắp hết hạn trong 30 ngày tới', 'Lô gần hạn sẽ được xuất trước', $by['soon'], '/inventory?view=batch&expiry=soon', 'watch');
         }
         if ($this->auth->allows($user, Permission::XemDoiXe)) {
             $add('alert', 'bad', 'Chuyến chưa thấy hàng', 'Kho đến báo chưa nhận được hàng — cần phản hồi', $this->fleet->openDiscrepancies($user->isAdmin ? null : (int)$user->warehouseId), '/fleet');
@@ -156,6 +172,7 @@ final class NotificationService
             $n = (int)$this->db->value("SELECT COUNT(*) FROM yeu_cau_chuyen_hang WHERE trang_thai IN ('WAIT_OWN', 'WAIT_SOURCE')");
             $add('truck', 'info', 'Yêu cầu chuyển hàng đang chờ xử lý', 'Các kho đang xin hàng lẫn nhau (chỉ xem)', $n, '/requests');
         }
+        usort($out, fn($a, $b) => ($a['group'] === 'urgent' ? 0 : 1) <=> ($b['group'] === 'urgent' ? 0 : 1));   // việc gấp lên trước (usort giữ thứ tự cũ khi bằng nhau)
         return $out;
     }
 }

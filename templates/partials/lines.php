@@ -11,7 +11,7 @@ if (!empty($newLots)) {   // phiếu nhập: hàng theo lô chỉ liệt kê m�
     $lotsOf = [];   // lô đã có của từng mặt hàng — chọn để tự điền số lô + hạn dùng
     foreach ($pick as $p) {
         if ($p['quan_ly_lo']) {
-            $lotsOf[$p['mat_hang_id']][] = ['lot' => $p['so_lo'], 'exp' => $p['han_dung'] ? dt($p['han_dung'], false) : '', 'iso' => $p['han_dung']];
+            $lotsOf[$p['mat_hang_id']][] = ['k' => $p['mat_hang_id'] . ':' . $p['lo_hang_id'], 'lot' => $p['so_lo'], 'exp' => $p['han_dung'] ? dt($p['han_dung'], false) : '', 'iso' => $p['han_dung']];
         }
     }
     foreach ($pick as $p) {
