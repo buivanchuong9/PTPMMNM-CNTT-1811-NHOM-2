@@ -686,3 +686,9 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .flow .flow-wh { display: flex; flex-direction: column; align-items: center; gap: 3px; margin: 4px 0 2px; }
 .flow .flow-wh .wh-code { font-size: .82rem; padding: 2px 9px; }
 .flow .flow-wh small { font-size: .8rem; color: var(--ink-2); font-weight: 500; max-width: 210px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Kiểm kê: cột chất lượng gọn lại để bảng không tràn ngang */
+.count-table .quality-cell { min-width: 140px; max-width: 170px; }
+.count-table .quality-cell .bad-input { width: 72px; }
+.count-table .quality-cell .bad-reason, .count-table .quality-cell .bad-note { width: 100%; margin-top: 4px; }
+.count-table .good-qty { white-space: nowrap; }

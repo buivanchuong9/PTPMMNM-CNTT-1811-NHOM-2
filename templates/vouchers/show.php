@@ -154,6 +154,25 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
 
     <?php if ($recvForm) { echo $actionHtml; } /* nhận hàng: nhập số thực nhận ở bảng trên rồi mới tới nút xác nhận */ ?>
 
+    <?php if (!empty($quality)): $qBad = array_sum(array_column($quality, 'so_luong_loi')); ?>
+    <section class="card flush">
+      <div class="card-head pad"><h2>Kiểm tra chất lượng khi nhận</h2>
+        <span><?= $qBad ? '<span class="tag tag-warn">' . n($qBad) . ' không đạt</span>' : '<span class="tag tag-ok">Đạt toàn bộ</span>' ?>
+        <?php if (!empty($returnNote)): ?> <a href="/returns/<?= (int)$returnNote['id'] ?>">Phiếu trả <?= e($returnNote['ma']) ?></a><?php endif; ?>
+        <?php if (!empty($replaces)): ?> <span class="muted">· cấp lại cho</span> <a href="/returns/<?= (int)$replaces['id'] ?>"><?= e($replaces['ma']) ?></a><?php endif; ?></span></div>
+      <div class="table-wrap"><table class="dense">
+        <thead><tr><th>Hàng hoá</th><th>Lô</th><th class="num">Nhận</th><th class="num">Đạt (nhập kho)</th><th class="num">Không đạt (trả NCC)</th><th>Tình trạng</th></tr></thead>
+        <tbody>
+        <?php foreach ($quality as $q): $bad = (int)$q['so_luong_loi']; ?>
+          <tr><td><b><?= e($q['ma_hang']) ?></b> <?= e($q['ten']) ?></td><td><?= $q['so_lo'] === 'NOLOT' ? '<span class="muted">—</span>' : e($q['so_lo']) ?></td>
+            <td class="num"><?= n($q['so_luong_nhan']) ?></td><td class="num"><b><?= n((int)$q['so_luong_nhan'] - $bad) ?></b></td><td class="num <?= $bad ? 'neg' : '' ?>"><?= n($bad) ?></td>
+            <td><?= $bad ? e(\StockFlow\Service\SupplierReturnService::REASONS[$q['ly_do']] ?? $q['ly_do']) . ($q['ghi_chu'] !== '' ? '<br><small class="muted">' . e($q['ghi_chu']) . '</small>' : '') : '<span class="muted">—</span>' ?></td></tr>
+        <?php endforeach; ?>
+        </tbody></table></div>
+      <?php if ($draft && $qBad): ?><p class="muted small pad">Khi xác nhận, tồn kho chỉ cộng phần đạt và hệ thống tự lập phiếu trả nhà cung cấp cho phần không đạt.</p><?php endif; ?>
+    </section>
+    <?php endif; ?>
+
     <?php if ($movements): ?>
     <section class="card flush">
       <div class="card-head pad"><h2>Đã ghi vào sổ phát sinh</h2><span class="muted small"><?= count($movements) ?> dòng · bất biến</span></div>

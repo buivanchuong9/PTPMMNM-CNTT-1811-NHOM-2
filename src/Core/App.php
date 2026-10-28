@@ -89,6 +89,22 @@ final class App
         $r->post('/counts/{id}/reject', [C\CountController::class, 'reject']);
         $r->post('/counts/{id}/cancel', [C\CountController::class, 'cancel']);
 
+        $r->get('/returns', [C\ReturnController::class, 'index']);
+        $r->get('/returns/{id}', [C\ReturnController::class, 'show']);
+        $r->get('/returns/{id}/print', [C\ReturnController::class, 'print']);
+        $r->post('/returns/{id}/close', [C\ReturnController::class, 'close']);
+
+        $r->get('/warranty', [C\WarrantyController::class, 'index']);
+        $r->post('/warranty', [C\WarrantyController::class, 'store']);
+        $r->post('/warranty/{id}/resolve', [C\WarrantyController::class, 'resolve']);
+        $r->post('/warranty/{id}/return', [C\WarrantyController::class, 'handBack']);
+
+        $r->get('/disposals', [C\DisposalController::class, 'index']);
+        $r->post('/disposals', [C\DisposalController::class, 'store']);
+        $r->post('/disposals/{id}/approve', [C\DisposalController::class, 'approve']);
+        $r->post('/disposals/{id}/reject', [C\DisposalController::class, 'reject']);
+        $r->post('/disposals/{id}/destroy', [C\DisposalController::class, 'destroy']);
+
         $r->get('/history', [C\HistoryController::class, 'index']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);

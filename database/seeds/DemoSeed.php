@@ -44,6 +44,19 @@ final class DemoSeed
     }
 
     /** Gán mã vạch mẫu cho các mặt hàng demo chưa có mã (không đụng mặt hàng đã có mã hay mặt hàng khác). Chạy lại an toàn. @return int số mặt hàng được gán */
+    /** Thời hạn bảo hành mẫu (tháng): điện tử / linh kiện có, hàng tiêu dùng không. */
+    private const WARRANTY_MONTHS = ['PHN-A15' => 12, 'PHN-A25' => 12, 'EARBUD' => 6, 'CHG-65W' => 12, 'CAB-USBC' => 3, 'PWR-20K' => 12, 'SPK-BT' => 12, 'WATCH-S' => 12];
+
+    /** CSDL demo có từ trước khi có kho bảo hành: gán thời hạn bảo hành cho mặt hàng điện tử chưa đặt. */
+    public static function backfillWarranty(Db $db): int
+    {
+        $n = 0;
+        foreach (self::WARRANTY_MONTHS as $sku => $months) {
+            $n += $db->exec('UPDATE mat_hang SET bao_hanh_thang = ? WHERE ma_hang = ? AND bao_hanh_thang = 0', [$months, $sku]);
+        }
+        return $n;
+    }
+
     public static function backfillBarcodes(Db $db): int
     {
         $n = 0;
@@ -159,6 +172,7 @@ final class DemoSeed
         $catOf = ['GLOVE' => 'TOOL', 'CUTTER' => 'TOOL', 'PHN-A15' => 'ELEC', 'PHN-A25' => 'ELEC', 'EARBUD' => 'ELEC', 'CHG-65W' => 'ELEC', 'CAB-USBC' => 'ELEC',
             'PWR-20K' => 'ELEC', 'SPK-BT' => 'ELEC', 'WATCH-S' => 'ELEC', 'MLK-1L' => 'FOOD', 'NDL-PK' => 'FOOD', 'CFE-3IN1' => 'FOOD', 'TEA-GRN' => 'FOOD',
             'OIL-1L' => 'FOOD', 'SGR-1KG' => 'FOOD', 'SOAP-500' => 'HOME', 'DET-3KG' => 'HOME', 'VIT-C' => 'MED', 'MASK-50' => 'MED'];
+        $warranty = self::WARRANTY_MONTHS;
         $item = [];   // sku => ['id'=>, 'batches'=>[batchId,…]]
         foreach ($defs as [$sku, $name, $un, $lot, $reorder]) {
             $id = $catalog->addItem($admin, $sku, $name, $unit[$un], (bool)$lot, $reorder, $pack[$sku] ?? 1, $cat[$catOf[$sku] ?? 'PKG']);
@@ -175,6 +189,9 @@ final class DemoSeed
                 $pricing->setCost($admin, $id, $money[$sku][0], $money[$sku][2], 'Giá gốc khởi tạo');
             }
             $db->exec('UPDATE mat_hang SET ma_vach = ? WHERE id = ?', [self::barcode($sku), $id]);
+            if (isset($warranty[$sku])) {   // điện tử / linh kiện có bảo hành; hàng tiêu dùng thì không
+                $db->exec('UPDATE mat_hang SET bao_hanh_thang = ? WHERE id = ?', [$warranty[$sku], $id]);
+            }
             $item[$sku] = ['id' => $id, 'batches' => $batches, 'hub' => end($defs[array_search($sku, array_column($defs, 0))])];
         }
 

@@ -176,7 +176,7 @@ final class CatalogService
         }
     }
 
-    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null, bool $viaSupplier = false, ?string $barcode = null): int
+    public function addItem(User $actor, string $sku, string $name, int $unitId, bool $trackBatch, int $reorder, int $packSize = 1, ?int $categoryId = null, bool $viaSupplier = false, ?string $barcode = null, int $warrantyMonths = 0): int
     {
         // Quản lý kho chỉ được thêm mặt hàng mới khi đang lập nhà cung cấp (hàng mới do nhà cung cấp đó cung cấp)
         if (!($viaSupplier && $actor->role === AccountRole::Manager)) {
@@ -199,21 +199,30 @@ final class CatalogService
         if (!$this->db->value('SELECT 1 FROM don_vi_tinh WHERE id = ?', [$unitId])) {
             throw new DomainError('Đơn vị tính không hợp lệ');
         }
+        self::checkWarranty($warrantyMonths);
         $this->requireCategory($categoryId);
         $this->requireUnique('mat_hang', 'ma_hang', $sku, "SKU $sku đã tồn tại");
         $barcode = self::normalizeBarcode($barcode);
         if ($barcode !== null) {
             $this->requireUnique('mat_hang', 'ma_vach', $barcode, "Mã vạch $barcode đã gắn cho mặt hàng khác");
         }
-        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize, $categoryId, $barcode) {
-            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo, danh_muc_id, ma_vach) VALUES (?,?,?,?,?,?,?,?)',
-                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize, $categoryId, $barcode]);
+        return $this->db->transaction(function () use ($actor, $sku, $name, $unitId, $trackBatch, $reorder, $packSize, $categoryId, $barcode, $warrantyMonths) {
+            $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo, danh_muc_id, ma_vach, bao_hanh_thang) VALUES (?,?,?,?,?,?,?,?,?)',
+                [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize, $categoryId, $barcode, $warrantyMonths]);
             if (!$trackBatch) {
                 $this->db->exec('INSERT INTO lo_hang (mat_hang_id, so_lo) VALUES (?,?)', [$id, self::NO_LOT]);
             }
             $this->audit->record($actor->id, 'item.create', 'item', $id, $sku . ($barcode !== null ? " · mã vạch $barcode" : ''));
             return $id;
         });
+    }
+
+    /** Thời hạn bảo hành (tháng): 0 = mặt hàng không bảo hành. */
+    private static function checkWarranty(int $months): void
+    {
+        if ($months < 0 || $months > 120) {
+            throw new DomainError('Thời hạn bảo hành phải từ 0 đến 120 tháng (0 = không bảo hành)');
+        }
     }
 
     // ───── mã vạch ─────
@@ -251,7 +260,7 @@ final class CatalogService
     }
 
     /** Sửa danh mục, quy cách đóng gói (1 kiện = bao nhiêu đơn vị tính) và định mức tồn tối thiểu. Không có cách sửa số lượng tồn: tồn chỉ đổi qua phiếu / kiểm kê. */
-    public function updateItem(User $actor, int $itemId, int $packSize, int $reorder, ?int $categoryId = null): void
+    public function updateItem(User $actor, int $itemId, int $packSize, int $reorder, ?int $categoryId = null, int $warrantyMonths = 0): void
     {
         $this->auth->requireAdmin($actor);
         if ($packSize < 1 || $packSize > 1000000) {
@@ -260,10 +269,11 @@ final class CatalogService
         if ($reorder < 0 || $reorder > 1000000) {
             throw new DomainError('Định mức tồn tối thiểu phải từ 0 đến 1.000.000');
         }
+        self::checkWarranty($warrantyMonths);
         $this->requireCategory($categoryId);
         $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
-        $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ?, danh_muc_id = ? WHERE id = ?', [$packSize, $reorder, $categoryId, $itemId]);
-        $this->audit->record($actor->id, 'item.update', 'item', $itemId, "{$item['ma_hang']} · quy cách $packSize · định mức $reorder · danh mục #" . ($categoryId ?? '—'));
+        $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ?, danh_muc_id = ?, bao_hanh_thang = ? WHERE id = ?', [$packSize, $reorder, $categoryId, $warrantyMonths, $itemId]);
+        $this->audit->record($actor->id, 'item.update', 'item', $itemId, "{$item['ma_hang']} · quy cách $packSize · định mức $reorder · bảo hành $warrantyMonths tháng · danh mục #" . ($categoryId ?? '—'));
     }
 
     /** Thêm lô cho mặt hàng quản lý theo lô — tài khoản được giao chức năng «Thêm lô hàng». */

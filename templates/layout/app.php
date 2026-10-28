@@ -6,28 +6,36 @@ $groups = [
     'Tác nghiệp' => [
         'dashboard' => ['/', 'home', 'Tổng quan', [P::XemTongQuan]],
         // mục có con (phần tử thứ 5): bấm mở trang cha, bấm mũi tên ▾ để xổ / gập các mục con; mục con lọc theo quyền riêng
-        'vouchers' => ['/vouchers', 'file', 'Phiếu', [P::XemPhieu], [
-            'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập', [P::LapPhieuNhap]],
-            'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', [P::LapPhieuXuat]],
+        // mục cha chỉ xổ / gập các mục con (href '#'), không phải một trang
+        'vouchers-group' => ['#', 'file', 'Quản lý phiếu', [P::XemPhieu], [
+            'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập hàng', [P::LapPhieuNhap]],
+            'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất bán', [P::LapPhieuXuat]],
+            'vouchers' => ['/vouchers', 'file', 'Quản lý phiếu', [P::XemPhieu]],
+            'returns' => ['/returns', 'truck', 'Trả hàng nhà cung cấp', [P::XemPhieu]],
             'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
             'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
             'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
         ]],
+        'warranty' => ['/warranty', 'shield', 'Bảo hành', [P::XemBaoHanh]],
+        'disposals' => ['/disposals', 'box', 'Kho huỷ', [P::XemKhoHuy]],
     ],
     'Tra cứu' => [
-        'inventory' => ['/inventory', 'box', 'Hàng hoá', [P::XemTonKho], [
+        'inventory-group' => ['#', 'box', 'Hàng hoá', [P::XemTonKho], [
+            'inventory' => ['/inventory', 'box', 'Danh sách hàng hoá', [P::XemTonKho]],
             'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
             'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
         ]],
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
-        'valuation' => ['/valuation', 'scale', 'Vốn kho', [P::XemBaoCao], [
+        'valuation-group' => ['#', 'scale', 'Vốn kho', [P::XemBaoCao], [
+            'valuation' => ['/valuation', 'scale', 'Tổng quan vốn kho', [P::XemBaoCao]],
             'money-in' => ['/money/in', 'in', 'Tiền nhập', [P::XemBaoCao]],
             'money-out' => ['/money/out', 'out', 'Tiền xuất', [P::XemBaoCao]],
             'money-profit' => ['/money/profit', 'chart', 'Tiền lãi', [P::XemBaoCao]],
         ]],
     ],
     'Danh mục' => [
-        'warehouses' => ['/warehouses', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc], [
+        'warehouses-group' => ['#', 'warehouse', 'Kho & nhân sự', [P::XemDanhMuc], [
+            'warehouses' => ['/warehouses', 'warehouse', 'Danh sách kho & nhân sự', [P::XemDanhMuc]],
             'partners' => ['/partners', 'users', 'Đối tác & nhà cung cấp', [P::XemDanhMuc]],
             'fleet' => ['/fleet', 'truck', 'Đội xe & tài xế', [P::XemDoiXe]],
         ]],
@@ -156,7 +164,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
         $pa = (int)($navBadges[$key] ?? 0);
         $pn = (int)($navNew[$key] ?? 0);
         $pills = $pa || $pn ? '<span class="nav-pills">' . ($pn ? '<b class="nav-new" title="' . n($pn) . ' thay đổi mới">' . ($pn > 99 ? '+99' : '+' . $pn) . '</b>' : '') . ($pa ? '<b class="nav-badge" title="Cần xử lý">' . n($pa) . '</b>' : '') . '</span>' : '';
-        return '<a href="' . e($href) . '" data-nav="' . e($key) . '"' . ($key === $active ? ' class="active" aria-current="page"' : '') . '>' . icon($ic) . '<span>' . e($text) . '</span>' . $pills . $tail . '</a>';
+        return '<a href="' . e($href) . '" data-nav="' . e($key) . '"' . ($href === '#' ? ' data-nav-toggle' : '') . ($key === $active ? ' class="active" aria-current="page"' : '') . '>' . icon($ic) . '<span>' . e($text) . '</span>' . $pills . $tail . '</a>';
     }; ?>
     <nav aria-label="Điều hướng chính">
       <?php foreach ($groups as $label => $items): ?>

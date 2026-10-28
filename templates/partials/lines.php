@@ -59,7 +59,7 @@ if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét m
 }
 ?>
 <fieldset class="lines picker" id="picker"<?= !empty($suppliers) || !empty($supplierMode) ? ' data-supplier="1"' : '' ?> data-items="<?= e(json_encode($pickItems, JSON_UNESCAPED_UNICODE)) ?>"
-          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
+          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-bad-reasons="<?= e(json_encode(array_map(null, array_keys(\StockFlow\Service\SupplierReturnService::REASONS), array_values(\StockFlow\Service\SupplierReturnService::REASONS)), JSON_UNESCAPED_UNICODE)) ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
   <legend>Dòng hàng</legend>
   <?php $showSup = empty($suppliers) && !empty($pickSups); ?>
   <?php if (empty($lockPick) && (!empty($pickCats) || $showSup)): ?>
@@ -77,7 +77,7 @@ if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét m
   <p class="empty" id="pick-empty"<?= !empty($lockPick) ? ' hidden' : '' ?>>Chưa có mặt hàng nào. Bấm vào ô tìm kiếm phía trên để chọn hàng.</p>
   <div class="table-wrap" id="pick-wrap" hidden>
     <table class="dense pick-table">
-      <thead><tr><th>Mặt hàng</th><th class="num">Tồn tại kho</th><th class="num">Số lượng</th><th></th></tr></thead>
+      <thead><tr><th>Mặt hàng</th><th class="num">Tồn tại kho</th><th class="num"><?= !empty($newLots) ? 'Số lượng nhận' : 'Số lượng' ?></th><?php if (!empty($newLots)): ?><th>Kiểm tra chất lượng (không đạt)</th><?php endif; ?><th></th></tr></thead>
       <tbody id="pick-rows"></tbody>
     </table>
   </div>

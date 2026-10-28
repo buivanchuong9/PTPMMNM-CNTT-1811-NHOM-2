@@ -26,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -84,9 +84,27 @@ final class VoucherController extends Controller
         $perm = $type === VoucherType::Receipt ? Permission::LapPhieuNhap : Permission::LapPhieuXuat;
         $this->need($user, $perm);
         $ids = $this->warehouseIdsFor($user, $perm);
+        $pick = $this->query->pickList();
+        $replace = null;   // lập phiếu nhập hàng nhà cung cấp cấp lại cho một phiếu trả: điền sẵn nhà cung cấp và số còn thiếu
+        $prefill = [];
+        if ($type === VoucherType::Receipt && ($rid = $r->int('replace'))) {
+            $replace = $this->returns->find($rid);
+            if ($replace['trang_thai'] !== 'CHO_CAP_LAI' || !in_array((int)$replace['kho_id'], $ids, true)) {
+                throw new DomainError('Phiếu trả hàng ' . $replace['ma'] . ' không còn chờ cấp lại hoặc thuộc kho khác');
+            }
+            foreach ($this->returns->outstanding($rid) as $itemId => $qty) {
+                foreach ($pick as $pi) {
+                    if ((int)$pi['mat_hang_id'] === $itemId) {
+                        $prefill[] = [$itemId . ':' . ($pi['quan_ly_lo'] ? 'new' : $pi['lo_hang_id']), $qty];
+                        break;
+                    }
+                }
+            }
+        }
         return $this->render('vouchers/form', $user, 'new-' . strtolower($type->value), [
-            'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($ids),
-            'idem' => bin2hex(random_bytes(16)), 'selected' => $r->int('warehouse'), 'prefillItem' => $r->int('item'),
+            'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $pick, 'stock' => $this->query->stockMap($ids),
+            'replace' => $replace, 'prefill' => $prefill,
+            'idem' => bin2hex(random_bytes(16)), 'selected' => $replace ? (int)$replace['kho_id'] : $r->int('warehouse'), 'prefillItem' => $r->int('item'),
             'partnerNames' => array_column($this->db->all('SELECT ten FROM doi_tac WHERE loai = ? AND hoat_dong ORDER BY ten', [$type === VoucherType::Receipt ? 'SUPPLIER' : 'CUSTOMER']), 'ten'),
             'suppliers' => $type === VoucherType::Receipt ? $this->db->all("SELECT id, ma, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten") : [],
         ] + $this->pickFilterData(), $type->label() . ' mới');
@@ -128,6 +146,7 @@ final class VoucherController extends Controller
                 }
             }
             $lines = StockRules::normalizeLines($keys, $qtys);
+            $quality = $type === VoucherType::Receipt ? $this->readQuality($r, $keys) : [];
             if ($type === VoucherType::Issue) {
                 $this->assertInStock((int)$r->int('warehouse_id'), $lines);
             }
@@ -138,7 +157,8 @@ final class VoucherController extends Controller
             if ($type === VoucherType::Issue) {
                 $partnerSvc->requireNewCustomerInfo($r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'));
             }
-            $res = $this->vouchers->createDraft($user, $type, (int)$r->int('warehouse_id'), $lines, $r->str('partner'), $r->str('note'), $this->idemKey($r));
+            $res = $this->vouchers->createDraft($user, $type, (int)$r->int('warehouse_id'), $lines, $r->str('partner'), $r->str('note'), $this->idemKey($r),
+                $quality, $type === VoucherType::Receipt ? ($r->int('replace') ?: null) : null);
             if ($type === VoucherType::Issue && $res['created'] && $partnerSvc->ensureCustomer($user, $r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'))) {
                 $this->session->flash('ok', 'Đã lưu «' . $r->str('partner') . '» vào danh sách khách hàng.');
             }
@@ -147,6 +167,37 @@ final class VoucherController extends Controller
             }
             return '/vouchers/' . $res['voucher']['id'];
         }, 'Đã lập phiếu nháp. Kiểm tra rồi bấm Xác nhận để ghi sổ.', '/vouchers/new?type=' . $type->value);
+    }
+
+    /**
+     * Kiểm tra chất lượng từng dòng phiếu nhập: bad[i] / bad_reason[i] / bad_note[i] đi song song với line[i]; dòng trùng hàng/lô được cộng dồn như normalizeLines.
+     * @param array<int,mixed> $keys khoá «hàng:lô» đã đổi lô mới
+     * @return array<string,array{loi:int,ly_do:string,ghi_chu:string}>
+     */
+    private function readQuality(Request $r, array $keys): array
+    {
+        $bad = $r->arr('bad');
+        $reason = $r->arr('bad_reason');
+        $note = $r->arr('bad_note');
+        $out = [];
+        foreach ($keys as $i => $key) {
+            if (!is_scalar($key) || !preg_match('/^(\d+):(\d+)$/', trim((string)$key), $m)) {
+                continue;
+            }
+            $raw = $bad[$i] ?? '';
+            $n = is_scalar($raw) && trim((string)$raw) !== '' ? StockRules::parseQty($raw) : 0;
+            if ($n === null) {
+                throw new DomainError('Số lượng không đạt chất lượng phải là số nguyên không âm');
+            }
+            $k = $m[1] . ':' . $m[2];
+            $out[$k] ??= ['loi' => 0, 'ly_do' => '', 'ghi_chu' => ''];
+            $out[$k]['loi'] += $n;
+            if ($n > 0) {
+                $out[$k]['ly_do'] = is_scalar($reason[$i] ?? null) ? (string)$reason[$i] : $out[$k]['ly_do'];
+                $out[$k]['ghi_chu'] = is_scalar($note[$i] ?? null) ? trim((string)$note[$i]) : $out[$k]['ghi_chu'];
+            }
+        }
+        return $out;
     }
 
     /**
@@ -212,6 +263,9 @@ final class VoucherController extends Controller
         };
         return $this->render('vouchers/show', $user, 'vouchers', [
             'v' => $v, 'lines' => $lines, 'check' => $check, 'movements' => $movements,
+            'quality' => $v['loai'] === 'RECEIPT' ? $this->repo->quality((int)$v['id']) : [],
+            'returnNote' => $v['loai'] === 'RECEIPT' ? $this->db->one('SELECT id, ma, trang_thai FROM tra_hang_ncc WHERE phieu_nhap_xuat_id = ?', [(int)$v['id']]) : null,
+            'replaces' => !empty($v['cap_lai_cho_id']) ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE id = ?', [(int)$v['cap_lai_cho_id']]) : null,
             'pair' => $this->repo->pairOf($v), 'correction' => $this->repo->correctionOf((int)$v['id']),
             'original' => $v['dieu_chinh_cho_id'] ? $this->repo->find((int)$v['dieu_chinh_cho_id']) : null,
             'trail' => $this->audit->forEntity('voucher', (int)$v['id']),
@@ -310,6 +364,9 @@ final class VoucherController extends Controller
         return $this->view->render('vouchers/print', [
             'v' => $v, 'lines' => $this->withCost($this->repo->lines((int)$v['id'])), 'wh' => $wh, 'partner' => $partner, 'fresh' => $r->str('fresh') === '1',
             'trip' => $trip = $this->fleet->tripOf($v), 'receipt' => $this->receiptOf($trip), 'user' => $user,
+            'quality' => $v['loai'] === 'RECEIPT' ? $this->repo->quality((int)$v['id']) : [],
+            'returnNote' => $v['loai'] === 'RECEIPT' ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE phieu_nhap_xuat_id = ?', [(int)$v['id']]) : null,
+            'replaces' => !empty($v['cap_lai_cho_id']) ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE id = ?', [(int)$v['cap_lai_cho_id']]) : null,
         ], '');
     }
 
