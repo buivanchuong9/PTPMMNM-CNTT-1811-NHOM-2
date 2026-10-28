@@ -554,24 +554,6 @@
       search.focus();
     }, true);
     refresh();
-    // Đang nhập mà chuyển trang / tìm kiếm: lưu số đã nhập trước rồi mới đi, để không mất dữ liệu
-    if (cf.dataset.save) {
-      const saveThen = (url) => { cf.querySelector('[name=goto]').value = url; cf.action = cf.dataset.save; cf.requestSubmit(); };
-      cf.addEventListener('click', (e) => {
-        const a = e.target.closest('.pager a');
-        if (!a) return;
-        e.preventDefault();
-        saveThen(a.getAttribute('href'));
-      });
-      const sf = document.querySelector('[data-count-search]');
-      sf?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const q = sf.querySelector('[name=q]').value.trim();
-        saveThen(location.pathname + (q ? '?q=' + encodeURIComponent(q) : ''));
-      });
-      const only = rows.length === 1 && new URLSearchParams(location.search).get('q');
-      if (only) rows[0].querySelector('.count-input')?.focus();   // quét mã vạch ra đúng một dòng: nhảy thẳng vào ô thực đếm
-    }
   }
 
   // Ô chọn có tìm kiếm cho mọi <select data-combo> (lọc theo mặt hàng, chọn mặt hàng để thêm lô…)
@@ -761,8 +743,173 @@
       dlg?.close();
       return;
     }
-    if (ev.target instanceof HTMLDialogElement) ev.target.close(); // bấm ra ngoài hộp thoại
+    if (ev.target instanceof HTMLDialogElement && !ev.target.hasAttribute('data-lock')) ev.target.close(); // bấm ra ngoài hộp thoại (trừ hộp thoại khoá: phải chọn một nút)
   });
+
+  // Xuất kho điều chuyển: chọn xe của kho hoặc thuê ngoài; tiền công gợi ý = km × đơn giá/km của kho đi, sửa được
+  const initPay = () => {
+    document.querySelectorAll('[data-pay]').forEach((box) => {
+      if (box._payInit) return;
+      box._payInit = true;
+      const q = (s) => box.querySelector(s);
+      const km = q('[name=km]'), money = q('[name=tien]'), hint = q('[data-pay-hint]');
+      const own = q('[data-pay-own]'), ext = q('[data-pay-ext]'), fields = q('[data-pay-fields]');
+      const rates = { NOI_BO: +box.dataset.rateOwn || 0, THUE_NGOAI: +box.dataset.rateHired || 0 };
+      let dirty = false;
+      const mode = () => (q('[name=hinh_thuc]:checked') || {}).value || 'NOI_BO';
+      const payWrap = box.previousElementSibling && box.previousElementSibling.classList.contains('pay-money') ? box.previousElementSibling : null;
+      if (payWrap) {   // khách đã thanh toán ⇒ chọn tiền mặt / chuyển khoản
+        const sync = () => { const paid = (payWrap.querySelector('[name=thanh_toan]:checked') || {}).value === 'DA_TT', m = payWrap.querySelector('[data-paid-method]'); m.hidden = !paid; m.querySelector('select').required = paid; };
+        payWrap.addEventListener('change', sync); sync();
+      }
+      const fmt = (n) => n.toLocaleString('vi-VN');
+      const refresh = (fromMode) => {
+        const m = mode(), ex = m === 'THUE_NGOAI', tl = m === 'TU_LAY';   // TU_LAY: khách tự đến lấy (phiếu xuất) — không cần xe, km, tiền
+        if (own) { own.hidden = ex || tl; own.querySelectorAll('select').forEach((e) => { e.required = !ex && !tl; }); }
+        if (ext) { ext.hidden = !ex; ext.querySelectorAll('input[data-req]').forEach((e) => { e.required = ex; }); }
+        if (fields) { fields.hidden = tl; fields.querySelectorAll('[data-need]').forEach((e) => { e.required = !tl; }); }
+        else { km.required = money.required = true; }
+        const rate = rates[m] || 0, k = +km.value || 0, sug = k * rate;
+        hint.textContent = tl ? '' : (k ? `Gợi ý: ${fmt(k)} km × ${fmt(rate)} đ/km = ${fmt(sug)} đ` : 'Nhập quãng đường để có gợi ý tiền.');
+        if (!tl && (!dirty || fromMode) && k) { money.value = String(sug); dirty = false; }
+      };
+      km.addEventListener('input', () => { km.value = km.value.replace(/\D+/g, ''); refresh(false); });
+      money.addEventListener('input', () => { dirty = true; money.value = money.value.replace(/[^\d]/g, ''); });
+      box.addEventListener('change', (e) => { if (e.target.name === 'hinh_thuc') refresh(true); });
+      refresh(true);
+    });
+  };
+
+  // ── Rời trang khi còn thay đổi chưa lưu: hỏi «Lưu / Không lưu / Ở lại trang» ──
+  // form[data-guard="submit"]: «Lưu» = gửi form (lưu phiếu nháp). form[data-guard="local"]: «Lưu» = nhớ tạm các ô đã nhập trên trình duyệt này, lần sau mở lại được điền sẵn.
+  const dirtyForms = new Set();
+  let leaveDlg = null, guardBound = false, sentinel = false;
+  const askLeave = (form) => new Promise((resolve) => {
+    if (!leaveDlg) {
+      leaveDlg = document.createElement('dialog');
+      leaveDlg.className = 'dlg dlg-confirm';
+      leaveDlg.setAttribute('data-lock', '');   // không đóng khi bấm ra ngoài: bắt buộc chọn Lưu / Không lưu / Ở lại
+      leaveDlg.setAttribute('aria-labelledby', 'lv-title');
+      leaveDlg.innerHTML = '<div class="cf-icon" aria-hidden="true">!</div><h2 id="lv-title">Bạn có thay đổi chưa lưu</h2><p class="cf-msg">Rời trang này, các thông tin vừa nhập có thể bị mất.</p>'
+        + '<div class="actions cf-actions"><button type="button" data-lv="save"></button><button type="button" class="btn-ghost" data-lv="discard">Không lưu</button><button type="button" class="btn-ghost" data-lv="stay">Ở lại trang</button></div>';
+      document.body.appendChild(leaveDlg);
+    }
+    const dlg = leaveDlg;
+    const isDraft = form.hasAttribute('data-guard-draft');   // phiếu nháp đã có trong hệ thống: lưu nháp để xác nhận sau, hoặc huỷ phiếu nháp
+    const dirty = !!form._dirty, canSave = isDraft || (dirty && (form.dataset.guard === 'submit' || form.dataset.guard === 'local'));
+    const local = document.querySelector('form[data-guard=local]');
+    dlg.querySelector('#lv-title').textContent = isDraft ? 'Phiếu đang ở bản nháp' : 'Bạn có thay đổi chưa lưu';
+    dlg.querySelector('.cf-msg').textContent = isDraft
+      ? 'Phiếu chưa được xác nhận nên chưa ghi sổ. Bạn có muốn lưu nháp để xác nhận sau không?' + (local && local._dirty ? ' Thông tin giao hàng vừa nhập cũng được lưu tạm.' : '')
+      : 'Rời trang này, các thông tin vừa nhập có thể bị mất.';
+    dlg.querySelector('[data-lv=save]').textContent = isDraft ? 'Lưu nháp, xác nhận sau' : (form.dataset.guardSave || 'Lưu');
+    dlg.querySelector('[data-lv=save]').hidden = !canSave;
+    dlg.querySelector('[data-lv=discard]').textContent = isDraft ? 'Huỷ phiếu nháp' : 'Không lưu';
+    let answer = 'stay';
+    const onClick = (e) => { const b = e.target.closest('[data-lv]'); if (b) { answer = b.dataset.lv; dlg.close(); } };
+    const onClose = () => { dlg.removeEventListener('click', onClick); dlg.removeEventListener('close', onClose); resolve(answer); };
+    dlg.addEventListener('click', onClick);
+    dlg.addEventListener('close', onClose);
+    dlg.showModal();
+    dlg.querySelector(canSave ? '[data-lv=save]' : '[data-lv=stay]').focus();   // mặc định «Ở lại» để Enter không vô tình rời trang
+  });
+  const guardKey = () => 'sf-draft:' + location.pathname;
+  const guardFields = (form) => [...form.elements].filter((el) => el.name && !['csrf', 'goto', 'idem'].includes(el.name) && el.type !== 'file' && el.type !== 'submit' && el.type !== 'button');
+  const guardSaveLocal = (form) => {
+    const data = guardFields(form).map((el) => ({ n: el.name, t: el.type, v: el.value, c: el.checked }));
+    try { localStorage.setItem(guardKey(), JSON.stringify(data)); } catch (e) { /* trình duyệt chặn lưu trữ: bỏ qua */ }
+  };
+  const guardRestore = (form) => {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(guardKey()) || 'null'); } catch (e) { /* bỏ qua */ }
+    if (!Array.isArray(data) || !data.length) return;
+    const els = guardFields(form);
+    data.forEach((d) => {
+      const el = els.find((x) => x.name === d.n && (x.type === 'radio' ? x.value === d.v : true));
+      if (!el) return;
+      if (el.type === 'radio' || el.type === 'checkbox') el.checked = !!d.c; else el.value = d.v;
+    });
+    els.forEach((el) => el.dispatchEvent(new Event(el.type === 'radio' || el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })));
+    const note = document.createElement('p');
+    note.className = 'muted small guard-note';
+    note.innerHTML = 'Đã điền lại thông tin bạn lưu tạm lần trước. <button type="button" class="link-btn">Xoá thông tin lưu tạm</button>';
+    note.querySelector('button').addEventListener('click', () => { try { localStorage.removeItem(guardKey()); } catch (e) { /* bỏ qua */ } form.reset(); els.forEach((el) => el.dispatchEvent(new Event('change', { bubbles: true }))); note.remove(); });
+    form.insertBefore(note, form.firstChild);
+  };
+  const guardClear = () => { dirtyForms.clear(); };
+  const guardPrune = () => { dirtyForms.forEach((f) => { if (!document.contains(f)) dirtyForms.delete(f); }); if (!dirtyForms.size) sentinel = false; };
+  /** Xử lý lựa chọn: true = được phép rời trang. */
+  const guardDecide = async () => {
+    const draft = [...dirtyForms].find((f) => document.contains(f) && f.hasAttribute('data-guard-draft'));
+    const form = draft || [...dirtyForms].find((f) => document.contains(f) && f._dirty) || [...dirtyForms].find((f) => document.contains(f));
+    if (!form) { guardClear(); return true; }
+    const ans = await askLeave(form);
+    if (ans === 'stay') return false;
+    if (draft) {
+      const local = document.querySelector('form[data-guard=local]');
+      if (ans === 'save') { if (local && local._dirty) guardSaveLocal(local); }   // lưu nháp: phiếu đã nằm sẵn trong danh sách, chỉ nhớ thêm các ô giao hàng đã nhập
+      else {                                                                        // huỷ phiếu nháp (phiếu vẫn còn trong lịch sử với trạng thái «Đã huỷ»)
+        try { await fetch(draft.dataset.cancel, { method: 'POST', credentials: 'same-origin', body: new URLSearchParams({ csrf: document.querySelector('input[name=csrf]')?.value || '' }) }); } catch (e) { /* bỏ qua */ }
+        if (local) { try { localStorage.removeItem(guardKey()); } catch (e) { /* bỏ qua */ } }
+      }
+      guardClear();
+      return true;
+    }
+    if (ans === 'save' && form._dirty) {
+      if (form.dataset.guard === 'local') { guardSaveLocal(form); } else { form.requestSubmit(); return false; }   // lưu phiếu nháp: gửi form, trang tự chuyển sau khi lưu
+    } else if (form.dataset.guard === 'local' && form._dirty) { try { localStorage.removeItem(guardKey()); } catch (e) { /* bỏ qua */ } }
+    guardClear();
+    return true;
+  };
+  const initGuard = () => {
+    document.querySelectorAll('form[data-guard]').forEach((form) => {
+      if (form._guard) return;
+      form._guard = true;
+      if (form.dataset.guard === 'local') guardRestore(form);
+      let armed = false;
+      setTimeout(() => { armed = true; }, 500);   // bỏ qua các thay đổi do chính trang sinh ra lúc mở (điền sẵn, dòng chọn sẵn…)
+      const mark = () => {
+        if (!armed || form._dirty) return;
+        form._dirty = true;
+        dirtyForms.add(form);
+        if (!sentinel) { sentinel = true; history.pushState({ guard: 1 }, '', location.href); }   // để nút Quay lại của trình duyệt cũng được hỏi
+      };
+      form.addEventListener('input', (e) => { if (!e.target.closest('[data-guard-ignore], #pick-search, [type=search]')) mark(); });
+      form.addEventListener('change', (e) => { if (!e.target.closest('[data-guard-ignore], #pick-search, [type=search]')) mark(); });
+      const rows = form.querySelector('#pick-rows');
+      if (rows) new MutationObserver(mark).observe(rows, { childList: true });
+      form.addEventListener('submit', () => { form._dirty = false; dirtyForms.delete(form); if (form.dataset.guard === 'local') { try { localStorage.removeItem(guardKey()); } catch (e) { /* bỏ qua */ } } });
+    });
+    // Phiếu nháp: luôn hỏi khi rời trang (bấm nhầm Quay lại) dù chưa nhập gì
+    document.querySelectorAll('[data-guard-draft]').forEach((el) => {
+      if (el._guard) return;
+      el._guard = true;
+      dirtyForms.add(el);
+      if (!sentinel) { sentinel = true; history.pushState({ guard: 1 }, '', location.href); }
+    });
+    if (guardBound) return;
+    guardBound = true;
+    window.addEventListener('beforeunload', (e) => { guardPrune(); if ([...dirtyForms].some((f) => f._dirty)) { e.preventDefault(); e.returnValue = ''; } });   // đóng tab / tải lại: hộp thoại của trình duyệt
+    window.addEventListener('click', async (ev) => {
+      guardPrune();
+      if (!dirtyForms.size || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      const a = ev.target.closest('a[href]');
+      if (!a || a.target === '_blank' || a.hasAttribute('download') || a.dataset.noGuard !== undefined) return;
+      const u = new URL(a.href, location.href);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+      if (u.pathname === location.pathname && u.search === location.search && u.hash) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      if (await guardDecide()) a.click();
+    }, true);
+    window.addEventListener('popstate', async (ev) => {
+      guardPrune();
+      if (!dirtyForms.size) return;
+      ev.stopImmediatePropagation();
+      history.pushState({ guard: 1 }, '', location.href);   // ở lại trang trong lúc chờ trả lời
+      if (await guardDecide()) { sentinel = false; history.go(-2); }
+    }, true);
+  };
 
   const initCounting = () => {
   // Kiểm kê: tính chênh lệch ngay khi gõ, chỉ hiện ô lý do khi có lệch
@@ -835,6 +982,24 @@
       refresh();
     });
     refresh();
+    // Đang nhập mà chuyển trang / tìm kiếm: lưu số đã nhập trước rồi mới đi, để không mất dữ liệu
+    if (cf.dataset.save) {
+      const saveThen = (url) => { cf.querySelector('[name=goto]').value = url; cf.action = cf.dataset.save; cf.requestSubmit(); };
+      cf.addEventListener('click', (e) => {
+        const a = e.target.closest('.pager a');
+        if (!a) return;
+        e.preventDefault();
+        saveThen(a.getAttribute('href'));
+      });
+      const sf = document.querySelector('[data-count-search]');
+      sf?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const q = sf.querySelector('[name=q]').value.trim();
+        saveThen(location.pathname + (q ? '?q=' + encodeURIComponent(q) : ''));
+      });
+      const only = rows.length === 1 && new URLSearchParams(location.search).get('q');
+      if (only) rows[0].querySelector('.count-input')?.focus();   // quét mã vạch ra đúng một dòng: nhảy thẳng vào ô thực đếm
+    }
   }
 
   // ── Lọc tự động: chọn mục là lọc ngay, gõ tìm kiếm thì lọc dần (không cần bấm nút «Lọc») ──
@@ -1095,7 +1260,7 @@
 
   new MutationObserver(() => { initHScroll(); initTabScroll(); initStickyHead(); queueHeads(); }).observe(document.body, { childList: true, subtree: true });
 
-  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;

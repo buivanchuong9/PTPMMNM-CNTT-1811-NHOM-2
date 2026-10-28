@@ -692,3 +692,18 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .count-table .quality-cell .bad-input { width: 72px; }
 .count-table .quality-cell .bad-reason, .count-table .quality-cell .bad-note { width: 100%; margin-top: 4px; }
 .count-table .good-qty { white-space: nowrap; }
+
+/* Trang Quản lý phiếu: ba thẻ lập phiếu mới */
+.create-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 0 0 18px; }
+.create-card { --cc: var(--brand); display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 14px; background: var(--card, #fff); border: 1px solid color-mix(in srgb, var(--cc) 22%, transparent); box-shadow: 0 1px 2px rgba(20, 24, 40, .05); color: inherit; text-decoration: none; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.create-card:hover { transform: translateY(-2px); border-color: var(--cc); box-shadow: 0 8px 22px color-mix(in srgb, var(--cc) 18%, transparent); text-decoration: none; }
+.create-card.tone-in { --cc: #16a34a; }
+.create-card.tone-out { --cc: var(--brand); }
+.create-card.tone-xfer { --cc: #2563eb; }
+.create-card .cc-ic { flex: none; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--cc) 14%, transparent); color: var(--cc); }
+.create-card .cc-ic .icon { width: 24px; height: 24px; }
+.create-card .cc-tx { display: grid; gap: 2px; min-width: 0; }
+.create-card .cc-tx b { font-size: 1rem; color: var(--ink); }
+.create-card .cc-tx small { color: var(--muted, #6b7280); line-height: 1.35; }
+.create-card .cc-go { margin-left: auto; font-style: normal; font-size: 1.25rem; color: var(--cc); opacity: .55; transition: transform .15s, opacity .15s; }
+.create-card:hover .cc-go { transform: translateX(3px); opacity: 1; }

@@ -26,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -101,7 +101,7 @@ final class VoucherController extends Controller
                 }
             }
         }
-        return $this->render('vouchers/form', $user, 'new-' . strtolower($type->value), [
+        return $this->render('vouchers/form', $user, 'vouchers', [
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $pick, 'stock' => $this->query->stockMap($ids),
             'replace' => $replace, 'prefill' => $prefill,
             'idem' => bin2hex(random_bytes(16)), 'selected' => $replace ? (int)$replace['kho_id'] : $r->int('warehouse'), 'prefillItem' => $r->int('item'),
@@ -226,9 +226,11 @@ final class VoucherController extends Controller
             if ($r->str('cust_contact') . $r->str('cust_phone') . $r->str('cust_address') !== '') {
                 $this->session->flash('err', $e->getMessage());
             }
-            return $this->render('vouchers/customer_step', $user, 'new-issue', [
+            $page = $this->render('vouchers/customer_step', $user, 'vouchers', [
                 'post' => $r->post, 'partner' => (string)preg_replace('/\s+/u', ' ', $name), 'lineCount' => count($lines), 'totalQty' => array_sum(array_column($lines, 'so_luong')),
             ], 'Phiếu xuất mới — bước 2');
+            $this->session->rememberInput('/vouchers', $r->post);   // «Quay lại» bước 1 thì các dòng hàng đã chọn được điền lại
+            return $page;
         }
     }
 
@@ -283,7 +285,13 @@ final class VoucherController extends Controller
                 "SELECT l.mat_hang_id, l.lo_hang_id, -l.so_luong AS thieu, p.id AS adj_id, p.ma AS adj_ma FROM phieu_nhap_xuat p JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = p.id
                  WHERE p.phieu_nhap_xuat_lien_quan_id = ? AND p.loai = 'ADJUSTMENT'", [(int)$v['id']]) : [],
             'receipt' => $this->receiptOf($trip),
-            'vehicles' => $isTransfer && $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
+            'vehicles' => in_array($v['loai'], ['TRANSFER_OUT', 'ISSUE'], true) && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
+            'payInfo' => $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT'
+                ? ['km' => $this->fleet->distance((int)$v['kho_id'], (int)$v['kho_doi_ung_id']), 'rates' => $this->fleet->rates((int)$v['kho_id'])]
+                : ($v['loai'] === 'ISSUE' && $v['trang_thai'] === 'DRAFT' ? ['km' => null, 'rates' => $this->fleet->rates((int)$v['kho_id'])] : null),
+            'delivery' => $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'CONFIRMED' ? $this->deliveries->of((int)$v['id']) : null,
+            'custInfo' => $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'DRAFT' && $v['doi_tac'] !== ''
+                ? ($this->db->one("SELECT dia_chi, nguoi_lien_he, so_dien_thoai FROM doi_tac WHERE loai = 'CUSTOMER' AND ten = ?", [$v['doi_tac']]) ?? []) + ['ten' => $v['doi_tac']] : [],
         ], $v['ma']);
     }
 
@@ -319,7 +327,11 @@ final class VoucherController extends Controller
         return $this->act(function () use ($r, $user, $id) {
             $v = $this->repo->find($id);
             if ($v['loai'] === 'TRANSFER_OUT') {   // xuất kho đi: bắt buộc xe + tài xế + tài xế xác nhận đủ hàng
-                $res = $this->transfers->dispatch($user, $id, (int)$r->int('vehicle_id'), $r->str('driver_ok') === '1');
+                $res = $this->transfers->dispatch($user, $id, (int)$r->int('vehicle_id'), $r->str('driver_ok') === '1', [
+                    'hinh_thuc' => $r->str('hinh_thuc') === 'THUE_NGOAI' ? 'THUE_NGOAI' : 'NOI_BO',
+                    'km' => StockRules::parseQty($r->str('km')) ?? 0, 'tien' => \StockFlow\Service\PricingService::parseMoney($r->str('tien')) ?? -1, 'ghi_chu' => $r->str('gia_note'),
+                    'ngoai' => ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type')],
+                ]);
             } elseif ($v['loai'] === 'TRANSFER_IN') {   // nhận hàng: kho đến kiểm tra hàng đủ + đúng tài xế
                 $received = null;   // nhập số thực nhận từng dòng: received[id dòng] = số lượng
                 if ($raw = $r->arr('received')) {
@@ -338,7 +350,12 @@ final class VoucherController extends Controller
                     return "/vouchers/$id/print?fresh=1";
                 }
             } else {
-                $res = $this->vouchers->confirm($user, $id);
+                $delivery = $v['loai'] === 'ISSUE' && $r->str('hinh_thuc') !== '' ? [   // xuất bán: khách tự lấy hoặc giao hàng (xe kho / thuê ngoài)
+                    'hinh_thuc' => $r->str('hinh_thuc'), 'thanh_toan' => $r->str('thanh_toan'), 'phuong_thuc_tt' => $r->str('pt_tt'), 'dia_chi' => $r->str('giao_dia_chi'), 'nguoi_nhan' => $r->str('giao_nguoi_nhan'), 'sdt_nhan' => $r->str('giao_sdt'), 'vehicle_id' => (int)$r->int('vehicle_id'), 'driver_ok' => $r->str('driver_ok') === '1',
+                    'km' => StockRules::parseQty($r->str('km')) ?? 0, 'tien' => \StockFlow\Service\PricingService::parseMoney($r->str('tien')) ?? -1, 'ghi_chu' => $r->str('gia_note'),
+                    'ngoai' => ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type')],
+                ] : null;
+                $res = $this->vouchers->confirm($user, $id, $delivery);
             }
             if ($res['already']) {
                 $this->session->flash('ok', 'Phiếu đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
@@ -364,6 +381,7 @@ final class VoucherController extends Controller
         return $this->view->render('vouchers/print', [
             'v' => $v, 'lines' => $this->withCost($this->repo->lines((int)$v['id'])), 'wh' => $wh, 'partner' => $partner, 'fresh' => $r->str('fresh') === '1',
             'trip' => $trip = $this->fleet->tripOf($v), 'receipt' => $this->receiptOf($trip), 'user' => $user,
+            'delivery' => $v['loai'] === 'ISSUE' ? $this->deliveries->of((int)$v['id']) : null,
             'quality' => $v['loai'] === 'RECEIPT' ? $this->repo->quality((int)$v['id']) : [],
             'returnNote' => $v['loai'] === 'RECEIPT' ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE phieu_nhap_xuat_id = ?', [(int)$v['id']]) : null,
             'replaces' => !empty($v['cap_lai_cho_id']) ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE id = ?', [(int)$v['cap_lai_cho_id']]) : null,
@@ -425,7 +443,7 @@ final class VoucherController extends Controller
     {
         $this->need($user, Permission::LapPhieuDieuChuyen);
         $from = $this->warehouseIdsFor($user, Permission::LapPhieuDieuChuyen);
-        return $this->render('transfers/form', $user, 'new-transfer', [
+        return $this->render('transfers/form', $user, 'vouchers', [
             'from' => $this->warehouseRows($from), 'to' => $this->warehouseRows($this->allActiveIds()),
             'pick' => $this->query->pickList(), 'stock' => $this->query->stockMap($from), 'idem' => bin2hex(random_bytes(16)), 'prefillItem' => $r->int('item'),
         ] + $this->pickFilterData(), 'Điều chuyển mới');

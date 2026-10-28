@@ -8,11 +8,8 @@ $groups = [
         // mục có con (phần tử thứ 5): bấm mở trang cha, bấm mũi tên ▾ để xổ / gập các mục con; mục con lọc theo quyền riêng
         // mục cha chỉ xổ / gập các mục con (href '#'), không phải một trang
         'vouchers-group' => ['#', 'file', 'Quản lý phiếu', [P::XemPhieu], [
-            'new-receipt' => ['/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập hàng', [P::LapPhieuNhap]],
-            'new-issue' => ['/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất bán', [P::LapPhieuXuat]],
             'vouchers' => ['/vouchers', 'file', 'Quản lý phiếu', [P::XemPhieu]],
             'returns' => ['/returns', 'truck', 'Trả hàng nhà cung cấp', [P::XemPhieu]],
-            'new-transfer' => ['/transfers/new', 'truck', 'Điều chuyển kho', [P::LapPhieuDieuChuyen]],
             'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
             'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
         ]],

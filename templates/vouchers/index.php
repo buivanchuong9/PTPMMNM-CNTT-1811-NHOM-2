@@ -5,9 +5,21 @@ $total = array_sum($counts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh, 'category' => $catSel, 'item' => $item, 'range' => $rangeSel === 'custom' ? '' : $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort === 'old' ? 'old' : null], $over), fn($v) => $v !== null && $v !== ''));
 ?>
 <header class="page-head">
-  <div><h1>Phiếu</h1></div>
-  <div class="actions"><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuNhap)): ?><a class="btn" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Phiếu nhập</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuXuat)): ?><a class="btn btn-ghost" href="/vouchers/new?type=ISSUE"><?= icon('out') ?>Phiếu xuất</a><?php endif; ?><?php if ($auth->allows($user, \StockFlow\Domain\Permission::LapPhieuDieuChuyen)): ?><a class="btn btn-ghost" href="/transfers/new"><?= icon('truck') ?>Điều chuyển</a><?php endif; ?></div>
+  <div><h1>Quản lý phiếu</h1></div>
 </header>
+<?php use StockFlow\Domain\Permission as Pm;
+$create = array_filter([
+    [Pm::LapPhieuNhap, '/vouchers/new?type=RECEIPT', 'in', 'in', 'Lập phiếu nhập hàng'],
+    [Pm::LapPhieuXuat, '/vouchers/new?type=ISSUE', 'out', 'out', 'Lập phiếu xuất bán'],
+    [Pm::LapPhieuDieuChuyen, '/transfers/new', 'truck', 'xfer', 'Điều chuyển kho'],
+], fn($c) => $auth->allows($user, $c[0]));
+if ($create): ?>
+<section class="create-cards" aria-label="Lập phiếu mới">
+  <?php foreach ($create as [, $href, $ic, $tone, $title]): ?>
+  <a class="create-card tone-<?= $tone ?>" href="<?= e($href) ?>"><span class="cc-ic"><?= icon($ic) ?></span><span class="cc-tx"><b><?= e($title) ?></b></span><i class="cc-go" aria-hidden="true">→</i></a>
+  <?php endforeach; ?>
+</section>
+<?php endif; ?>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => $label): $n = $k === '' ? $total : ($counts[$k] ?? 0); ?>
   <a href="/vouchers?<?= e($qs(['status' => $k])) ?>" data-tone="<?= $tones[$k] ?>"<?= ($status ?? '') === $k || ($k === '' && !$status) ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($n) ?></span></a>

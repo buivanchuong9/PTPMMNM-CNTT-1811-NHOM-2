@@ -103,7 +103,7 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
 
 <?php elseif ($tab === 'nhat-ky'): ?>
 <section class="card flush">
-  <div class="card-head pad"><h2>Nhật ký thao tác</h2><span class="muted small"><?= count($log) ?> thao tác gần nhất, toàn hệ thống</span></div>
+  <div class="card-head pad"><h2>Nhật ký thao tác</h2><span class="muted small"><?= $logPg->total ?> thao tác gần nhất, toàn hệ thống</span></div>
   <div class="table-wrap"><table class="dense">
     <thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Đối tượng</th><th>Chi tiết</th></tr></thead>
     <tbody>
@@ -113,6 +113,6 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
         <td><code><?= e($l['hanh_dong']) ?></code></td><td class="muted"><?= e($l['doi_tuong']) ?></td><td class="muted wrap"><?= e($l['chi_tiet']) ?></td></tr>
     <?php endforeach; if (!$log): ?><tr><td colspan="5" class="empty">Chưa có thao tác nào được ghi.</td></tr><?php endif; ?>
     </tbody>
-  </table></div>
+  </table></div><?= pager($logPg) ?>
 </section>
 <?php endif; ?>

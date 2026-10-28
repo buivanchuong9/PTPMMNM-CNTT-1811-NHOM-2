@@ -43,7 +43,7 @@ final class SettingsController extends Controller
         if ($tab === 'he-thong') {
             $data['overview'] = $this->settings->overview();
         } elseif ($tab === 'nhat-ky') {
-            $data['log'] = $this->settings->recentAudit($user);
+            [$data['log'], $data['logPg']] = \StockFlow\Core\Paginator::of($this->settings->recentAudit($user, 200), $r);
         }
         return $this->render('settings/index', $user, 'settings', $data, 'Cài đặt');
     }

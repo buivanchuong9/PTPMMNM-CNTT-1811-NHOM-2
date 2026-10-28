@@ -1,7 +1,7 @@
 <?php /** @var array $post @var string $partner @var int $lineCount @var int $totalQty */
 $hidden = function (string $name, mixed $value): string { return '<input type="hidden" name="' . e($name) . '" value="' . e((string)$value) . '">'; };
 ?>
-<header class="page-head"><div><h1>Phiếu xuất mới</h1><p class="muted">Bước 2/2 — Thông tin khách hàng mới</p></div></header>
+<header class="page-head"><div><p class="crumb"><a href="/vouchers/new?type=ISSUE">← Quay lại bước 1: chọn hàng</a></p><h1>Phiếu xuất mới</h1><p class="muted">Bước 2/2 — Thông tin khách hàng mới</p></div></header>
 <form method="post" action="/vouchers" class="card form" data-once>
   <?= $hidden('csrf', $csrf) ?><?= $hidden('type', 'ISSUE') ?><?= $hidden('idem', $post['idem'] ?? '') ?><?= $hidden('warehouse_id', $post['warehouse_id'] ?? '') ?><?= $hidden('partner', $partner) ?><?= $hidden('note', $post['note'] ?? '') ?>
   <?php foreach (($post['line'] ?? []) as $i => $k): ?><?= $hidden('line[]', $k) ?><?= $hidden('qty[]', $post['qty'][$i] ?? '') ?><?php endforeach; ?>

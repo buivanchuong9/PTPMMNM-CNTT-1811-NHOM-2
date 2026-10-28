@@ -94,13 +94,22 @@ $qcLabels = \StockFlow\Service\SupplierReturnService::REASONS;
     <?php if ($loai === 'TRANSFER_OUT' || $loai === 'TRANSFER_IN'): ?>
     <dt><?= e($partnerLabel) ?>:</dt><dd><?= $v['cp_code'] ? e($v['cp_code'] . ' — ' . $v['cp_name']) : '—' ?></dd>
     <?php if ($trip): ?>
+    <?php if ($trip['hinh_thuc'] === 'THUE_NGOAI'): ?><dt>Đơn vị vận tải:</dt><dd><b><?= e($trip['don_vi_van_tai']) ?></b> (thuê ngoài)</dd><?php endif; ?>
     <dt>Xe / tài xế:</dt><dd><?= e($trip['bien_so']) ?><?= $trip['loai_xe'] ? ' (' . e($trip['loai_xe']) . ')' : '' ?> — <?= e($trip['tai_xe_ten']) ?> · CCCD <?= e($trip['cccd']) ?><?= $trip['so_dien_thoai'] ? ' · ' . e($trip['so_dien_thoai']) : '' ?></dd>
+    <?php if ((int)$trip['km'] > 0): ?><dt>Quãng đường:</dt><dd><?= e(n($trip['km'])) ?> km<?= $trip['hinh_thuc'] === 'THUE_NGOAI' ? ' · tiền thuê vận chuyển ' . e(n($trip['tien_tra'])) . ' đ' : '' ?></dd><?php endif; ?>
     <?php endif; ?>
     <?php else: ?>
     <dt><?= e($partnerLabel) ?>:</dt><dd><b><?= e($v['doi_tac'] ?: '—') ?></b></dd>
     <?php if ($partner && ($partner['nguoi_lien_he'] !== '' || $partner['so_dien_thoai'] !== '')): ?><dt>Liên hệ:</dt><dd><?= e(trim($partner['nguoi_lien_he'] . ($partner['so_dien_thoai'] !== '' ? ' · ' . $partner['so_dien_thoai'] : ''), ' ·')) ?></dd><?php endif; ?>
     <?php if ($partner && $partner['dia_chi'] !== ''): ?><dt>Địa chỉ:</dt><dd><?= e($partner['dia_chi']) ?></dd><?php endif; ?>
     <?php endif; ?>
+    <?php if (!empty($delivery)): ?>
+    <dt>Giao hàng:</dt><dd><b><?= e(\StockFlow\Service\DeliveryService::MODES[$delivery['hinh_thuc']] ?? $delivery['hinh_thuc']) ?></b><?= $delivery['hinh_thuc'] === 'THUE_NGOAI' ? ' — ' . e($delivery['don_vi_van_tai']) : '' ?></dd>
+    <dt>Thanh toán:</dt><dd><?php if ($delivery['thanh_toan'] === 'COD'): ?><b>Thu tiền khi nhận hàng: <?= e(n($delivery['so_tien'])) ?> đ</b><?php else: ?>Khách đã thanh toán<?= !empty($delivery['phuong_thuc_tt']) ? ' (' . e(\StockFlow\Service\DeliveryService::METHODS[$delivery['phuong_thuc_tt']] ?? '') . ')' : '' ?><?php endif; ?></dd>
+    <?php if ($delivery['hinh_thuc'] !== 'TU_LAY'): ?>
+    <dt>Giao đến:</dt><dd><?= e($delivery['dia_chi']) ?> — người nhận <?= e($delivery['nguoi_nhan']) ?> · <?= e($delivery['sdt_nhan']) ?></dd>
+    <dt>Xe / tài xế:</dt><dd><?= e($delivery['bien_so']) ?><?= $delivery['loai_xe'] ? ' (' . e($delivery['loai_xe']) . ')' : '' ?> — <?= e($delivery['tai_xe_ten']) ?> · CCCD <?= e($delivery['cccd']) ?><?= $delivery['so_dien_thoai'] ? ' · ' . e($delivery['so_dien_thoai']) : '' ?></dd>
+    <?php endif; endif; ?>
     <?php if ($v['ghi_chu'] !== ''): ?><dt>Ghi chú:</dt><dd><?= e($v['ghi_chu']) ?></dd><?php endif; ?>
   </dl>
 

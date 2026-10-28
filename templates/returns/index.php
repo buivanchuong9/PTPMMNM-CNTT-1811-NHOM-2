@@ -23,4 +23,4 @@ $tone = ['CHO_CAP_LAI' => 'warn', 'DA_CAP_LAI' => 'ok', 'HUY' => 'all'];
       <td class="muted nw"><?= e(dt_short($t['ngay_tao'])) ?></td>
     </tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="empty">Chưa có phiếu trả hàng nào ở mục này.</td></tr><?php endif; ?>
-  </tbody></table></div></section>
+  </tbody></table></div><?= pager($pg) ?></section>
