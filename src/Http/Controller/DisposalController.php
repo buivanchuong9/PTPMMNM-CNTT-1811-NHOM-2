@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace StockFlow\Http\Controller;
 
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -28,9 +29,11 @@ final class DisposalController extends Controller
         $status = isset(DisposalService::STATUS[$r->str('status')]) ? $r->str('status') : 'TRONG_KHO_HUY';
         $q = trim($r->str('q'));
         $canPropose = $user->warehouseId !== null && $this->auth->allows($user, Permission::LapPhieuHuy);
+        [$rows, $pg] = Paginator::of($this->disposals->list($scope, $status, $q), $r);
+        [$expired, $expiredPg] = Paginator::of($this->disposals->expiredStock($scope), $r, 'hh');
         return $this->render('disposals/index', $user, 'disposals', [
-            'rows' => $this->disposals->list($scope, $status, $q), 'status' => $status, 'q' => $q, 'counts' => $this->disposals->counts($scope),
-            'loss' => $this->disposals->lossByReason($scope), 'expired' => $this->disposals->expiredStock($scope),
+            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'counts' => $this->disposals->counts($scope),
+            'loss' => $this->disposals->lossByReason($scope), 'expired' => $expired, 'expiredPg' => $expiredPg,
             'pick' => $canPropose ? $this->disposals->pickable((int)$user->warehouseId) : [],
             'canPropose' => $canPropose, 'canApprove' => $user->warehouseId !== null && $this->auth->allows($user, Permission::XacNhanHuy),
         ], 'Kho huỷ');

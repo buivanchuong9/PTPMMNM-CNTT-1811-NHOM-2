@@ -1,8 +1,8 @@
-<header class="page-head"><div><h1>Điều chuyển kho</h1></div></header>
+<header class="page-head"><div><p class="crumb"><a href="/vouchers">← Quản lý phiếu</a></p><h1>Điều chuyển kho</h1></div></header>
 <?php if (!$from): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu điều chuyển.</p></section>
 <?php else: ?>
-<form method="post" action="/transfers" class="card form" data-once>
+<form method="post" action="/transfers" class="card form" data-once data-guard="submit" data-guard-save="Lưu phiếu nháp">
   <input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="idem" value="<?= e($idem) ?>">
   <div class="route">
     <?php if (!$user->isAdmin && $myWarehouse): ?>
@@ -15,6 +15,6 @@
   </div>
   <label>Ghi chú<input name="note" maxlength="255" placeholder="Lý do điều chuyển, đơn vị vận chuyển…"></label>
   <?php $checkStock = true; $autoLots = true; require __DIR__ . '/../partials/lines.php'; ?>
-  <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Huỷ</a></div>
+  <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Quay lại</a></div>
 </form>
 <?php endif; ?>

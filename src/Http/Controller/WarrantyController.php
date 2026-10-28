@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace StockFlow\Http\Controller;
 
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -27,8 +28,9 @@ final class WarrantyController extends Controller
         $scope = $this->auth->visibleWarehouseIds($user);
         $tab = in_array($r->str('tab'), ['TIEP_NHAN', 'WAITING', 'DA_TRA'], true) ? $r->str('tab') : 'TIEP_NHAN';
         $q = trim($r->str('q'));
+        [$rows, $pg] = Paginator::of($this->warranty->list($scope, $tab, $q), $r);
         return $this->render('warranty/index', $user, 'warranty', [
-            'rows' => $this->warranty->list($scope, $tab, $q), 'tab' => $tab, 'q' => $q, 'counts' => $this->warranty->counts($scope),
+            'rows' => $rows, 'pg' => $pg, 'tab' => $tab, 'q' => $q, 'counts' => $this->warranty->counts($scope),
             'items' => $this->warranty->warrantyItems(), 'today' => StockQuery::today(),
             'canHandle' => $user->warehouseId !== null && $this->auth->allows($user, Permission::XuLyBaoHanh),
         ], 'Bảo hành');

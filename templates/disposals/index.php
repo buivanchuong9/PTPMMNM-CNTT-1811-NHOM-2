@@ -11,7 +11,7 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
 
 <?php if ($expired): ?>
 <section class="card flush" style="margin-bottom:16px">
-  <div class="card-head pad"><h2><?= icon('alert') ?> Đã hết hạn mà vẫn còn trong kho</h2><span class="muted small"><?= n(count($expired)) ?> lô</span></div>
+  <div class="card-head pad"><h2><?= icon('alert') ?> Đã hết hạn mà vẫn còn trong kho</h2><span class="muted small"><?= n($expiredPg->total) ?> lô</span></div>
   <div class="table-wrap"><table class="dense"><tbody>
     <?php foreach ($expired as $x): ?>
     <tr><td><b><?= e($x['ma_hang']) ?></b> <?= e($x['ten']) ?><br><small class="muted">lô <?= e($x['so_lo']) ?> · hết hạn <?= e(dt($x['han_dung'], false)) ?></small></td>
@@ -22,7 +22,7 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
           <button type="submit" class="btn-ghost">Đưa vào kho huỷ</button></form>
         <?php else: ?><span class="wh-code"><?= e($x['wh_code']) ?></span><?php endif; ?></td></tr>
     <?php endforeach; ?>
-  </tbody></table></div>
+  </tbody></table></div><?= pager($expiredPg) ?>
 </section>
 <?php endif; ?>
 
@@ -64,7 +64,7 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
       </td>
     </tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="empty"><?= $q !== '' ? 'Không có phiếu huỷ phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
-  </tbody></table></div></section>
+  </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canPropose): ?>
 <dialog id="dispose-dlg" class="dlg" aria-labelledby="dispose-dlg-t">

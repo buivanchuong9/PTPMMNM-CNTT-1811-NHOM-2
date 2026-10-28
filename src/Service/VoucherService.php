@@ -16,7 +16,7 @@ final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
                                 private Authorizer $auth, private AuditLog $audit, private TransferService $transfers, private StockQuery $query, private PricingService $pricing,
-                                private SupplierReturnService $returns) {}
+                                private SupplierReturnService $returns, private DeliveryService $deliveries) {}
 
     /**
      * Lập phiếu nhập/xuất ở trạng thái nháp (chưa ảnh hưởng tồn).
@@ -97,9 +97,10 @@ final class VoucherService
 
     /**
      * Xác nhận phiếu ⇒ ghi sổ. Idempotent: phiếu đã xác nhận ⇒ không ghi thêm (trả về already=true).
+     * Phiếu xuất: $delivery = cách giao hàng cho khách (khách tự lấy / xe của kho / thuê ngoài), xem DeliveryService::record.
      * @return array{voucher:array,already:bool}
      */
-    public function confirm(User $user, int $id): array
+    public function confirm(User $user, int $id, ?array $delivery = null): array
     {
         $peek = $this->repo->find($id);
         if ($peek['loai'] === VoucherType::TransferOut->value) {
@@ -109,7 +110,7 @@ final class VoucherService
             return $this->transfers->receive($user, $id);
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
-        $already = $this->db->transaction(function () use ($user, $id) {
+        $already = $this->db->transaction(function () use ($user, $id, $delivery) {
             $v = $this->repo->lock($id);
             if ($v['trang_thai'] === 'CONFIRMED') {
                 return true;
@@ -129,6 +130,9 @@ final class VoucherService
             $this->ledger->post($ops);
             $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CONFIRMED', nguoi_xac_nhan_id = ?, ngay_xac_nhan = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $id]);
             $this->audit->record($user->id, 'voucher.confirm', 'voucher', $id, $v['ma']);
+            if ($v['loai'] === VoucherType::Issue->value && $delivery !== null) {
+                $this->deliveries->record($user, $v, $delivery);
+            }
             if ($v['loai'] === VoucherType::Receipt->value) {   // hàng không đạt ⇒ phiếu trả nhà cung cấp; hàng cấp lại ⇒ trừ vào số còn thiếu
                 $this->returns->createFromReceipt($user, $v);
                 $this->returns->fulfil($v, $lines);

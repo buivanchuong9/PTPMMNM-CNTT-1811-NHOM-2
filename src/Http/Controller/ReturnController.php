@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace StockFlow\Http\Controller;
 
+use StockFlow\Core\Paginator;
 use StockFlow\Core\Request;
 use StockFlow\Core\Response;
 use StockFlow\Core\Session;
@@ -25,8 +26,9 @@ final class ReturnController extends Controller
         $this->need($user, Permission::XemPhieu);
         $scope = $this->auth->visibleWarehouseIds($user);
         $status = isset(SupplierReturnService::STATUS[$r->str('status')]) ? $r->str('status') : 'CHO_CAP_LAI';
+        [$rows, $pg] = Paginator::of($this->returns->list($scope, $status), $r);
         return $this->render('returns/index', $user, 'returns', [
-            'rows' => $this->returns->list($scope, $status), 'status' => $status, 'counts' => $this->returns->counts($scope),
+            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'counts' => $this->returns->counts($scope),
         ], 'Trả hàng nhà cung cấp');
     }
 

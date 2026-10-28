@@ -49,7 +49,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
       </td>
     </tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="empty"><?= $q !== '' ? 'Không có phiếu bảo hành phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
-  </tbody></table></div></section>
+  </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canHandle): ?>
 <dialog id="warranty-dlg" class="dlg" aria-labelledby="warranty-dlg-t">

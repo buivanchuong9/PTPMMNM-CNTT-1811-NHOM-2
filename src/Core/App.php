@@ -142,6 +142,8 @@ final class App
         $r->post('/fleet/trips/loss', [C\FleetController::class, 'confirmLoss']);
         $r->post('/fleet/losses/adjust', [C\FleetController::class, 'adjustLoss']);
         $r->post('/fleet/drivers/pay', [C\FleetController::class, 'driverPay']);
+        $r->post('/fleet/rates', [C\FleetController::class, 'saveRates']);
+        $r->post('/fleet/distances', [C\FleetController::class, 'saveDistances']);
         $r->post('/fleet/vehicles', [C\FleetController::class, 'addVehicle']);
         $r->post('/fleet/vehicles/update', [C\FleetController::class, 'updateVehicle']);
         $r->post('/fleet/vehicles/delete', [C\FleetController::class, 'deleteVehicle']);

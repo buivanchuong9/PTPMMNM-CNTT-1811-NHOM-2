@@ -22,7 +22,7 @@ use StockFlow\Domain\VoucherType;
 final class TransferService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
-                                private Authorizer $auth, private AuditLog $audit, private StockQuery $query) {}
+                                private Authorizer $auth, private AuditLog $audit, private StockQuery $query, private FleetService $fleet) {}
 
     /** @param list<array{item_id:int,batch_id:int,qty:int}> $lines @return array{voucher:array,created:bool} */
     public function createDraft(User $user, int $fromWh, int $toWh, array $lines, string $note, ?string $idempotencyKey): array
@@ -148,24 +148,35 @@ final class TransferService
     /**
      * XUẤT KHO ĐI kèm vận chuyển: bắt buộc chọn xe (đang đứng ở kho đi, đã có tài xế phụ trách) — tài xế đi theo xe — và tài xế đã xác nhận nhận đủ hàng.
      * Một giao dịch: trừ tồn kho đi, mở phiếu đến, lập chuyến, xe chuyển sang «đang chạy tới kho đến».
+     * $pay (bắt buộc khi xuất từ giao diện): hinh_thuc NOI_BO | THUE_NGOAI, km, tien (số tiền thực trả), ghi_chu, và với THUE_NGOAI thêm company · driver · cccd · phone · plate · type
+     * của đơn vị vận tải bên thứ ba (bắt buộc đủ). Tiền gợi ý = km × đơn giá/km của kho đi; có thể nhập số tiền khác.
+     * @param ?array<string,mixed> $pay null = không ghi tiền công (chuyến cũ / kiểm thử)
      * @return array{voucher:array,already:bool}
      */
-    public function dispatch(User $user, int $outId, int $vehicleId, bool $driverConfirmed): array
+    public function dispatch(User $user, int $outId, int $vehicleId, bool $driverConfirmed, ?array $pay = null): array
     {
         $peek = $this->repo->find($outId);
         if ($peek['loai'] !== VoucherType::TransferOut->value) {
             throw new DomainError('Đây không phải phiếu điều chuyển đi');
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
-        return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed) {
+        return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed, $pay) {
             $out = $this->repo->lock($outId);
             $xe = $tx = null;
+            $trip = ['hinh_thuc' => 'NOI_BO', 'km' => 0, 'don_gia_km' => 0, 'tien_goi_y' => 0, 'tien_tra' => 0, 'don_vi_van_tai' => '', 'ghi_chu_gia' => ''];
             if ($out['trang_thai'] === 'DRAFT') {
+                $external = ($pay['hinh_thuc'] ?? 'NOI_BO') === 'THUE_NGOAI';
+                if ($pay !== null) {
+                    $trip = $this->tripPay((int)$out['kho_id'], (int)$out['kho_doi_ung_id'], $pay);
+                }
+                if ($external) {
+                    $vehicleId = $this->fleet->registerExternal((int)$out['kho_id'], $pay['ngoai'] ?? []);   // đủ thông tin bên thứ ba mới được bàn giao hàng
+                }
                 if (!$vehicleId) {
                     throw new DomainError('Chọn xe chở hàng trước khi xuất kho');
                 }
                 if (!$driverConfirmed) {
-                    throw new DomainError('Tài xế phải xác nhận đã nhận đủ hàng trước khi xuất kho');
+                    throw new DomainError($external ? 'Tài xế của đơn vị vận tải phải xác nhận đã nhận đủ hàng trước khi xuất kho' : 'Tài xế phải xác nhận đã nhận đủ hàng trước khi xuất kho');
                 }
                 $xe = $this->db->one('SELECT * FROM xe WHERE id = ? FOR UPDATE', [$vehicleId]);
                 if (!$xe || !$xe['hoat_dong']) {
@@ -186,14 +197,22 @@ final class TransferService
             if (!$res['already'] && $xe && $tx) {
                 $in = $this->repo->pairOf($res['voucher']) ?? throw new DomainError('Không tìm thấy phiếu đến đối ứng');
                 $this->db->insert(
-                    'INSERT INTO chuyen_van_chuyen (phieu_di_id, phieu_den_id, xe_id, tai_xe_id, kho_di_id, kho_den_id, tai_xe_xac_nhan_du_hang, nguoi_giao_id) VALUES (?,?,?,?,?,?,?,?)',
-                    [$outId, (int)$in['id'], $vehicleId, (int)$tx['id'], (int)$out['kho_id'], (int)$out['kho_doi_ung_id'], 1, $user->id]
+                    'INSERT INTO chuyen_van_chuyen (phieu_di_id, phieu_den_id, xe_id, tai_xe_id, kho_di_id, kho_den_id, tai_xe_xac_nhan_du_hang, nguoi_giao_id,
+                                                    hinh_thuc, km, don_gia_km, tien_goi_y, tien_tra, don_vi_van_tai, ghi_chu_gia) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    [$outId, (int)$in['id'], $vehicleId, (int)$tx['id'], (int)$out['kho_id'], (int)$out['kho_doi_ung_id'], 1, $user->id,
+                     $trip['hinh_thuc'], $trip['km'], $trip['don_gia_km'], $trip['tien_goi_y'], $trip['tien_tra'], $trip['don_vi_van_tai'], $trip['ghi_chu_gia']]
                 );
                 $this->db->exec('UPDATE xe SET kho_hien_tai_id = NULL, dang_den_kho_id = ? WHERE id = ?', [(int)$out['kho_doi_ung_id'], $vehicleId]);
-                $this->audit->record($user->id, 'transfer.vehicle', 'voucher', $outId, "{$xe['bien_so']} · {$tx['ho_ten']} · tài xế xác nhận đủ hàng");
+                $this->audit->record($user->id, 'transfer.vehicle', 'voucher', $outId, "{$xe['bien_so']} · {$tx['ho_ten']} · tài xế xác nhận đủ hàng"
+                    . ($pay !== null ? ' · ' . ($trip['hinh_thuc'] === 'THUE_NGOAI' ? 'thuê ngoài ' . $trip['don_vi_van_tai'] : 'xe kho') . " · {$trip['km']} km · " . number_format($trip['tien_tra'], 0, ',', '.') . ' đ' : ''));
             }
             return $res;
         });
+    }
+
+    private function tripPay(int $fromWh, int $toWh, array $pay): array
+    {
+        return $this->fleet->tripPay($fromWh, $toWh, $pay);
     }
 
     /** Lý do thu hồi chuyến khi xe còn trên đường. */
