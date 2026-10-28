@@ -93,6 +93,10 @@ function cmdSeed(array $argv): int
         echo "✔ Đã gán mã vạch mẫu cho $n mặt hàng demo chưa có mã
 ";
     }
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillWarranty(connect())) {   // CSDL demo có từ trước khi có kho bảo hành
+        echo "✔ Đã đặt thời hạn bảo hành mẫu cho $n mặt hàng điện tử
+";
+    }
     return $rc;
 }
 

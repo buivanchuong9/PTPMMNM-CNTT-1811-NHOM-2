@@ -15,15 +15,19 @@ use StockFlow\Domain\VoucherType;
 final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
-                                private Authorizer $auth, private AuditLog $audit, private TransferService $transfers, private StockQuery $query, private PricingService $pricing) {}
+                                private Authorizer $auth, private AuditLog $audit, private TransferService $transfers, private StockQuery $query, private PricingService $pricing,
+                                private SupplierReturnService $returns) {}
 
     /**
      * Lập phiếu nhập/xuất ở trạng thái nháp (chưa ảnh hưởng tồn).
      * Gửi lại cùng $idempotencyKey ⇒ trả về phiếu đã có, không tạo phiếu thứ hai.
+     * Phiếu nhập: $lines mang số lượng NHẬN; $quality ("hàng:lô" ⇒ [loi, ly_do, ghi_chu]) là phần KHÔNG ĐẠT trả lại nhà cung cấp.
+     * Dòng phiếu (và tồn kho) chỉ nhận phần đạt = nhận − không đạt. $replaceId: phiếu nhập này là hàng nhà cung cấp cấp lại cho một phiếu trả hàng.
      * @param list<array{item_id:int,batch_id:int,qty:int,note?:string}> $lines
+     * @param array<string,array{loi:int,ly_do:string,ghi_chu:string}> $quality
      * @return array{voucher:array,created:bool}
      */
-    public function createDraft(User $user, VoucherType $type, int $warehouseId, array $lines, string $partner, string $note, ?string $idempotencyKey): array
+    public function createDraft(User $user, VoucherType $type, int $warehouseId, array $lines, string $partner, string $note, ?string $idempotencyKey, array $quality = [], ?int $replaceId = null): array
     {
         if (!in_array($type, [VoucherType::Receipt, VoucherType::Issue], true)) {
             throw new DomainError('Chỉ lập tay phiếu nhập hoặc phiếu xuất');
@@ -39,14 +43,27 @@ final class VoucherService
             return ['voucher' => $existing, 'created' => false];
         }
         try {
-            $id = $this->db->transaction(function () use ($user, $type, $warehouseId, $lines, $partner, $note, $idempotencyKey) {
+            $id = $this->db->transaction(function () use ($user, $type, $warehouseId, $lines, $partner, $note, $idempotencyKey, $quality, $replaceId) {
                 $this->requireActiveWarehouse($warehouseId);
                 $this->validateLines($lines);
+                $received = [];
+                if ($type === VoucherType::Receipt) {
+                    [$lines, $received] = $this->applyQuality($lines, $quality);
+                    if ($replaceId !== null) {
+                        $this->returns->assertReplacement($replaceId, $warehouseId, $partner, $lines);
+                    }
+                } elseif ($replaceId !== null || $quality) {
+                    throw new DomainError('Chỉ phiếu nhập mới có kiểm tra chất lượng');
+                }
                 $lines = $this->priceLines($type, $warehouseId, $lines);
                 $id = $this->repo->insert([
                     'loai' => $type->value, 'kho_id' => $warehouseId, 'doi_tac' => trim($partner), 'ghi_chu' => trim($note),
-                    'khoa_chong_trung' => $idempotencyKey, 'nguoi_lap_id' => $user->id,
+                    'khoa_chong_trung' => $idempotencyKey, 'nguoi_lap_id' => $user->id, 'cap_lai_cho_id' => $replaceId,
                 ], $lines);
+                foreach ($received as $q) {
+                    $this->db->exec('INSERT INTO nhap_loi (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id, so_luong_nhan, so_luong_loi, ly_do, ghi_chu) VALUES (?,?,?,?,?,?,?)',
+                        [$id, $q['mat_hang_id'], $q['lo_hang_id'], $q['so_luong'], $q['loi'], $q['ly_do'], $q['ghi_chu']]);
+                }
                 $this->audit->record($user->id, 'voucher.create', 'voucher', $id, $type->value);
                 return $id;
             });
@@ -112,6 +129,10 @@ final class VoucherService
             $this->ledger->post($ops);
             $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CONFIRMED', nguoi_xac_nhan_id = ?, ngay_xac_nhan = CURRENT_TIMESTAMP WHERE id = ?", [$user->id, $id]);
             $this->audit->record($user->id, 'voucher.confirm', 'voucher', $id, $v['ma']);
+            if ($v['loai'] === VoucherType::Receipt->value) {   // hàng không đạt ⇒ phiếu trả nhà cung cấp; hàng cấp lại ⇒ trừ vào số còn thiếu
+                $this->returns->createFromReceipt($user, $v);
+                $this->returns->fulfil($v, $lines);
+            }
             return false;
         });
         return ['voucher' => $this->repo->find($id), 'already' => $already];
@@ -183,6 +204,39 @@ final class VoucherService
             return $newId;
         });
         return ['voucher' => $this->repo->find($newId)];
+    }
+
+    /**
+     * Tách số nhận thành phần đạt (vào dòng phiếu) và phần không đạt (trả lại nhà cung cấp).
+     * @param list<array{mat_hang_id:int,lo_hang_id:int,so_luong:int}> $lines
+     * @return array{0:list<array>,1:list<array>} [dòng đạt, dòng nhận kèm số không đạt]
+     */
+    private function applyQuality(array $lines, array $quality): array
+    {
+        $accepted = $received = [];
+        foreach ($lines as $l) {
+            $q = $quality[$l['mat_hang_id'] . ':' . $l['lo_hang_id']] ?? ['loi' => 0, 'ly_do' => '', 'ghi_chu' => ''];
+            $bad = (int)$q['loi'];
+            $name = (string)$this->db->value('SELECT ma_hang FROM mat_hang WHERE id = ?', [$l['mat_hang_id']]);
+            if ($bad < 0 || $bad > (int)$l['so_luong']) {
+                throw new DomainError("Mặt hàng $name: số không đạt chất lượng ($bad) phải từ 0 đến số lượng nhận ({$l['so_luong']})");
+            }
+            $note = mb_substr(trim((string)$q['ghi_chu']), 0, 255);
+            if ($bad > 0 && !isset(SupplierReturnService::REASONS[$q['ly_do']])) {
+                throw new DomainError("Mặt hàng $name: chọn tình trạng của hàng không đạt chất lượng");
+            }
+            if ($bad > 0 && $q['ly_do'] === 'KHAC' && $note === '') {
+                throw new DomainError("Mặt hàng $name: tình trạng «Khác» cần ghi chú rõ");
+            }
+            $received[] = $l + ['loi' => $bad, 'ly_do' => $bad > 0 ? $q['ly_do'] : '', 'ghi_chu' => $bad > 0 ? $note : ''];
+            if ((int)$l['so_luong'] - $bad > 0) {
+                $accepted[] = ['so_luong' => (int)$l['so_luong'] - $bad] + $l;
+            }
+        }
+        if ($accepted === []) {
+            throw new DomainError('Toàn bộ hàng nhận đều không đạt chất lượng — không lập phiếu nhập, hãy từ chối nhận lô hàng này với nhà cung cấp');
+        }
+        return [$accepted, $received];
     }
 
     private function requireActiveWarehouse(int $id): void

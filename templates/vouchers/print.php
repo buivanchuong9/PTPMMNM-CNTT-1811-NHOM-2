@@ -25,6 +25,9 @@ foreach ($lines as $l) {
     $sumQty += (int)$l['so_luong'];
 }
 $when = $v['ngay_xac_nhan'] ?: $v['ngay_tao'];
+$qcRows = $loai === 'RECEIPT' ? ($quality ?? []) : [];   // phiếu nhập: kết quả kiểm tra chất lượng từng dòng
+$qcBad = array_sum(array_column($qcRows, 'so_luong_loi'));
+$qcLabels = \StockFlow\Service\SupplierReturnService::REASONS;
 ?><!doctype html>
 <html lang="vi">
 <head>
@@ -102,7 +105,7 @@ $when = $v['ngay_xac_nhan'] ?: $v['ngay_tao'];
   </dl>
 
   <table>
-    <thead><tr><th style="width:36px">STT</th><th>Tên hàng hoá</th><th style="width:90px">Lô / HSD</th><th style="width:50px">ĐVT</th><th style="width:74px"><?= $receipt ? 'Theo phiếu' : 'Số lượng' ?></th><?php if ($receipt): ?><th style="width:74px">Thực nhận</th><?php if ($lack): ?><th style="width:60px">Thiếu</th><?php endif; endif; ?>
+    <thead><tr><th style="width:36px">STT</th><th>Tên hàng hoá</th><th style="width:90px">Lô / HSD</th><th style="width:50px">ĐVT</th><th style="width:74px"><?= $receipt ? 'Theo phiếu' : ($qcRows ? 'Nhập kho' : 'Số lượng') ?></th><?php if ($receipt): ?><th style="width:74px">Thực nhận</th><?php if ($lack): ?><th style="width:60px">Thiếu</th><?php endif; endif; ?>
       <?php if ($priced): ?><th style="width:90px"><?= $taxed ? 'Đơn giá' : 'Giá gốc' ?></th><th style="width:100px">Thành tiền</th><?php endif; ?></tr></thead>
     <tbody>
     <?php foreach ($lines as $i => $l): $ln = $qtyOf($l) * (int)($l['don_gia'] ?? 0); ?>
@@ -122,6 +125,24 @@ $when = $v['ngay_xac_nhan'] ?: $v['ngay_tao'];
   <p class="words"><b>Thực nhận tại kho đến:</b> <?= e($receipt['by'] ?? '—') ?> · <?= e(dt($receipt['when'])) ?> · <?= $lack ? '<b>thiếu ' . n($lack) . '</b>' : 'nhận đủ' ?><?= $why !== '' ? '<br><b>Lý do thiếu:</b> ' . e($why) : '' ?></p>
   <?php endif; ?>
 
+  <?php if ($qcRows): ?>
+  <p class="words" style="margin-top:14px"><b>Kết quả kiểm tra chất lượng khi nhận hàng</b></p>
+  <table>
+    <thead><tr><th style="width:36px">STT</th><th>Tên hàng hoá</th><th style="width:80px">Lô</th><th style="width:70px">Nhận</th><th style="width:70px">Đạt<br>(nhập kho)</th><th style="width:70px">Không đạt<br>(trả NCC)</th><th>Tình trạng / ghi chú</th><th style="width:78px">Kết luận</th></tr></thead>
+    <tbody>
+    <?php foreach ($qcRows as $i => $q): $bad = (int)$q['so_luong_loi']; $ok = (int)$q['so_luong_nhan'] - $bad; ?>
+      <tr><td class="c"><?= $i + 1 ?></td><td><b><?= e($q['ma_hang']) ?></b> <?= e($q['ten']) ?></td><td class="c"><?= $q['so_lo'] === 'NOLOT' ? '—' : e($q['so_lo']) ?></td>
+        <td class="r"><?= n($q['so_luong_nhan']) ?></td><td class="r"><b><?= n($ok) ?></b></td><td class="r"><?= $bad ? '<b>' . n($bad) . '</b>' : '0' ?></td>
+        <td><?= $bad ? e($qcLabels[$q['ly_do']] ?? $q['ly_do']) . ($q['ghi_chu'] !== '' ? ' — ' . e($q['ghi_chu']) : '') : '—' ?></td>
+        <td class="c"><b><?= $bad === 0 ? 'Đạt' : ($ok === 0 ? 'Không đạt' : 'Đạt một phần') ?></b></td></tr>
+    <?php endforeach; ?>
+    </tbody>
+    <tfoot><tr><td colspan="3" style="text-align:right">Cộng</td><td class="r"><?= n(array_sum(array_column($qcRows, 'so_luong_nhan'))) ?></td><td class="r"><?= n(array_sum(array_column($qcRows, 'so_luong_nhan')) - $qcBad) ?></td><td class="r"><?= n($qcBad) ?></td><td colspan="2"></td></tr></tfoot>
+  </table>
+  <?php if ($qcBad && !empty($returnNote)): ?><p class="words"><b>Hàng không đạt chất lượng:</b> đã lập phiếu trả nhà cung cấp <b><?= e($returnNote['ma']) ?></b>, chờ nhà cung cấp cấp lại đúng số lượng. Tồn kho chỉ cộng phần đạt.</p><?php endif; ?>
+  <?php if (!empty($replaces)): ?><p class="words"><b>Hàng cấp lại</b> cho phiếu trả <b><?= e($replaces['ma']) ?></b>.</p><?php endif; ?>
+  <?php endif; ?>
+
   <?php if ($priced && $sumNet > 0): ?>
   <div class="sum">
     <?php if ($taxed): ?>
@@ -133,9 +154,10 @@ $when = $v['ngay_xac_nhan'] ?: $v['ngay_tao'];
   <p class="words"><i>Bằng chữ: <?= e(vnd_words($sumNet + $sumTax)) ?>.</i></p>
   <?php endif; ?>
 
-  <div class="sign">
+  <div class="sign"<?= $qcRows ? ' style="grid-template-columns:repeat(4,1fr)"' : '' ?>>
     <div><b>Người lập phiếu</b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= e($v['creator_name']) ?></span></div>
     <div><b>Thủ kho / Quản lý kho</b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= e($v['approver_name'] ?? '') ?></span></div>
+    <?php if ($qcRows): ?><div><b>Người kiểm tra chất lượng</b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"></span></div><?php endif; ?>
     <div><b><?= e($third) ?></b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= $trip && in_array($loai, ['TRANSFER_OUT', 'TRANSFER_IN'], true) ? e($trip['tai_xe_ten']) : '' ?></span></div>
   </div>
   <p class="foot">Phiếu đã ghi sổ lúc <?= e(dt($when)) ?> · <?= e($v['ma']) ?> · in từ hệ thống <?= e(APP_NAME) ?></p>

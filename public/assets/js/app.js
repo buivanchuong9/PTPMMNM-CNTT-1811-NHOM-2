@@ -413,6 +413,7 @@
         tr.innerHTML = `<td>${lotRow ? '<span class="auto-out"></span>' : `<input type="hidden" name="line[]" value="${esc(i.k)}">`}<b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}${lotCells}${addLot}</td>`
           + '<td class="num stock-cell"></td>'
           + `<td class="num${lotRow ? ' qty-cell lot-cell' : ''}"><div class="qty-line">${lotRow ? '<div class="lot-chips"></div>' : ''}<div class="qty-box"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input${lotRow ? '' : ' name="qty[]"'} data-qty type="number" min="1" max="1000000" value="1" inputmode="numeric" aria-label="Số lượng"${lotRow ? ' placeholder="Chọn lô"' : ''}><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small></div></div><div class="row-err" role="alert" hidden></div></td>`
+          + (picker.dataset.newlots ? `<td class="bad-cell"><input name="bad[]" class="bad-qty" type="number" min="0" max="1000000" value="0" inputmode="numeric" aria-label="Số lượng không đạt chất lượng"><select name="bad_reason[]" class="bad-reason" aria-label="Tình trạng hàng không đạt" hidden><option value="">Tình trạng…</option>${(picker.dataset.badReasons ? JSON.parse(picker.dataset.badReasons) : []).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select><input name="bad_note[]" class="bad-note" maxlength="200" placeholder="Ghi chú" hidden></td>` : '')
           + '<td class="num"><button type="button" class="icon-btn remove-line" aria-label="Xoá dòng">✕</button></td>';
       }
       if (lotRow && !tr._alloc) { tr._alloc = {}; syncLots(tr); }
@@ -458,6 +459,15 @@
     body.addEventListener('input', (ev) => {
       const tr = ev.target.closest('tr');
       if (tr && tr._alloc && ev.target.matches('input[data-qty]')) syncLots(tr);
+      if (tr && picker.dataset.newlots) {   // phiếu nhập: kiểm tra chất lượng — không đạt không vượt số nhận; có số thì phải chọn tình trạng
+        const q = tr.querySelector('input[data-qty]'), b = tr.querySelector('.bad-qty');
+        if (q && b) {
+          const bad = +b.value || 0;
+          b.setCustomValidity(bad > (+q.value || 0) ? 'Số không đạt vượt số lượng nhận' : '');
+          const on = bad > 0, rs = tr.querySelector('.bad-reason'), nt = tr.querySelector('.bad-note');
+          rs.hidden = nt.hidden = !on; rs.required = on;
+        }
+      }
       refresh();
     });
     body.addEventListener('change', (ev) => {
@@ -544,6 +554,24 @@
       search.focus();
     }, true);
     refresh();
+    // Đang nhập mà chuyển trang / tìm kiếm: lưu số đã nhập trước rồi mới đi, để không mất dữ liệu
+    if (cf.dataset.save) {
+      const saveThen = (url) => { cf.querySelector('[name=goto]').value = url; cf.action = cf.dataset.save; cf.requestSubmit(); };
+      cf.addEventListener('click', (e) => {
+        const a = e.target.closest('.pager a');
+        if (!a) return;
+        e.preventDefault();
+        saveThen(a.getAttribute('href'));
+      });
+      const sf = document.querySelector('[data-count-search]');
+      sf?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const q = sf.querySelector('[name=q]').value.trim();
+        saveThen(location.pathname + (q ? '?q=' + encodeURIComponent(q) : ''));
+      });
+      const only = rows.length === 1 && new URLSearchParams(location.search).get('q');
+      if (only) rows[0].querySelector('.count-input')?.focus();   // quét mã vạch ra đúng một dòng: nhảy thẳng vào ô thực đếm
+    }
   }
 
   // Ô chọn có tìm kiếm cho mọi <select data-combo> (lọc theo mặt hàng, chọn mặt hàng để thêm lô…)
@@ -743,10 +771,19 @@
     const rows = [...cf.querySelectorAll('tr[data-system]')];
     const refresh = () => {
       if (!cf.querySelector('.count-input')) return; // đợt đã nộp/đóng: giữ số liệu do máy chủ tính
-      let net = 0, n = 0;
+      let net = +cf.dataset.baseNet || 0, n = +cf.dataset.baseVar || 0, badSum = +cf.dataset.baseBad || 0;   // phần ở các trang khác + phần trang này
       rows.forEach((tr) => {
         const input = tr.querySelector('.count-input');
         if (!input) return;
+        // Chất lượng: số không đạt nằm trong số thực đếm (để trống thực đếm = khớp sổ sách); có số thì bắt chọn tình trạng
+        const bq = tr.querySelector('.bad-input'), br = tr.querySelector('.bad-reason'), bn = tr.querySelector('.bad-note'), good = tr.querySelector('.good-qty');
+        const have = input.value === '' ? +tr.dataset.system : +input.value, bad = bq && bq.value !== '' ? +bq.value : 0;
+        if (bq) {
+          bq.setCustomValidity(bad > have ? `Không đạt (${bad}) vượt số thực đếm (${have})` : '');
+          br.hidden = bn.hidden = !(bad > 0); br.required = bad > 0;
+          good.textContent = Math.max(0, have - bad).toLocaleString('vi-VN');
+          badSum += bad;
+        }
         const cell = tr.querySelector('.variance');
         const sel = tr.querySelector('.reason-select'), note = tr.querySelector('.reason-note');
         const warn = tr.querySelector('.count-warn');
@@ -782,14 +819,16 @@
       cf.querySelector('[data-var-lines]').textContent = n;
       netEl.textContent = fmt(net);
       netEl.className = net > 0 ? 'pos' : net < 0 ? 'neg' : '';
+      const badEl = cf.querySelector('[data-bad-total]');
+      if (badEl) { badEl.textContent = badSum.toLocaleString('vi-VN'); badEl.className = badSum ? 'neg' : ''; }
     };
     // Ô thực đếm chỉ nhận chữ số: chặn phím ký tự / dấu âm / dấu chấm, và lọc cả khi dán
     cf.addEventListener('keydown', (e) => {
-      if (!e.target.classList.contains('count-input') || e.ctrlKey || e.metaKey || e.altKey || e.key.length > 1) return;
+      if (!(e.target.classList.contains('count-input') || e.target.classList.contains('bad-input')) || e.ctrlKey || e.metaKey || e.altKey || e.key.length > 1) return;
       if (!/^[0-9]$/.test(e.key)) e.preventDefault();
     });
     cf.addEventListener('input', (e) => {
-      if (e.target.classList.contains('count-input')) {
+      if (e.target.classList.contains('count-input') || e.target.classList.contains('bad-input')) {
         const clean = e.target.value.replace(/\D+/g, '').replace(/^0+(?=\d)/, '');
         if (clean !== e.target.value) e.target.value = clean;
       }
@@ -930,7 +969,7 @@
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeNotif(); });
   // Menu có mục con: bấm mũi tên ▾ chỉ gập / mở nhánh, không chuyển trang
   document.addEventListener('click', (ev) => {
-    const caret = ev.target.closest('[data-nav-caret]');
+    const caret = ev.target.closest('[data-nav-caret], a[data-nav-toggle]');   // mục cha không có trang: bấm đâu cũng chỉ xổ / gập
     if (!caret) return;
     ev.preventDefault();
     ev.stopPropagation();

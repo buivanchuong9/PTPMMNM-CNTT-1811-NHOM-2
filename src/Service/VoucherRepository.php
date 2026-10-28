@@ -46,6 +46,17 @@ final class VoucherRepository
         );
     }
 
+    /** Kết quả kiểm tra chất lượng từng dòng của phiếu nhập (số nhận, số không đạt, lý do). */
+    public function quality(int $voucherId): array
+    {
+        return $this->db->all(
+            'SELECT q.*, i.ma_hang, i.ten, u.ma AS unit, b.so_lo, b.han_dung
+             FROM nhap_loi q JOIN mat_hang i ON i.id = q.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = q.lo_hang_id
+             WHERE q.phieu_nhap_xuat_id = ? ORDER BY q.id',
+            [$voucherId]
+        );
+    }
+
     public function correctionOf(int $id): ?array
     {
         return $this->db->one('SELECT id, ma FROM phieu_nhap_xuat WHERE dieu_chinh_cho_id = ?', [$id]);
@@ -71,11 +82,11 @@ final class VoucherRepository
         $confirmed = ($v['trang_thai'] ?? 'DRAFT') === 'CONFIRMED';
         $id = $this->db->insert(
             'INSERT INTO phieu_nhap_xuat (ma, loai, trang_thai, kho_id, kho_doi_ung_id, phieu_nhap_xuat_lien_quan_id, dieu_chinh_cho_id, khoa_chong_trung,
-                                   doi_tac, ly_do, ghi_chu, nguoi_lap_id, nguoi_xac_nhan_id, ngay_xac_nhan)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,' . ($confirmed ? 'CURRENT_TIMESTAMP' : 'NULL') . ')',
+                                   doi_tac, ly_do, ghi_chu, nguoi_lap_id, nguoi_xac_nhan_id, cap_lai_cho_id, ngay_xac_nhan)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,' . ($confirmed ? 'CURRENT_TIMESTAMP' : 'NULL') . ')',
             [$code, $v['loai'], $v['trang_thai'] ?? 'DRAFT', $v['kho_id'], $v['kho_doi_ung_id'] ?? null, $v['phieu_nhap_xuat_lien_quan_id'] ?? null,
              $v['dieu_chinh_cho_id'] ?? null, $v['khoa_chong_trung'] ?? null, mb_substr($v['doi_tac'] ?? '', 0, 120),
-             mb_substr($v['ly_do'] ?? '', 0, 255), mb_substr($v['ghi_chu'] ?? '', 0, 255), $v['nguoi_lap_id'], $confirmed ? $v['nguoi_lap_id'] : null]
+             mb_substr($v['ly_do'] ?? '', 0, 255), mb_substr($v['ghi_chu'] ?? '', 0, 255), $v['nguoi_lap_id'], $confirmed ? $v['nguoi_lap_id'] : null, $v['cap_lai_cho_id'] ?? null]
         );
         foreach ($lines as $l) {
             $this->db->exec('INSERT INTO chi_tiet_phieu_nhap_xuat (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id, so_luong, ghi_chu, don_gia, thue_suat, gia_von) VALUES (?,?,?,?,?,?,?,?)',

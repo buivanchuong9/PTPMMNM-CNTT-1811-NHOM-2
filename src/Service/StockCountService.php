@@ -19,7 +19,7 @@ use StockFlow\Domain\VoucherType;
 final class StockCountService
 {
     public function __construct(private Db $db, private VoucherRepository $vouchers, private Ledger $ledger,
-                                private Authorizer $auth, private AuditLog $audit) {}
+                                private Authorizer $auth, private AuditLog $audit, private DisposalService $disposals) {}
 
     public function open(User $user, int $warehouseId, string $note): int
     {
@@ -54,7 +54,7 @@ final class StockCountService
                              LEFT JOIN nguoi_dung au ON au.id = c.nguoi_duyet_id LEFT JOIN phieu_nhap_xuat v ON v.id = c.phieu_nhap_xuat_dieu_chinh_id
                              WHERE c.id = ?', [$id]) ?? throw new NotFound('Không tìm thấy đợt kiểm kê');
         $c['lines'] = $this->db->all(
-            'SELECT l.*, i.ma_hang, i.ten, u.ma AS unit, b.so_lo, b.han_dung FROM chi_tiet_kiem_ke l
+            'SELECT l.*, i.ma_hang, i.ten, i.ma_vach, u.ma AS unit, b.so_lo, b.han_dung FROM chi_tiet_kiem_ke l
              JOIN mat_hang i ON i.id = l.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = l.lo_hang_id
              WHERE l.dot_kiem_ke_id = ? ORDER BY i.ma_hang, b.so_lo', [$id]);
         return $c;
@@ -185,13 +185,15 @@ final class StockCountService
 
     /**
      * Lưu số đếm (và lý do chênh lệch). Khoá "item:batch" ⇒ số đếm ('' = chưa đếm).
-     * @param array<string,?int> $counted @param array<string,string> $reasons
+     * $quality: khoá ⇒ [qty => số lượng không đạt chất lượng (nằm trong số thực đếm), reason => mã lý do, note => ghi chú].
+     * Số không đạt được trừ khỏi tồn và chuyển vào kho huỷ khi duyệt đợt.
+     * @param array<string,?int> $counted @param array<string,string> $reasons @param array<string,array{qty:int,reason:string,note:string}> $quality
      */
-    public function save(User $user, int $id, array $counted, array $reasons = []): void
+    public function save(User $user, int $id, array $counted, array $reasons = [], array $quality = []): void
     {
         $peek = $this->find($id);
         $this->auth->require($user, (int)$peek['kho_id'], Permission::KiemKeThucHien);
-        $this->db->transaction(function () use ($id, $counted, $reasons) {
+        $this->db->transaction(function () use ($id, $counted, $reasons, $quality) {
             $c = $this->db->one('SELECT trang_thai FROM dot_kiem_ke WHERE id = ? FOR UPDATE', [$id]);
             if (!$c || $c['trang_thai'] !== 'OPEN') {
                 throw new DomainError('Đợt kiểm kê không còn ở trạng thái đang đếm');
@@ -206,13 +208,34 @@ final class StockCountService
                 $this->db->exec('UPDATE chi_tiet_kiem_ke SET so_luong_thuc_dem = ?, ly_do = ? WHERE dot_kiem_ke_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
                     [$qty, mb_substr(trim($reasons[$key] ?? ''), 0, 255), $id, (int)$m[1], (int)$m[2]]);
             }
+            foreach ($quality as $key => $q) {
+                if (!preg_match('/^(\d+):(\d+)$/', (string)$key, $m)) {
+                    throw new DomainError('Dòng kiểm kê không hợp lệ');
+                }
+                $line = $this->db->one('SELECT l.so_luong_so_sach, l.so_luong_thuc_dem, i.ma_hang FROM chi_tiet_kiem_ke l JOIN mat_hang i ON i.id = l.mat_hang_id
+                                        WHERE l.dot_kiem_ke_id = ? AND l.mat_hang_id = ? AND l.lo_hang_id = ?', [$id, (int)$m[1], (int)$m[2]]) ?? throw new DomainError('Dòng kiểm kê không tồn tại');
+                $bad = (int)$q['qty'];
+                $have = $line['so_luong_thuc_dem'] === null ? (int)$line['so_luong_so_sach'] : (int)$line['so_luong_thuc_dem'];   // để trống = khớp sổ sách
+                if ($bad < 0 || $bad > $have) {
+                    throw new DomainError("Dòng {$line['ma_hang']}: số không đạt chất lượng ($bad) vượt số thực đếm ($have)");
+                }
+                $note = mb_substr(trim($q['note']), 0, 255);
+                if ($bad > 0 && !isset(DisposalService::REASONS[$q['reason']])) {
+                    throw new DomainError("Dòng {$line['ma_hang']}: chọn tình trạng của hàng không đạt chất lượng");
+                }
+                if ($bad > 0 && $q['reason'] === 'KHAC' && $note === '') {
+                    throw new DomainError("Dòng {$line['ma_hang']}: tình trạng «Khác» cần ghi chú rõ");
+                }
+                $this->db->exec('UPDATE chi_tiet_kiem_ke SET so_luong_hong = ?, ly_do_hong = ?, ghi_chu_hong = ? WHERE dot_kiem_ke_id = ? AND mat_hang_id = ? AND lo_hang_id = ?',
+                    [$bad, $bad > 0 ? $q['reason'] : '', $bad > 0 ? $note : '', $id, (int)$m[1], (int)$m[2]]);
+            }
         });
     }
 
     /** Nộp đợt kiểm: dòng để trống coi như khớp; mọi dòng đã nhập mà chênh lệch phải có lý do. */
-    public function submit(User $user, int $id, array $counted, array $reasons): void
+    public function submit(User $user, int $id, array $counted, array $reasons, array $quality = []): void
     {
-        $this->save($user, $id, $counted, $reasons);
+        $this->save($user, $id, $counted, $reasons, $quality);
         $this->db->transaction(function () use ($user, $id) {
             $c = $this->db->one('SELECT trang_thai FROM dot_kiem_ke WHERE id = ? FOR UPDATE', [$id]);
             if (!$c || $c['trang_thai'] !== 'OPEN') {
@@ -242,7 +265,7 @@ final class StockCountService
 
     /**
      * Xác nhận chênh lệch ⇒ lập PHIẾU NHẬP XUẤT ĐIỀU CHỈNH (có lý do, đã ghi sổ) và đóng đợt kiểm. Idempotent.
-     * @return array{already:bool,voucher:?array,adjusted:int,net:int}
+     * @return array{already:bool,voucher:?array,adjusted:int,net:int,disposed:int}
      */
     public function approve(User $user, int $id): array
     {
@@ -251,7 +274,7 @@ final class StockCountService
         $out = $this->db->transaction(function () use ($user, $id) {
             $c = $this->db->one('SELECT * FROM dot_kiem_ke WHERE id = ? FOR UPDATE', [$id]);
             if ($c['trang_thai'] === 'CLOSED') {
-                return ['already' => true, 'phieu_nhap_xuat_id' => $c['phieu_nhap_xuat_dieu_chinh_id'], 'adjusted' => 0, 'net' => 0];
+                return ['already' => true, 'phieu_nhap_xuat_id' => $c['phieu_nhap_xuat_dieu_chinh_id'], 'adjusted' => 0, 'net' => 0, 'disposed' => 0];
             }
             if ($c['trang_thai'] !== 'REVIEW') {
                 throw new DomainError('Chỉ đợt kiểm đã nộp (chờ duyệt) mới được xác nhận');
@@ -267,6 +290,7 @@ final class StockCountService
                     $reasons[$l['ly_do']] = true;
                 }
             }
+            $bad = $this->db->all('SELECT * FROM chi_tiet_kiem_ke WHERE dot_kiem_ke_id = ? AND so_luong_hong > 0 ORDER BY mat_hang_id, lo_hang_id', [$id]);
             $voucherId = null;
             if ($lines !== []) {
                 $voucherId = $this->vouchers->insert([
@@ -279,13 +303,14 @@ final class StockCountService
                 $this->ledger->lock($this->vouchers->lockKeys($ops));
                 $this->ledger->post($ops);
             }
+            $disposed = $this->disposals->fromCount($user, $c, $bad);   // hàng không đạt chất lượng: tồn đã khớp thực đếm rồi mới trừ tiếp vào kho huỷ
             $this->db->exec("UPDATE dot_kiem_ke SET trang_thai = 'CLOSED', nguoi_duyet_id = ?, phieu_nhap_xuat_dieu_chinh_id = ?, ngay_dong = CURRENT_TIMESTAMP WHERE id = ?",
                 [$user->id, $voucherId, $id]);
-            $this->audit->record($user->id, 'count.approve', 'count', $id, count($lines) . ' dòng chênh lệch');
-            return ['already' => false, 'phieu_nhap_xuat_id' => $voucherId, 'adjusted' => count($lines), 'net' => $net];
+            $this->audit->record($user->id, 'count.approve', 'count', $id, count($lines) . ' dòng chênh lệch' . ($disposed ? ", $disposed dòng vào kho huỷ" : ''));
+            return ['already' => false, 'phieu_nhap_xuat_id' => $voucherId, 'adjusted' => count($lines), 'net' => $net, 'disposed' => $disposed];
         });
         return ['already' => $out['already'], 'voucher' => $out['phieu_nhap_xuat_id'] ? $this->vouchers->find((int)$out['phieu_nhap_xuat_id']) : null,
-                'adjusted' => $out['adjusted'], 'net' => $out['net']];
+                'adjusted' => $out['adjusted'], 'net' => $out['net'], 'disposed' => $out['disposed']];
     }
 
     public function cancel(User $user, int $id, string $reason = ''): void

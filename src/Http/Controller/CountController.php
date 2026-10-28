@@ -14,6 +14,7 @@ use StockFlow\Domain\StockRules;
 use StockFlow\Domain\Permission;
 use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
+use StockFlow\Service\DisposalService;
 use StockFlow\Service\StockCountService;
 
 final class CountController extends Controller
@@ -70,12 +71,62 @@ final class CountController extends Controller
         $this->need($user, Permission::XemKiemKe, Permission::KiemKeThucHien, Permission::KiemKeDuyet);
         $c = $this->counts->find((int)$p['id']);
         $this->auth->requireVisible($user, (int)$c['kho_id']);
+        // tìm theo SKU, tên, số lô hoặc mã vạch; mỗi trang một phần dòng (số nhập ở trang này được lưu khi chuyển trang)
+        $q = trim($r->str('q'));
+        $all = $c['lines'];
+        $lines = $all;
+        if ($q !== '') {
+            $needle = fold_vn($q);
+            $lines = array_values(array_filter($all, fn($l) => str_contains(fold_vn($l['ma_hang'] . ' ' . $l['ten'] . ' ' . $l['so_lo']), $needle) || ($l['ma_vach'] !== null && str_contains((string)$l['ma_vach'], $q))));
+        }
+        [$page, $pg] = Paginator::of($lines, $r);
+        $stat = function (array $rows): array {   // dòng lệch · lệch ròng · số hàng không đạt chất lượng
+            $s = ['var' => 0, 'net' => 0, 'bad' => 0];
+            foreach ($rows as $l) {
+                if ($l['so_luong_thuc_dem'] !== null) {
+                    $d = (int)$l['so_luong_thuc_dem'] - (int)$l['so_luong_so_sach'];
+                    $s['net'] += $d;
+                    $s['var'] += $d !== 0 ? 1 : 0;
+                }
+                $s['bad'] += (int)$l['so_luong_hong'];
+            }
+            return $s;
+        };
+        $onPage = array_map(fn($l) => $l['mat_hang_id'] . ':' . $l['lo_hang_id'], $page);
+        $c['lines'] = $page;
         return $this->render('counts/show', $user, 'counts', [
+            'pg' => $pg, 'q' => $q, 'lineTotal' => count($all), 'tot' => $stat($all),
+            'base' => $stat(array_filter($all, fn($l) => !in_array($l['mat_hang_id'] . ':' . $l['lo_hang_id'], $onPage, true))),   // phần ngoài trang đang xem (JS cộng thêm phần trang này)
+            'badReasons' => DisposalService::REASONS,
             'c' => $c, 'cancel' => $c['trang_thai'] === 'CANCELLED' ? $this->counts->cancelInfo((int)$c['id']) : null,
             'canCount' => $this->auth->can($user, (int)$c['kho_id'], Permission::KiemKeThucHien),
             'canApprove' => $this->auth->can($user, (int)$c['kho_id'], Permission::KiemKeDuyet),
             'reasons' => ['Hư hỏng / vỡ', 'Thất thoát / mất hàng', 'Nhập sai số lượng', 'Xuất sai số lượng', 'Chưa ghi phiếu nhập xuất', 'Nhầm lô / nhầm hàng', 'Khác'],
         ], $c['ma']);
+    }
+
+    /** Số hàng không đạt chất lượng từng dòng (nằm trong số thực đếm). @return array<string,array{qty:int,reason:string,note:string}> */
+    private function readQuality(Request $r): array
+    {
+        $out = [];
+        foreach ($r->arr('bad_qty') as $key => $v) {
+            $v = is_string($v) ? trim($v) : '';
+            $qty = $v === '' ? 0 : StockRules::parseQty($v);
+            if ($qty === null) {
+                throw new DomainError('Số lượng không đạt chất lượng phải là số nguyên không âm');
+            }
+            $reason = $r->arr('bad_reason')[$key] ?? '';
+            $note = $r->arr('bad_note')[$key] ?? '';
+            $out[(string)$key] = ['qty' => $qty, 'reason' => is_string($reason) ? $reason : '', 'note' => is_string($note) ? $note : ''];
+        }
+        return $out;
+    }
+
+    /** Địa chỉ quay lại sau khi lưu (chuyển trang / tìm kiếm khi đang nhập): chỉ nhận đường dẫn của chính đợt này. */
+    private function goto(Request $r, int $id): ?string
+    {
+        $to = $r->str('goto');
+        return preg_match('#^/counts/' . $id . '(\?[^\s]*)?$#', $to) ? $to : null;
     }
 
     /** @return array{0:array<string,?int>,1:array<string,string>} */
@@ -111,8 +162,9 @@ final class CountController extends Controller
         $id = (int)$p['id'];
         return $this->act(function () use ($r, $user, $id) {
             [$counted, $reasons] = $this->readForm($r);
-            $this->counts->save($user, $id, $counted, $reasons);
-        }, 'Đã lưu số đếm.', "/counts/$id");
+            $this->counts->save($user, $id, $counted, $reasons, $this->readQuality($r));
+            return $this->goto($r, $id);
+        }, $this->goto($r, $id) ? '' : 'Đã lưu số đếm.', "/counts/$id");
     }
 
     public function submit(Request $r, array $p, ?User $user): Response
@@ -120,7 +172,7 @@ final class CountController extends Controller
         $id = (int)$p['id'];
         return $this->act(function () use ($r, $user, $id) {
             [$counted, $reasons] = $this->readForm($r);
-            $this->counts->submit($user, $id, $counted, $reasons);
+            $this->counts->submit($user, $id, $counted, $reasons, $this->readQuality($r));
         }, 'Đã nộp kết quả kiểm kê — chờ người duyệt xác nhận chênh lệch.', "/counts/$id");
     }
 
@@ -132,6 +184,9 @@ final class CountController extends Controller
             $this->session->flash('ok', $res['already'] ? 'Đợt kiểm kê đã được xác nhận trước đó — không lập thêm phiếu.'
                 : ($res['adjusted'] === 0 ? 'Sổ sách khớp thực tế — không cần phiếu điều chỉnh.'
                     : 'Đã lập phiếu điều chỉnh ' . $res['voucher']['ma'] . ' (' . $res['adjusted'] . ' dòng, chênh lệch ròng ' . signed($res['net']) . ').'));
+            if ($res['disposed']) {
+                $this->session->flash('ok', $res['disposed'] . ' dòng hàng không đạt chất lượng đã được trừ khỏi tồn và chuyển vào kho huỷ.');
+            }
         }, '', "/counts/$id");
     }
 

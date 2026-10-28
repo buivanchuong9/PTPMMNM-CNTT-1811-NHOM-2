@@ -137,6 +137,10 @@
       if (!res.ok) { say(data.error || 'Không tra được mã này.', true); return; }
     } catch (e) { say('Không kết nối được máy chủ.', true); return; }
     say('');
+    if (target && target.fill) {   // quét để điền vào ô tìm kiếm của trang (kiểm kê): điền mã, đóng hộp thoại, tìm luôn
+      const input = document.querySelector(target.fill);
+      if (input) { input.value = data.code || code; dlg.close(); input.form.requestSubmit(); return; }
+    }
     if (target) showAssign(data); else if (data.found) showItem(data); else showNew(data);
   };
 
@@ -219,8 +223,8 @@
   const open = (tgt) => {
     target = tgt || null;
     out.replaceChildren(); say(''); manual.reset();
-    title.textContent = target ? 'Gán mã vạch' : 'Quét mã vạch';
-    sub.replaceChildren(document.createTextNode(target ? target.label + '. Quét hoặc nhập mã để gán cho mặt hàng này.' : defaultSub));
+    title.textContent = target && !target.fill ? 'Gán mã vạch' : 'Quét mã vạch';
+    sub.replaceChildren(document.createTextNode(target && target.fill ? 'Quét mã để tìm đúng dòng hàng cần đếm.' : target ? target.label + '. Quét hoặc nhập mã để gán cho mặt hàng này.' : defaultSub));
     if (target && target.code) sub.append(document.createTextNode(' Mã hiện tại: ' + target.code + ' '), postForm('/items/barcode', { item_id: target.id, code: '' }, 'Gỡ mã', 'btn-ghost'));
     dlg.showModal();
     manual.code.focus();
@@ -228,6 +232,8 @@
 
   document.addEventListener('click', (ev) => {
     if (ev.target.closest('[data-scan-open]')) { open(null); return; }
+    const f = ev.target.closest('[data-scan-fill]');
+    if (f) { open({ fill: f.dataset.scanFill }); return; }
     const a = ev.target.closest('[data-scan-assign]');
     if (a) open({ id: a.dataset.scanAssign, label: a.dataset.scanLabel || '', code: a.dataset.scanCode || '' });
   });

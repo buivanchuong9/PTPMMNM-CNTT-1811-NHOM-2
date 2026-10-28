@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NavBadges
 {
-    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals) {}
+    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals) {}
 
     /** @return array<string,int> chỉ gồm các mục có số > 0 */
     public function for(User $user): array
@@ -27,6 +27,12 @@ final class NavBadges
         }
         if ($this->auth->allows($user, Permission::LapPhieuDieuChuyen) || $this->auth->allows($user, Permission::XacNhanPhieu)) {
             $out['requests'] = $this->requests->pendingFor($user);
+        }
+        if ($this->auth->allows($user, Permission::XuLyBaoHanh)) {   // hàng khách gửi đang chờ sửa / chờ trả
+            $out['warranty'] = $this->warranty->open($this->auth->visibleWarehouseIds($user));
+        }
+        if ($this->auth->allows($user, Permission::XacNhanHuy)) {   // đề xuất huỷ hàng chờ quản lý duyệt
+            $out['disposals'] = $this->disposals->counts($this->auth->visibleWarehouseIds($user))['CHO_DUYET'] ?? 0;
         }
         $out['proposals'] = $this->proposals->attention($user);
         return array_filter($out);

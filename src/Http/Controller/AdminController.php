@@ -74,7 +74,7 @@ final class AdminController extends Controller
             if ($cost === null || $cost < 1) {   // kiểm tra giá TRƯỚC khi tạo mặt hàng
                 throw new DomainError('Nhập giá gốc lớn hơn 0 (đồng / 1 đơn vị tính)');
             }
-            $id = $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
+            $id = $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'), false, null, StockRules::parseQty($r->str('warranty_months') ?: '0') ?? -1);
             $this->partners->setItemSuppliers($user, $id, $r->arr('supplier_ids'));
             $this->pricing->setCost($user, $id, $cost, (int)$r->int('vat'), 'Giá gốc khi tạo mặt hàng');
         }, 'Đã thêm mặt hàng.', '/inventory');
@@ -83,7 +83,7 @@ final class AdminController extends Controller
     public function updateItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'));
+            $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'), StockRules::parseQty($r->str('warranty_months') ?: '0') ?? -1);
             $this->partners->setItemSuppliers($user, (int)$r->int('item_id'), $r->arr('supplier_ids'));
         }, 'Đã cập nhật mặt hàng.', '/inventory');
     }
