@@ -878,9 +878,16 @@
     root.querySelector('[data-notif-list]').innerHTML = tasks.map((x) => `<li><a href="${esc(x.href)}" class="notif-item tone-${esc(x.tone)}"><i class="notif-dot" aria-hidden="true"></i><span><b>${esc(x.title)}</b><small>${esc(x.note)}</small></span><em>${vn.format(x.count)}</em></a></li>`).join('');
     const head = (k, n) => { const el = root.querySelector(`[data-notif-n="${k}"]`); el.hidden = !n; el.textContent = vn.format(n); };
     head('act', notifNew);
+    root.querySelector('[data-notif-readall]').disabled = notifNew === 0;
     head('tasks', tasks.reduce((s, x) => s + (x.count || 0), 0));
     root.querySelector('[data-notif-empty="act"]').hidden = acts.length > 0;
     root.querySelector('[data-notif-empty="tasks"]').hidden = tasks.length > 0;
+  };
+  const markNotifsSeen = () => {   // dời mốc «đã xem» của hoạt động mới
+    if (notifNew <= 0 || !window.fetch) return;
+    const fd = new FormData();
+    fd.set('csrf', document.querySelector('input[name="csrf"]')?.value || '');
+    fetch('/api/notifications/seen', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).then(() => window.refreshBadges && window.refreshBadges(true)).catch(() => {});
   };
   const closeNotif = () => {
     const root = notifRoot();
@@ -889,13 +896,23 @@
     if (pop.hidden) return;
     pop.hidden = true;
     root.querySelector('[data-notif-toggle]').setAttribute('aria-expanded', 'false');
-    if (notifNew > 0 && window.fetch) {   // đã xem hoạt động mới ⇒ dời mốc «đã xem»
-      const fd = new FormData();
-      fd.set('csrf', document.querySelector('input[name="csrf"]')?.value || '');
-      fetch('/api/notifications/seen', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).then(() => window.refreshBadges && window.refreshBadges(true)).catch(() => {});
-    }
+    markNotifsSeen();
   };
   document.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-notif-readall]')) {   // đánh dấu đã đọc ngay, vẫn mở khung
+      if (notifNew <= 0) return;
+      markNotifsSeen();
+      notifNew = 0;
+      const root = notifRoot();
+      root.querySelectorAll('.notif-item.fresh').forEach((a) => a.classList.remove('fresh'));
+      root.querySelector('[data-notif-readall]').disabled = true;
+      const n = root.querySelector('[data-notif-n="act"]'); n.hidden = true;
+      const badge = root.querySelector('[data-notif-count]');
+      const left = root.querySelectorAll('[data-notif-list] .notif-item em');
+      const tasks = [...left].reduce((s, e) => s + (parseInt(e.textContent.replace(/\D/g, ''), 10) || 0), 0);
+      badge.hidden = tasks === 0; badge.textContent = tasks > 99 ? '99+' : String(tasks);
+      return;
+    }
     const toggle = ev.target.closest('[data-notif-toggle]');
     if (toggle) {
       const pop = toggle.closest('[data-notif]').querySelector('[data-notif-pop]');

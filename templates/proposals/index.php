@@ -27,7 +27,7 @@ $tones = ['' => 'all', 'PENDING' => 'warn', 'APPROVED' => 'ok', 'REJECTED' => 'b
         <?php if ($q['trang_thai'] === 'REJECTED'): ?><br><small class="warn-text"><?= e($q['xu_ly_ten']) ?>: <?= e($q['ly_do']) ?></small>
         <?php elseif ($q['trang_thai'] === 'APPROVED'): ?><br><small class="muted"><?= e($q['xu_ly_ten']) ?> · <?= e(dt($q['ngay_xu_ly'])) ?></small><?php endif; ?></td>
       <td class="nw"><?= e($q['de_xuat_ten']) ?><br><small class="muted"><?= e(dt($q['ngay_tao'])) ?></small></td>
-      <td class="nw">
+      <td class="nw row-actions">
         <?php if ($q['trang_thai'] === 'PENDING' && $canReview): ?>
           <button type="button" class="btn-sm" data-dialog-open="approve-dlg" data-fill-action="/proposals/<?= $id ?>/approve" data-fill-label="<?= e($q['ma_hang'] . ' — ' . $q['ten'] . ' (mã vạch ' . $q['ma_vach'] . ')') ?>">Chấp nhận</button>
           <button type="button" class="btn-ghost btn-sm" data-dialog-open="reject-dlg" data-fill-action="/proposals/<?= $id ?>/reject" data-fill-label="<?= e($q['ma_hang'] . ' — ' . $q['ten']) ?>">Từ chối</button>
