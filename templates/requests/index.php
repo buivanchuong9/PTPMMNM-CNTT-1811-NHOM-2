@@ -33,7 +33,7 @@ $mineId = (int)$user->warehouseId;
         <?php elseif ($q['trang_thai'] === 'CANCELLED' && $q['ly_do'] !== ''): ?><br><small class="muted"><?= e($q['ly_do']) ?></small><?php endif; ?></td>
       <td class="nw"><?= e($q['lap_ten']) ?><?= $q['duyet_ten'] && (int)$q['nguoi_duyet_id'] !== (int)$q['nguoi_lap_id'] ? ' <span class="arrow">→</span> ' . e($q['duyet_ten']) : '' ?></td>
       <td class="muted"><?= e(dt($q['ngay_tao'])) ?></td>
-      <td class="nw">
+      <td class="nw row-actions">
         <?php if ($q['trang_thai'] === 'WAIT_OWN' && $isNhan && $canAct): ?>
           <form method="post" action="/requests/<?= $id ?>/approve" class="inline" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit" class="btn-sm">Xác nhận gửi</button></form>
         <?php elseif ($q['trang_thai'] === 'WAIT_SOURCE' && $isCap && $canAct): ?>

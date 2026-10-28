@@ -109,7 +109,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
     <div class="notif" data-notif>
       <button class="icon-btn notif-btn" type="button" data-notif-toggle aria-haspopup="true" aria-expanded="false" aria-label="Thông báo" title="Thông báo"><?= icon('bell') ?><b class="notif-count" data-notif-count<?= $notifTotal ? '' : ' hidden' ?>><?= $notifTotal > 99 ? '99+' : $notifTotal ?></b></button>
       <div class="notif-pop" data-notif-pop hidden>
-        <p class="notif-head">Thông báo</p>
+        <div class="notif-head"><p>Thông báo</p><button class="notif-readall" type="button" data-notif-readall<?= $nAct['new'] ? '' : ' disabled' ?>>Đánh dấu tất cả là đã đọc</button></div>
         <div class="notif-cols">
           <section class="notif-col notif-act">
             <p class="notif-col-head">Hoạt động mới<em data-notif-n="act"<?= $nAct['new'] ? '' : ' hidden' ?>><?= n($nAct['new']) ?></em></p>
