@@ -285,9 +285,10 @@ final class VoucherController extends Controller
                 "SELECT l.mat_hang_id, l.lo_hang_id, -l.so_luong AS thieu, p.id AS adj_id, p.ma AS adj_ma FROM phieu_nhap_xuat p JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = p.id
                  WHERE p.phieu_nhap_xuat_lien_quan_id = ? AND p.loai = 'ADJUSTMENT'", [(int)$v['id']]) : [],
             'receipt' => $this->receiptOf($trip),
+            'route' => $this->routeOf($v, $trip),
             'vehicles' => in_array($v['loai'], ['TRANSFER_OUT', 'ISSUE'], true) && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
             'payInfo' => $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT'
-                ? ['km' => $this->fleet->distance((int)$v['kho_id'], (int)$v['kho_doi_ung_id']), 'rates' => $this->fleet->rates((int)$v['kho_id'])]
+                ? $this->fleet->distanceHint((int)$v['kho_id'], (int)$v['kho_doi_ung_id']) + ['rates' => $this->fleet->rates((int)$v['kho_id'])]
                 : ($v['loai'] === 'ISSUE' && $v['trang_thai'] === 'DRAFT' ? ['km' => null, 'rates' => $this->fleet->rates((int)$v['kho_id'])] : null),
             'delivery' => $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'CONFIRMED' ? $this->deliveries->of((int)$v['id']) : null,
             'custInfo' => $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'DRAFT' && $v['doi_tac'] !== ''
@@ -300,6 +301,31 @@ final class VoucherController extends Controller
      * từng dòng = số trên phiếu − phần thiếu ghi ở phiếu điều chỉnh của phiếu đến.
      * @return ?array{rows:list<array<string,mixed>>,in_id:int,when:?string,by:?string,note:string}
      */
+    /** Lộ trình minh hoạ kho đi → kho đến của chuyến đang chạy; null nếu không phải đang vận chuyển hoặc không xác định được vị trí kho. */
+    private function routeOf(array $v, ?array $trip): ?array
+    {
+        if (!$trip || $trip['trang_thai'] !== 'IN_TRANSIT' || empty($v['kho_doi_ung_id'])) {
+            return null;
+        }
+        [$fromId, $toId] = $v['loai'] === 'TRANSFER_OUT' ? [(int)$v['kho_id'], (int)$v['kho_doi_ung_id']] : [(int)$v['kho_doi_ung_id'], (int)$v['kho_id']];
+        $ends = [];
+        foreach ([$fromId, $toId] as $id) {
+            $w = $this->db->one('SELECT ma, ten, dia_chi FROM kho WHERE id = ?', [$id]);
+            $at = $w ? \StockFlow\Domain\VnAddress::locate($w['dia_chi']) : null;
+            if (!$at) {
+                return null;
+            }
+            $ends[] = ['code' => $w['ma'], 'name' => $w['ten'], 'lat' => $at['lat'], 'lng' => $at['lng']];
+        }
+        $all = [];   // mọi kho đang hoạt động có vị trí nhận ra được — kho mới thêm tự hiện trên bản đồ
+        foreach ($this->db->all('SELECT ma, ten, dia_chi FROM kho WHERE hoat_dong ORDER BY ma') as $w) {
+            if ($at = \StockFlow\Domain\VnAddress::locate($w['dia_chi'])) {
+                $all[] = ['code' => $w['ma'], 'name' => $w['ten'], 'lat' => $at['lat'], 'lng' => $at['lng']];
+            }
+        }
+        return ['from' => $ends[0], 'to' => $ends[1], 'all' => $all, 'km' => (int)$trip['km'], 'plate' => $trip['bien_so']];
+    }
+
     private function receiptOf(?array $trip): ?array
     {
         if (!$trip || $trip['trang_thai'] !== 'DELIVERED') {

@@ -45,6 +45,7 @@ $fa = !empty($formId) ? ' form="' . e($formId) . '"' : '';
       <label>Quãng đường (km)<input name="km" data-need inputmode="numeric" maxlength="4" autocomplete="off" value="<?= (int)($payInfo['km'] ?? 0) ?: '' ?>"<?= ($payInfo['km'] ?? null) ? '' : ' placeholder="' . ($dm ? 'Nhập km tới nơi giao' : 'Chưa có số liệu — nhập km') . '"' ?><?= $fa ?>></label>
       <label>Tiền trả cho chuyến (đ)<input name="tien" data-need inputmode="numeric" maxlength="10" autocomplete="off"<?= $fa ?>></label>
     </div>
+    <?php if (!empty($payInfo['estimated'])): ?><p class="muted small"><?= icon('clock') ?> Quãng đường được tự ước tính theo vị trí hai kho — sửa lại nếu thực tế khác, số này sẽ được ghi nhớ cho lần sau.</p><?php endif; ?>
     <p class="muted small" data-pay-hint></p>
     <label>Ghi chú về giá (nếu khác gợi ý)<input name="gia_note" maxlength="255" autocomplete="off" placeholder="VD: đường xấu, hàng cồng kềnh"<?= $fa ?>></label>
     <label class="check"><input type="checkbox" name="driver_ok" value="1" data-need<?= $fa ?>> Tài xế đã kiểm và xác nhận nhận đủ hàng</label>
