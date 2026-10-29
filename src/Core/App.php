@@ -67,6 +67,8 @@ final class App
         $r->post('/vouchers/{id}/confirm', [C\VoucherController::class, 'confirm']);
         $r->post('/vouchers/{id}/cancel', [C\VoucherController::class, 'cancel']);
         $r->post('/vouchers/{id}/recall', [C\VoucherController::class, 'recall']);
+        $r->post('/vouchers/{id}/breakdown', [C\VoucherController::class, 'breakdown']);
+        $r->post('/vouchers/{id}/resume', [C\VoucherController::class, 'resume']);
         $r->post('/vouchers/{id}/not-received', [C\VoucherController::class, 'notReceived']);
         $r->post('/vouchers/{id}/correct', [C\VoucherController::class, 'correct']);
         $r->get('/transfers/new', [C\VoucherController::class, 'createTransfer']);

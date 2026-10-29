@@ -201,6 +201,8 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <script src="/assets/js/dialog-fx.js" defer></script>
 <script src="/assets/js/app.js" defer></script>
 <script src="/assets/js/address.js" defer></script>
+<script src="/assets/js/route-map.js" defer></script>
+<script src="/assets/js/convoy.js" defer></script>
 <?php if ($canScan): ?><script src="/assets/js/scan.js" defer></script><?php endif; ?>
 </body>
 </html>

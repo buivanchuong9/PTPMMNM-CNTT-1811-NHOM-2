@@ -503,6 +503,29 @@ final class FleetService
     }
 
     /** Chuyến của một phiếu điều chuyển (phiếu đi hoặc phiếu đến); null nếu phiếu không có thông tin vận chuyển (dữ liệu trước khi có đội xe). */
+    /** Sự cố xe hỏng đang mở của một chuyến (chưa sửa xong); null nếu xe chạy bình thường. */
+    public function breakdownOf(int $tripId): ?array
+    {
+        return $this->db->one('SELECT s.*, u.ho_ten AS bao_ten FROM su_co_xe s JOIN nguoi_dung u ON u.id = s.nguoi_bao_id WHERE s.chuyen_id = ? AND s.ngay_sua IS NULL ORDER BY s.id DESC', [$tripId]);
+    }
+
+    /**
+     * Các xe cùng đợt với phiếu đi này (nối đuôi nhau), kèm trạng thái từng chuyến và sự cố đang mở; rỗng nếu phiếu không thuộc đợt nhiều xe.
+     * @return list<array<string,mixed>>
+     */
+    public function convoyOf(int $outId): array
+    {
+        $rows = $this->db->all(
+            'SELECT d.thu_tu, d.phieu_di_id, p.ma AS ma_di, c.id AS chuyen_id, c.phieu_den_id, pi.ma AS ma_den, c.trang_thai, x.bien_so, t.ho_ten AS tai_xe_ten,
+                    s.ly_do AS hong_ly_do, s.tien_do AS hong_tien_do
+             FROM dot_dieu_chuyen m JOIN dot_dieu_chuyen d ON d.dot_id = m.dot_id JOIN phieu_nhap_xuat p ON p.id = d.phieu_di_id
+             LEFT JOIN chuyen_van_chuyen c ON c.phieu_di_id = d.phieu_di_id LEFT JOIN phieu_nhap_xuat pi ON pi.id = c.phieu_den_id
+             LEFT JOIN xe x ON x.id = c.xe_id LEFT JOIN tai_xe t ON t.id = c.tai_xe_id
+             LEFT JOIN su_co_xe s ON s.chuyen_id = c.id AND s.ngay_sua IS NULL
+             WHERE m.phieu_di_id = ? ORDER BY d.thu_tu', [$outId]);
+        return count($rows) >= 2 ? $rows : [];
+    }
+
     public function tripOf(array $voucher): ?array
     {
         $col = $voucher['loai'] === 'TRANSFER_OUT' ? 'phieu_di_id' : ($voucher['loai'] === 'TRANSFER_IN' ? 'phieu_den_id' : null);

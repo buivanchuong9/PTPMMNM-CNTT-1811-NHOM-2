@@ -22,6 +22,7 @@ $fa = !empty($formId) ? ' form="' . e($formId) . '"' : '';
   </div>
   <div data-pay-own<?= $dm || !$ready ? ' hidden' : '' ?>>
     <label>Xe chở hàng (tài xế đi theo xe)<select name="vehicle_id"<?= $dm ? '' : ($ready ? ' required' : '') ?><?= $fa ?>><option value="">Chọn xe…</option><?php foreach ($ready as $x): ?><option value="<?= (int)$x['id'] ?>"><?= e($x['bien_so'] . ' — ' . $x['ho_ten'] . ' · CCCD ' . $x['cccd']) ?></option><?php endforeach; ?></select></label>
+    <?php if (!$dm && !empty($convoyLines) && count($ready) >= 2): require __DIR__ . '/convoy_box.php'; endif; ?>
   </div>
   <fieldset class="notrecv" data-pay-ext hidden><legend>Thông tin đơn vị vận tải (bắt buộc đủ)</legend>
     <label>Đơn vị vận tải<input name="ext_company" data-req maxlength="120" autocomplete="off" placeholder="Tên công ty / nhà xe"<?= $fa ?>></label>
