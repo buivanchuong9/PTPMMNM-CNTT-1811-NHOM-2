@@ -67,14 +67,14 @@ final class TransferService
      * Hàng lúc này ĐANG VẬN CHUYỂN: đã rời kho đi, chưa vào tồn kho đến. Trong một giao dịch: lỗi giữa chừng ⇒ rollback.
      * @return array{voucher:array,already:bool}
      */
-    public function confirm(User $user, int $outId): array
+    public function confirm(User $user, int $outId, bool $checkFefo = true): array
     {
         $peek = $this->repo->find($outId);
         if ($peek['loai'] !== VoucherType::TransferOut->value) {
             throw new DomainError('Đây không phải phiếu điều chuyển đi');
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
-        $already = $this->db->transaction(function () use ($user, $outId) {
+        $already = $this->db->transaction(function () use ($user, $outId, $checkFefo) {
             $out = $this->repo->lock($outId);
             if ($out['trang_thai'] === 'CONFIRMED') {
                 return true;
@@ -91,7 +91,7 @@ final class TransferService
             if ($outLines === []) {
                 throw new DomainError('Phiếu không có dòng hàng');
             }
-            if ($errors = $this->query->fefoErrors($from, $outLines)) {
+            if ($checkFefo && ($errors = $this->query->fefoErrors($from, $outLines))) {
                 throw new DomainError('Xuất theo hạn dùng (hết hạn trước, xuất trước) — ' . implode('; ', $errors));
             }
             $outOps = $this->repo->ops($out, $outLines);
@@ -153,14 +153,14 @@ final class TransferService
      * @param ?array<string,mixed> $pay null = không ghi tiền công (chuyến cũ / kiểm thử)
      * @return array{voucher:array,already:bool}
      */
-    public function dispatch(User $user, int $outId, int $vehicleId, bool $driverConfirmed, ?array $pay = null): array
+    public function dispatch(User $user, int $outId, int $vehicleId, bool $driverConfirmed, ?array $pay = null, bool $checkFefo = true): array
     {
         $peek = $this->repo->find($outId);
         if ($peek['loai'] !== VoucherType::TransferOut->value) {
             throw new DomainError('Đây không phải phiếu điều chuyển đi');
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
-        return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed, $pay) {
+        return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed, $pay, $checkFefo) {
             $out = $this->repo->lock($outId);
             $xe = $tx = null;
             $trip = ['hinh_thuc' => 'NOI_BO', 'km' => 0, 'don_gia_km' => 0, 'tien_goi_y' => 0, 'tien_tra' => 0, 'don_vi_van_tai' => '', 'ghi_chu_gia' => ''];
@@ -193,7 +193,7 @@ final class TransferService
                     throw new DomainError('Tài xế ' . $tx['ho_ten'] . ' của xe ' . $xe['bien_so'] . ' đã ngừng dùng');
                 }
             }
-            $res = $this->confirm($user, $outId);
+            $res = $this->confirm($user, $outId, $checkFefo);
             if (!$res['already'] && $xe && $tx) {
                 $in = $this->repo->pairOf($res['voucher']) ?? throw new DomainError('Không tìm thấy phiếu đến đối ứng');
                 $this->db->insert(
@@ -208,6 +208,157 @@ final class TransferService
             }
             return $res;
         });
+    }
+
+    /**
+     * XUẤT KHO ĐI bằng NHIỀU XE: mỗi xe chở một phần số lượng của từng dòng hàng. Xe chính (đã chọn ở khối vận chuyển) chở phần còn lại sau khi trừ các xe phụ.
+     * Phiếu nháp gốc được tách thành mỗi xe một phiếu điều chuyển riêng (nên nhận hàng, thu hồi, sổ cái chạy theo từng xe như thường) rồi xuất kho cùng lúc;
+     * phiếu gốc bị huỷ kèm ghi chú. Các phiếu cùng đợt được gom trong dot_dieu_chuyen để hiện nối đuôi nhau trên bản đồ.
+     * Chỉ dùng xe của kho (tiền công xe phụ = km × đơn giá gợi ý). Hàng xuất theo hạn dùng được kiểm trên cả lô một lần.
+     * @param array<int,array<int,int>> $extra id xe phụ ⇒ [id dòng phiếu ⇒ số lượng xe đó chở]
+     * @return array{voucher:array,already:bool,split:list<int>} voucher = phiếu của xe chính
+     */
+    public function dispatchConvoy(User $user, int $outId, int $mainVehicleId, array $extra, bool $driverConfirmed, array $pay): array
+    {
+        $extra = array_filter(array_map(fn($q) => array_filter(array_map('intval', $q), fn($n) => $n > 0), $extra), fn($q) => $q !== []);
+        if ($extra === []) {
+            return $this->dispatch($user, $outId, $mainVehicleId, $driverConfirmed, $pay) + ['split' => []];
+        }
+        $peek = $this->repo->find($outId);
+        if ($peek['loai'] !== VoucherType::TransferOut->value) {
+            throw new DomainError('Đây không phải phiếu điều chuyển đi');
+        }
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
+        if (($pay['hinh_thuc'] ?? 'NOI_BO') !== 'NOI_BO') {
+            throw new DomainError('Chia hàng cho nhiều xe chỉ áp dụng với xe của kho — thuê đơn vị vận tải ngoài thì chở bằng một xe');
+        }
+        return $this->db->transaction(function () use ($user, $outId, $mainVehicleId, $extra, $driverConfirmed, $pay) {
+            $out = $this->repo->lock($outId);
+            if ($out['trang_thai'] !== 'DRAFT') {
+                throw new DomainError('Chỉ chia hàng cho nhiều xe khi phiếu còn là bản nháp');
+            }
+            if (!$mainVehicleId) {
+                throw new DomainError('Chọn xe chở hàng trước khi xuất kho');
+            }
+            if (isset($extra[$mainVehicleId])) {
+                throw new DomainError('Xe chính không được chọn lại làm xe phụ');
+            }
+            $lines = $this->repo->lines($outId);
+            $byId = array_column($lines, null, 'id');
+            $plan = [$mainVehicleId => []];   // xe ⇒ [id dòng ⇒ số lượng]
+            foreach ($lines as $l) {
+                $plan[$mainVehicleId][(int)$l['id']] = (int)$l['so_luong'];
+            }
+            foreach ($extra as $vid => $qty) {
+                foreach ($qty as $lineId => $n) {
+                    if (!isset($byId[$lineId])) {
+                        throw new DomainError('Dòng hàng không thuộc phiếu này');
+                    }
+                    $plan[$mainVehicleId][$lineId] -= $n;
+                    $plan[(int)$vid][$lineId] = $n;
+                }
+            }
+            foreach ($plan as $vid => $qty) {
+                foreach ($qty as $lineId => $n) {
+                    if ($n < 0) {
+                        throw new DomainError('Các xe chở nhiều hơn số lượng ' . $byId[$lineId]['ma_hang'] . ' trên phiếu');
+                    }
+                }
+                if (array_sum($qty) < 1) {
+                    $plate = $this->db->value('SELECT bien_so FROM xe WHERE id = ?', [$vid]) ?: '#' . $vid;
+                    throw new DomainError('Xe ' . $plate . ' chưa được chia hàng nào — bỏ xe đó hoặc chia thêm số lượng');
+                }
+            }
+            if ($errors = $this->query->fefoErrors((int)$out['kho_id'], $lines)) {
+                throw new DomainError('Xuất theo hạn dùng (hết hạn trước, xuất trước) — ' . implode('; ', $errors));
+            }
+            $km = (int)($pay['km'] ?? 0);
+            $from = (int)$out['kho_id'];
+            $to = (int)$out['kho_doi_ung_id'];
+            $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CANCELLED', ghi_chu = ? WHERE id = ?", [mb_substr('Đã tách thành ' . count($plan) . ' phiếu theo xe — xem các phiếu cùng đợt', 0, 255), $outId]);
+            $newIds = [];
+            foreach ($plan as $vid => $qty) {
+                $vlines = [];
+                foreach ($lines as $l) {
+                    if (($n = $qty[(int)$l['id']] ?? 0) > 0) {
+                        $vlines[] = ['mat_hang_id' => (int)$l['mat_hang_id'], 'lo_hang_id' => (int)$l['lo_hang_id'], 'so_luong' => $n, 'don_gia' => $l['don_gia'],
+                                     'thue_suat' => (int)$l['thue_suat'], 'gia_von' => (int)$l['gia_von'], 'ghi_chu' => $l['ghi_chu']];
+                    }
+                }
+                $newId = $this->repo->insert([
+                    'loai' => VoucherType::TransferOut->value, 'kho_id' => $from, 'kho_doi_ung_id' => $to,
+                    'ghi_chu' => mb_substr(trim((string)$out['ghi_chu']) . ($out['ghi_chu'] !== '' ? ' · ' : '') . 'tách từ ' . $out['ma'], 0, 255), 'nguoi_lap_id' => (int)$out['nguoi_lap_id'],
+                ], $vlines);
+                $legPay = $newIds === [] ? $pay : ['hinh_thuc' => 'NOI_BO', 'km' => $km, 'tien' => (int)($this->fleet->quote($from, $to, 'NOI_BO', $km)['amount'] ?? 0), 'ghi_chu' => 'Xe cùng đợt — tiền công theo gợi ý'];
+                $this->dispatch($user, $newId, $vid, $driverConfirmed, $legPay, false);
+                $newIds[] = $newId;
+                $this->db->exec('INSERT INTO dot_dieu_chuyen (dot_id, phieu_di_id, thu_tu) VALUES (?,?,?)', [$newIds[0], $newId, count($newIds)]);
+            }
+            $this->audit->record($user->id, 'transfer.split', 'voucher', $outId, $out['ma'] . ' → ' . count($newIds) . ' xe cùng đợt');
+            return ['voucher' => $this->repo->find($newIds[0]), 'already' => false, 'split' => $newIds];
+        });
+    }
+
+    /** Lý do xe hỏng giữa đường. */
+    public const BREAKDOWN_REASONS = ['Hỏng động cơ', 'Thủng lốp / hỏng bánh', 'Tai nạn / kẹt đường', 'Hết nhiên liệu', 'Khác'];
+
+    /**
+     * Kho đi (hoặc quản trị) báo XE HỎNG giữa đường: hàng vẫn đang vận chuyển nhưng sẽ tới muộn — kho đến chưa nhận được cho tới khi xe chạy tiếp
+     * (resumeTrip) hoặc kho đi thu hồi chuyến. Vị trí xe dừng trên bản đồ cố định theo chuyến (minh hoạ).
+     */
+    public function reportBreakdown(User $user, int $outId, string $reason, string $note = ''): void
+    {
+        $reason = trim($reason);
+        $note = trim($note);
+        if (!in_array($reason, self::BREAKDOWN_REASONS, true)) {
+            throw new DomainError('Chọn lý do xe hỏng');
+        }
+        if ($reason === 'Khác' && $note === '') {
+            throw new DomainError('Ghi rõ lý do khác');
+        }
+        if (mb_strlen($note) > 120) {
+            throw new DomainError('Ghi chú tối đa 120 ký tự');
+        }
+        $peek = $this->repo->find($outId);
+        if ($peek['loai'] !== VoucherType::TransferOut->value) {
+            throw new DomainError('Chỉ báo xe hỏng từ phiếu điều chuyển đi');
+        }
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
+        $this->db->transaction(function () use ($user, $outId, $reason, $note) {
+            $trip = $this->openTrip($outId);
+            if ($this->fleet->breakdownOf((int)$trip['id'])) {
+                throw new DomainError('Xe này đã được báo hỏng — bấm «Xe đã chạy tiếp» khi sửa xong');
+            }
+            $text = $reason . ($note !== '' ? ' — ' . $note : '');
+            $this->db->exec('INSERT INTO su_co_xe (chuyen_id, ly_do, tien_do, nguoi_bao_id) VALUES (?,?,?,?)', [(int)$trip['id'], mb_substr($text, 0, 200), 25 + ((int)$trip['id'] * 37) % 51, $user->id]);
+            $this->audit->record($user->id, 'transfer.breakdown', 'voucher', $outId, $trip['bien_so'] . ' hỏng giữa đường · ' . $text);
+        });
+    }
+
+    /** Xe đã sửa xong, chạy tiếp tới kho đến. */
+    public function resumeTrip(User $user, int $outId): void
+    {
+        $peek = $this->repo->find($outId);
+        if ($peek['loai'] !== VoucherType::TransferOut->value) {
+            throw new DomainError('Chỉ xác nhận xe chạy tiếp từ phiếu điều chuyển đi');
+        }
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
+        $this->db->transaction(function () use ($user, $outId) {
+            $trip = $this->openTrip($outId);
+            $b = $this->fleet->breakdownOf((int)$trip['id']) ?? throw new DomainError('Xe này không ở trạng thái hỏng');
+            $this->db->exec('UPDATE su_co_xe SET ngay_sua = CURRENT_TIMESTAMP, nguoi_sua_id = ? WHERE id = ?', [$user->id, (int)$b['id']]);
+            $this->audit->record($user->id, 'transfer.resume', 'voucher', $outId, $trip['bien_so'] . ' đã sửa xong, chạy tiếp');
+        });
+    }
+
+    /** Chuyến đang chạy của phiếu đi (khoá để sửa). */
+    private function openTrip(int $outId): array
+    {
+        $trip = $this->db->one('SELECT c.*, x.bien_so FROM chuyen_van_chuyen c JOIN xe x ON x.id = c.xe_id WHERE c.phieu_di_id = ? FOR UPDATE', [$outId]);
+        if (!$trip || $trip['trang_thai'] !== 'IN_TRANSIT') {
+            throw new DomainError('Chỉ áp dụng cho chuyến đang vận chuyển');
+        }
+        return $trip;
     }
 
     private function tripPay(int $fromWh, int $toWh, array $pay): array
@@ -253,6 +404,9 @@ final class TransferService
             }
             $trip = $this->db->one('SELECT * FROM chuyen_van_chuyen WHERE phieu_den_id = ? FOR UPDATE', [$inId]);
             $open = $trip && $trip['trang_thai'] === 'IN_TRANSIT';
+            if ($open && ($b = $this->fleet->breakdownOf((int)$trip['id']))) {
+                throw new DomainError('Xe đang hỏng giữa đường (' . $b['ly_do'] . ') — hàng tới muộn, chưa nhận được. Chờ kho đi báo xe chạy tiếp.');
+            }
             if ($open && !$rightDriver) {
                 throw new DomainError('Chỉ nhận hàng khi đúng tài xế và đúng xe. Nếu không, hãy bấm «Chưa nhận được hàng».');
             }
@@ -455,6 +609,7 @@ final class TransferService
             $this->ledger->post($ops);
             $this->db->exec("UPDATE phieu_nhap_xuat SET trang_thai = 'CANCELLED', ghi_chu = ? WHERE id = ?", [mb_substr('Kho đi thu hồi chuyến: ' . $reason, 0, 255), (int)$in['id']]);
             $this->db->exec("UPDATE chuyen_van_chuyen SET trang_thai = 'RECALLED', sai_lech = ? WHERE id = ?", [mb_substr('Kho đi thu hồi chuyến: ' . $reason, 0, 255), (int)$trip['id']]);
+            $this->db->exec('UPDATE su_co_xe SET ngay_sua = CURRENT_TIMESTAMP, nguoi_sua_id = ? WHERE chuyen_id = ? AND ngay_sua IS NULL', [$user->id, (int)$trip['id']]);
             $this->db->exec('UPDATE xe SET kho_hien_tai_id = ?, dang_den_kho_id = NULL WHERE id = ?', [(int)$out['kho_id'], (int)$trip['xe_id']]);
             $this->audit->record($user->id, 'transfer.recall', 'voucher', $outId, "{$out['ma']} · xe quay về kho đi · $reason");
             return $adjId;

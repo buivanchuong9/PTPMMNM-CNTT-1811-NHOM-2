@@ -285,6 +285,8 @@ final class VoucherController extends Controller
                 "SELECT l.mat_hang_id, l.lo_hang_id, -l.so_luong AS thieu, p.id AS adj_id, p.ma AS adj_ma FROM phieu_nhap_xuat p JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = p.id
                  WHERE p.phieu_nhap_xuat_lien_quan_id = ? AND p.loai = 'ADJUSTMENT'", [(int)$v['id']]) : [],
             'receipt' => $this->receiptOf($trip),
+            'convoy' => $isTransfer ? $this->fleet->convoyOf((int)($v['loai'] === 'TRANSFER_OUT' ? $v['id'] : $v['phieu_nhap_xuat_lien_quan_id'])) : [],
+            'breakdown' => $trip && $trip['trang_thai'] === 'IN_TRANSIT' ? $this->fleet->breakdownOf((int)$trip['id']) : null,
             'route' => $this->routeOf($v, $trip),
             'vehicles' => in_array($v['loai'], ['TRANSFER_OUT', 'ISSUE'], true) && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
             'payInfo' => $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT'
@@ -304,7 +306,7 @@ final class VoucherController extends Controller
     /** Lộ trình minh hoạ kho đi → kho đến của chuyến đang chạy; null nếu không phải đang vận chuyển hoặc không xác định được vị trí kho. */
     private function routeOf(array $v, ?array $trip): ?array
     {
-        if (!$trip || $trip['trang_thai'] !== 'IN_TRANSIT' || empty($v['kho_doi_ung_id'])) {
+        if (!$trip || !in_array($trip['trang_thai'], ['IN_TRANSIT', 'RECALLED'], true) || empty($v['kho_doi_ung_id'])) {
             return null;
         }
         [$fromId, $toId] = $v['loai'] === 'TRANSFER_OUT' ? [(int)$v['kho_id'], (int)$v['kho_doi_ung_id']] : [(int)$v['kho_doi_ung_id'], (int)$v['kho_id']];
@@ -323,7 +325,20 @@ final class VoucherController extends Controller
                 $all[] = ['code' => $w['ma'], 'name' => $w['ten'], 'lat' => $at['lat'], 'lng' => $at['lng']];
             }
         }
-        return ['from' => $ends[0], 'to' => $ends[1], 'all' => $all, 'km' => (int)$trip['km'], 'plate' => $trip['bien_so']];
+        $outId = (int)($v['loai'] === 'TRANSFER_OUT' ? $v['id'] : $v['phieu_nhap_xuat_lien_quan_id']);
+        $trucks = [];   // xe nối đuôi nhau theo thứ tự trong đợt; xe bị thu hồi chạy ngược về kho đi; xe mất hàng không còn trên bản đồ
+        foreach ($this->fleet->convoyOf($outId) as $row) {
+            if (in_array($row['trang_thai'], ['IN_TRANSIT', 'DELIVERED', 'RECALLED'], true)) {
+                $trucks[] = ['plate' => $row['bien_so'], 'me' => (int)$row['chuyen_id'] === (int)$trip['id'],
+                             'state' => match (true) { $row['trang_thai'] === 'DELIVERED' => 'arrived', $row['trang_thai'] === 'RECALLED' => 'returning', $row['hong_ly_do'] !== null => 'broken', default => 'moving' },
+                             'at' => $row['hong_ly_do'] !== null ? (int)$row['hong_tien_do'] / 100 : 1, 'why' => (string)$row['hong_ly_do']];
+            }
+        }
+        if ($trucks === []) {
+            $b = $this->fleet->breakdownOf((int)$trip['id']);
+            $trucks[] = ['plate' => $trip['bien_so'], 'me' => true, 'state' => $trip['trang_thai'] === 'RECALLED' ? 'returning' : ($b ? 'broken' : 'moving'), 'at' => $b ? (int)$b['tien_do'] / 100 : 1, 'why' => (string)($b['ly_do'] ?? '')];
+        }
+        return ['from' => $ends[0], 'to' => $ends[1], 'all' => $all, 'km' => (int)$trip['km'], 'plate' => $trip['bien_so'], 'trucks' => $trucks];
     }
 
     private function receiptOf(?array $trip): ?array
@@ -353,7 +368,17 @@ final class VoucherController extends Controller
         return $this->act(function () use ($r, $user, $id) {
             $v = $this->repo->find($id);
             if ($v['loai'] === 'TRANSFER_OUT') {   // xuất kho đi: bắt buộc xe + tài xế + tài xế xác nhận đủ hàng
-                $res = $this->transfers->dispatch($user, $id, (int)$r->int('vehicle_id'), $r->str('driver_ok') === '1', [
+                $extra = [];   // xe phụ cùng chở: extra[id xe][id dòng] = số lượng
+                foreach ($r->arr('extra') as $vid => $byLine) {
+                    foreach (is_array($byLine) ? $byLine : [] as $lineId => $val) {
+                        $q = trim((string)$val) === '' ? 0 : StockRules::parseQty((string)$val);
+                        if ($q === null) {
+                            throw new DomainError('Số lượng chia cho xe phải là số nguyên không âm');
+                        }
+                        $extra[(int)$vid][(int)$lineId] = $q;
+                    }
+                }
+                $res = $this->transfers->dispatchConvoy($user, $id, (int)$r->int('vehicle_id'), $extra, $r->str('driver_ok') === '1', [
                     'hinh_thuc' => $r->str('hinh_thuc') === 'THUE_NGOAI' ? 'THUE_NGOAI' : 'NOI_BO',
                     'km' => StockRules::parseQty($r->str('km')) ?? 0, 'tien' => \StockFlow\Service\PricingService::parseMoney($r->str('tien')) ?? -1, 'ghi_chu' => $r->str('gia_note'),
                     'ngoai' => ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type')],
@@ -386,6 +411,10 @@ final class VoucherController extends Controller
             if ($res['already']) {
                 $this->session->flash('ok', 'Phiếu đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
                 return null;
+            }
+            if (!empty($res['split'])) {   // chia nhiều xe: phiếu nháp gốc đã tách thành mỗi xe một phiếu
+                $this->session->flash('ok', 'Đã xuất kho bằng ' . count($res['split']) . ' xe — mỗi xe một phiếu, xem các xe cùng đợt ở cột bên phải.');
+                return '/vouchers/' . (int)$res['voucher']['id'];
             }
             return "/vouchers/$id/print?fresh=1";   // vừa ghi sổ ⇒ mở luôn phiếu để in và ký
         }, 'Đã xác nhận và ghi sổ phát sinh.', "/vouchers/$id");
@@ -446,8 +475,38 @@ final class VoucherController extends Controller
                 throw new DomainError('Chọn lý do thu hồi chuyến');
             }
             $note = trim($r->str('note'));
-            $this->transfers->recall($user, $id, $why . ($note !== '' ? ' — ' . $note : ''));
+            $this->transfers->recall($user, $this->convoyTarget($r, $id), $why . ($note !== '' ? ' — ' . $note : ''));
         }, 'Đã thu hồi chuyến: hàng được cộng lại vào kho đi, xe quay về kho đi, phiếu nhận ở kho đến đã bị huỷ.', "/vouchers/$id");
+    }
+
+    /** Phiếu đi của xe được chọn trong đợt (ô «xe nào» ở các khối báo hỏng / chạy tiếp / thu hồi): mặc định chính phiếu đang xem; phải cùng đợt. */
+    private function convoyTarget(Request $r, int $id): int
+    {
+        $target = (int)($r->int('target') ?? 0);
+        if ($target === 0 || $target === $id) {
+            return $id;
+        }
+        foreach ($this->fleet->convoyOf($id) as $c) {
+            if ((int)$c['phieu_di_id'] === $target) {
+                return $target;
+            }
+        }
+        throw new DomainError('Xe được chọn không thuộc đợt điều chuyển này');
+    }
+
+    /** Kho đi báo xe hỏng giữa đường: hàng tới muộn, kho đến chưa nhận được cho tới khi xe chạy tiếp. */
+    public function breakdown(Request $r, array $p, ?User $user): Response
+    {
+        $id = (int)$p['id'];
+        return $this->act(fn() => $this->transfers->reportBreakdown($user, $this->convoyTarget($r, $id), $r->str('reason'), $r->str('note')),
+            'Đã báo xe hỏng giữa đường. Hàng sẽ tới muộn — kho đến chưa nhận được cho tới khi xe chạy tiếp.', "/vouchers/$id");
+    }
+
+    /** Xe đã sửa xong, chạy tiếp. */
+    public function resume(Request $r, array $p, ?User $user): Response
+    {
+        $id = (int)$p['id'];
+        return $this->act(fn() => $this->transfers->resumeTrip($user, $this->convoyTarget($r, $id)), 'Xe đã chạy tiếp — kho đến nhận được hàng khi xe tới.', "/vouchers/$id");
     }
 
     public function cancel(Request $r, array $p, ?User $user): Response

@@ -1,7 +1,30 @@
 // Bản đồ lộ trình điều chuyển: xe chạy theo đường bộ từ kho đi tới kho đến trong 5 giây (minh hoạ, không phải GPS).
+// Nhiều xe cùng đợt nối đuôi nhau; xe hỏng dừng giữa đường kèm cảnh báo; xe đã giao đứng ở kho đến; xe bị thu hồi chạy ngược về kho đi.
 (function () {
-  var el = document.getElementById('route-map');
-  if (!el || !window.L) { return; }
+  // Leaflet chỉ nạp khi có bản đồ trên trang — trang khác không tốn thêm dung lượng
+  var leaflet = null;
+  function loadLeaflet() {
+    if (window.L) { return Promise.resolve(); }
+    return leaflet || (leaflet = new Promise(function (ok, fail) {
+      var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assets/vendor/leaflet/leaflet.css'; document.head.appendChild(css);
+      var js = document.createElement('script'); js.src = '/assets/vendor/leaflet/leaflet.js'; js.onload = ok; js.onerror = fail; document.head.appendChild(js);
+    }));
+  }
+
+  // gọi lúc tải trang và sau mỗi lần đổi trang không reload (app.js → initPage)
+  window.initRouteMap = function () {
+    var el = document.getElementById('route-map');
+    if (!el || el.dataset.ready) { return; }
+    el.dataset.ready = '1';
+    loadLeaflet().then(function () { build(el); }, function () { delete el.dataset.ready; });
+  };
+
+  var TRUCK = '<svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>';
+  var WARN = '<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg>';
+  var GAP = 0.09;   // khoảng cách giữa hai xe nối đuôi (tính theo phần lộ trình)
+
+  function build(el) {
+  if (!document.body.contains(el)) { return; }   // đã chuyển sang trang khác trong lúc nạp Leaflet
   var r = JSON.parse(el.dataset.route), DURATION = 5000;
   var a = [r.from.lat, r.from.lng], b = [r.to.lat, r.to.lng];
 
@@ -22,10 +45,19 @@
       .bindTooltip(w.code + ' · ' + w.name, { permanent: on, direction: 'right', offset: [8, 0] }).addTo(map);
   });
 
-  var line = null, trail = L.polyline([], { color: '#2563eb', weight: 5 }).addTo(map);
-  var truck = L.marker(a, { interactive: false, zIndexOffset: 1000, icon: L.divIcon({
-    className: '', iconSize: [34, 34], iconAnchor: [17, 17],
-    html: '<div class="route-truck"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></div>' }) }).addTo(map);
+  // mỗi xe một biểu tượng (kèm biển số) và một vệt đường phía sau; xe của phiếu đang xem được tô đậm
+  var trucks = (r.trucks || []).map(function (t) {
+    var cls = 'route-truck' + (t.me ? ' me' : '') + (t.state === 'broken' ? ' broken' : '') + (t.state === 'returning' ? ' returning' : '');
+    var marker = L.marker(a, { interactive: false, zIndexOffset: t.me ? 1100 : 1000, icon: L.divIcon({
+      className: '', iconSize: [34, 34], iconAnchor: [17, 17],
+      html: '<div class="' + cls + '">' + (t.state === 'broken' ? WARN : TRUCK) + '</div><span class="route-plate">' + t.plate + '</span>' }) }).addTo(map);
+    if (t.state === 'broken') { marker.options.interactive = true; marker.bindTooltip('Xe ' + t.plate + ' hỏng: ' + t.why, { direction: 'top', offset: [0, -16] }); }
+    if (t.state === 'returning') { marker.options.interactive = true; marker.bindTooltip('Xe ' + t.plate + ' bị thu hồi — quay về kho đi', { direction: 'top', offset: [0, -16] }); }
+    var trail = L.polyline([], { color: t.state === 'broken' ? '#dc2626' : t.state === 'returning' ? '#f59e0b' : t.me ? '#2563eb' : '#60a5fa', weight: t.me ? 5 : 4, dashArray: t.state === 'returning' ? '2 8' : null }).addTo(map);
+    return { t: t, marker: marker, trail: trail };
+  });
+
+  var line = null;
 
   // các thành phố dọc quốc lộ 1 giữa hai kho: ép tuyến đi theo trục Bắc – Nam trong nước, không để dịch vụ chỉ đường tự cắt qua Lào / Campuchia
   var SPINE = [[21.03, 105.85], [20.25, 105.97], [19.81, 105.78], [18.68, 105.68], [18.34, 105.91], [16.82, 107.10], [16.46, 107.59], [16.05, 108.21], [15.12, 108.80], [13.78, 109.22], [12.24, 109.19], [10.78, 106.70]];
@@ -48,15 +80,26 @@
   }
 
   var route = null, raf = 0;
+  // xe thứ i xuất phát chậm hơn xe dẫn đầu i × GAP; xe hỏng dừng tại vị trí đã báo; xe đã giao nằm sẵn ở kho đến
+  function place(k, e) {
+    var span = 1 + GAP * (trucks.length - 1), m = e * span;
+    trucks.forEach(function (tr, n) {
+      var go = Math.max(0, Math.min(1, m - GAP * n));
+      var f = tr.t.state === 'arrived' ? 1 : tr.t.state === 'returning' ? 1 - go : go;   // xe thu hồi: xuất phát từ phía kho đến, chạy ngược về kho đi
+      if (tr.t.state === 'broken') { f = Math.min(f, tr.t.at); }
+      var s = at(route, f);
+      tr.marker.setLatLng(s.p);
+      if (tr.t.state === 'returning') { tr.trail.setLatLngs(go > 0 ? [s.p].concat(route.pts.slice(s.upto + 1)) : []); }   // vệt đường đã chạy ngược
+      else { tr.trail.setLatLngs(f > 0 ? route.pts.slice(0, s.upto + 1).concat([s.p]) : []); }
+    });
+  }
   function run() {
     if (!route) { return; }
     cancelAnimationFrame(raf);
     var start = performance.now();
     (function step(now) {
       var k = Math.min(1, (now - start) / DURATION), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;   // chạy êm đầu và cuối
-      var s = at(route, e);
-      truck.setLatLng(s.p);
-      trail.setLatLngs(route.pts.slice(0, s.upto + 1).concat([s.p]));
+      place(k, e);
       if (k < 1) { raf = requestAnimationFrame(step); }
     })(start);
   }
@@ -64,7 +107,7 @@
     route = prepare(pts);
     if (line) { map.removeLayer(line); }
     line = L.polyline(pts, { color: '#94a3b8', weight: 4, dashArray: '6 8' }).addTo(map);
-    trail.bringToFront();
+    trucks.forEach(function (tr) { tr.trail.bringToFront(); });
     run();
   }
 
@@ -81,4 +124,7 @@
     })
     .catch(function () { show(fallback()); })
     .then(function () { clearTimeout(timer); });
+  }
+
+  window.initRouteMap();
 })();

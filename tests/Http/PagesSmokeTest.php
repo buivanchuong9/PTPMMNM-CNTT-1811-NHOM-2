@@ -25,6 +25,8 @@ $xferGoIn = $f->c->get(\StockFlow\Service\VoucherRepository::class)->pairOf($xfe
 // xe đầu đang chạy nên kho A cần thêm một xe + tài xế sẵn sàng để phiếu nháp còn chọn được xe
 $spareDriver = $fleet->addDriver($f->approverA, 'Tài xế dự phòng', (string)random_int(100000000000, 999999999999), '0912345679');
 $fleet->addVehicle($f->approverA, '30H-' . random_int(100, 999) . '.' . random_int(10, 99), 'Xe tải 1 tấn', $f->wa, $spareDriver);
+$thirdDriver = $fleet->addDriver($f->approverA, 'Tài xế thứ ba', (string)random_int(100000000000, 999999999999), '0912345670');
+$fleet->addVehicle($f->approverA, '30H-' . random_int(100, 999) . '.' . random_int(10, 99), 'Xe tải 1 tấn', $f->wa, $thirdDriver);   // từ hai xe sẵn sàng trở lên mới có form chia hàng nhiều xe
 
 $port = random_int(19000, 19999);
 $sessions = sys_get_temp_dir() . '/sf-sess-' . bin2hex(random_bytes(4));
@@ -107,6 +109,12 @@ foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouche
 same($get("/vouchers/{$pair['id']}")[0], 403, 'phiếu nhập xuất của kho B ⇒ 403');
 [, $draftPage] = $get("/vouchers/{$xferDraft['id']}");
 truthy(str_contains($draftPage, 'name="vehicle_id"') && str_contains($draftPage, 'name="driver_ok"') && !str_contains($draftPage, 'name="driver_id"'), 'phiếu điều chuyển nháp: chỉ chọn xe (tài xế đi theo xe) và tài xế xác nhận đủ hàng');
+truthy(str_contains($draftPage, 'data-convoy') && str_contains($draftPage, 'name="extra['), 'phiếu điều chuyển nháp có ≥ 2 xe sẵn sàng: hiện nút «Thêm xe chở cùng» dưới ô chọn xe');
+$f->db->exec('UPDATE kho SET dia_chi = ? WHERE id = ?', ['KCN Thăng Long, Đông Anh, Hà Nội', $f->wa]);   // bản đồ lộ trình cần địa chỉ nhận ra được tỉnh
+$f->db->exec('UPDATE kho SET dia_chi = ? WHERE id = ?', ['KCN Hoà Khánh, Liên Chiểu, Đà Nẵng', $f->wb]);
+$ts->reportBreakdown($f->approverA, (int)$xferGo['id'], 'Hỏng động cơ');
+[$st, $goPage] = $get("/vouchers/{$xferGo['id']}");
+truthy($st === 200 && $noPhpError($goPage) && str_contains($goPage, 'hỏng giữa đường') && str_contains($goPage, 'đã sửa xong, chạy tiếp') && str_contains($goPage, 'data-route') && str_contains($goPage, '&quot;broken&quot;'), 'kho đi thấy xe hỏng: cảnh báo, nút chạy tiếp và xe hỏng trên bản đồ');
 [$st, $fleetPage] = $get('/fleet');
 truthy($st === 200 && $noPhpError($fleetPage) && str_contains($fleetPage, 'name="plate"'), 'quản lý kho A vào được trang Đội xe và thấy form thêm xe');
 foreach (['/fleet?q=khongco&tt=ready&ai=TAI_XE', '/fleet?thang=2000-01', '/fleet?thang=sai&tt=zzz&q=' . urlencode('30h')] as $p) {
@@ -117,6 +125,7 @@ section('Quản lý kho B: kiểm tra hàng khi nhận');
 $login($f->approverB->username);
 [$st, $inPage] = $get("/vouchers/{$xferGoIn['id']}");
 truthy($st === 200 && $noPhpError($inPage), 'quản lý kho đến mở được phiếu đang vận chuyển');
+truthy(str_contains($inPage, 'hỏng giữa đường') && !str_contains($inPage, 'đã sửa xong, chạy tiếp'), 'kho đến thấy cảnh báo xe hỏng, không có nút chạy tiếp của kho đi');
 truthy(str_contains($inPage, 'name="received[') && str_contains($inPage, 'name="driver_match"') && str_contains($inPage, '/not-received') && !str_contains($inPage, 'name="full_ok"') && str_contains($inPage, 'Tài xế thử'), 'phiếu đến: có ô nhập số thực nhận, ô đúng tài xế, nút «Chưa nhận được hàng» và thông tin tài xế');
 section('Quét mã vạch');
 $login($f->approverA->username);

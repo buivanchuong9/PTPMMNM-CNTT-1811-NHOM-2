@@ -718,3 +718,23 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .route-pin.dest { background: #16a34a; }
 .route-truck { width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 2px solid #f59e0b; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 .route-truck svg { width: 18px; height: 18px; stroke: #b45309; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Nhiều xe nối đuôi, xe hỏng, chia hàng cho nhiều xe */
+.route-truck.me { border-color: #2563eb; }
+.route-truck.me svg { stroke: #1d4ed8; }
+.route-truck.broken { border-color: #dc2626; animation: route-blink 1s ease-in-out infinite alternate; }
+.route-truck.broken svg { stroke: #b91c1c; }
+@keyframes route-blink { to { box-shadow: 0 0 0 7px rgba(220, 38, 38, .25); } }
+.route-plate { position: absolute; left: 50%; top: 36px; transform: translateX(-50%); background: rgba(15, 23, 42, .85); color: #fff; font: 600 10px/1 system-ui, sans-serif; padding: 3px 5px; border-radius: 5px; white-space: nowrap; }
+.convoy { margin: 8px 0 12px; display: grid; gap: 8px; }
+.convoy-row { display: flex; gap: 8px; align-items: center; }
+.convoy-row select { flex: 1; }
+.convoy-add { justify-self: start; }
+.convoy .qty-input { width: 80px; }
+.convoy-list li { align-items: center; }
+
+.ops-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+
+.car-pick { margin: 0 0 4px; font-size: 15px; }
+.route-truck.returning { border-color: #f59e0b; background: #fffbeb; }
+.route-truck.returning svg { transform: scaleX(-1); }
