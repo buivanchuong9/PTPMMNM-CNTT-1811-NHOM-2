@@ -73,7 +73,7 @@ $ageDays = fn(?string $t) => $t ? (int)floor((time() - strtotime($t . ' UTC')) /
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($warehouses): ?>
-<dialog id="count-dlg" class="dlg" aria-labelledby="count-dlg-t">
+<dialog id="count-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="count-dlg-t">
   <form method="post" action="/counts" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="count-dlg-t">Mở đợt kiểm kê</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <?php if (!$user->isAdmin && $myWarehouse && count($warehouses) === 1): ?>

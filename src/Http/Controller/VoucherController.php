@@ -26,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries, private \StockFlow\Service\TransportService $transport)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -105,7 +105,10 @@ final class VoucherController extends Controller
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $pick, 'stock' => $this->query->stockMap($ids),
             'replace' => $replace, 'prefill' => $prefill,
             'idem' => bin2hex(random_bytes(16)), 'selected' => $replace ? (int)$replace['kho_id'] : $r->int('warehouse'), 'prefillItem' => $r->int('item'),
-            'partnerNames' => array_column($this->db->all('SELECT ten FROM doi_tac WHERE loai = ? AND hoat_dong ORDER BY ten', [$type === VoucherType::Receipt ? 'SUPPLIER' : 'CUSTOMER']), 'ten'),
+            'partnerNames' => array_column($partnerRows = $type === VoucherType::Receipt
+                ? $this->db->all("SELECT ten, '' AS kho_ma, 0 AS mine FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten")
+                : $this->db->all("SELECT d.ten, COALESCE(k.ma, '') AS kho_ma, (d.kho_id = ?) AS mine FROM doi_tac d LEFT JOIN kho k ON k.id = d.kho_id WHERE d.loai = 'CUSTOMER' AND d.hoat_dong" . ($user->isAdmin ? '' : ' AND (d.kho_id IS NULL OR d.kho_id = ' . (int)$user->warehouseId . ')') . ' ORDER BY mine DESC, d.ten', [(int)($user->warehouseId ?? 0)]), 'ten'),   // mỗi kho một danh sách khách riêng; quản trị thấy tất cả
+            'partnerKho' => array_column($partnerRows, 'kho_ma', 'ten'),
             'suppliers' => $type === VoucherType::Receipt ? $this->db->all("SELECT id, ma, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten") : [],
         ] + $this->pickFilterData(), $type->label() . ' mới');
     }
@@ -155,11 +158,11 @@ final class VoucherController extends Controller
             }
             $partnerSvc = new \StockFlow\Service\PartnerService($this->db, $this->auth, $this->audit);
             if ($type === VoucherType::Issue) {
-                $partnerSvc->requireNewCustomerInfo($r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'));
+                $partnerSvc->requireNewCustomerInfo($r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $this->custAddress($r), $user->warehouseId);
             }
             $res = $this->vouchers->createDraft($user, $type, (int)$r->int('warehouse_id'), $lines, $r->str('partner'), $r->str('note'), $this->idemKey($r),
                 $quality, $type === VoucherType::Receipt ? ($r->int('replace') ?: null) : null);
-            if ($type === VoucherType::Issue && $res['created'] && $partnerSvc->ensureCustomer($user, $r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'))) {
+            if ($type === VoucherType::Issue && $res['created'] && $partnerSvc->ensureCustomer($user, $r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $this->custAddress($r))) {
                 $this->session->flash('ok', 'Đã lưu «' . $r->str('partner') . '» vào danh sách khách hàng.');
             }
             if (!$res['created']) {
@@ -208,7 +211,7 @@ final class VoucherController extends Controller
     {
         $svc = new \StockFlow\Service\PartnerService($this->db, $this->auth, $this->audit);
         $name = $r->str('partner');
-        if ($name === '' || $svc->known($name)) {
+        if ($name === '' || $svc->known($name, $user->warehouseId)) {
             return null;
         }
         try {   // kiểm tra dòng hàng / tồn trước: phiếu sai thì báo ngay ở bước 1, không bắt nhập khách
@@ -220,10 +223,10 @@ final class VoucherController extends Controller
             return Response::redirect('/vouchers/new?type=ISSUE');
         }
         try {
-            $svc->requireNewCustomerInfo($name, $r->str('cust_contact'), $r->str('cust_phone'), $r->str('cust_address'));
+            $svc->requireNewCustomerInfo($name, $r->str('cust_contact'), $r->str('cust_phone'), $this->custAddress($r), $user->warehouseId);
             return null;   // đã đủ thông tin khách mới ⇒ cho lập phiếu
         } catch (DomainError $e) {
-            if ($r->str('cust_contact') . $r->str('cust_phone') . $r->str('cust_address') !== '') {
+            if ($r->str('cust_contact') . $r->str('cust_phone') . $r->str('cust_address') . $r->str('street') . $r->str('ward') . $r->str('province') !== '') {
                 $this->session->flash('err', $e->getMessage());
             }
             $page = $this->render('vouchers/customer_step', $user, 'vouchers', [
@@ -288,7 +291,13 @@ final class VoucherController extends Controller
             'convoy' => $isTransfer ? $this->fleet->convoyOf((int)($v['loai'] === 'TRANSFER_OUT' ? $v['id'] : $v['phieu_nhap_xuat_lien_quan_id'])) : [],
             'breakdown' => $trip && $trip['trang_thai'] === 'IN_TRANSIT' ? $this->fleet->breakdownOf((int)$trip['id']) : null,
             'route' => $this->routeOf($v, $trip),
-            'vehicles' => in_array($v['loai'], ['TRANSFER_OUT', 'ISSUE'], true) && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
+            'deliveryRoute' => $this->deliveryRouteOf($v),
+            'load' => in_array($v['loai'], ['TRANSFER_OUT', 'TRANSFER_IN', 'ISSUE'], true) ? $load = $this->transport->loadOf($lines) : null,
+            'vehicles' => $vehicles = in_array($v['loai'], ['TRANSFER_OUT', 'ISSUE'], true) && $v['trang_thai'] === 'DRAFT' ? $this->fleet->availableVehicles((int)$v['kho_id']) : [],
+            'fit' => $fit = $vehicles && isset($load) ? $this->transport->fitMap($vehicles, $load, $v['loai'] === 'TRANSFER_OUT') : [],
+            'recommended' => $fit ? $this->transport->recommend($vehicles, $fit, $v['loai'] === 'TRANSFER_OUT') : null,   // xe nhỏ nhất vẫn đủ chở: khuyến khích chọn
+            'drivers' => $vehicles ? $drv = $this->fleet->availableDrivers((int)$v['kho_id']) : [],   // tài xế rảnh của kho: chọn riêng với xe
+            'driverFit' => !empty($drv) ? $this->transport->driverFit($drv) : [],
             'payInfo' => $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT'
                 ? $this->fleet->distanceHint((int)$v['kho_id'], (int)$v['kho_doi_ung_id']) + ['rates' => $this->fleet->rates((int)$v['kho_id'])]
                 : ($v['loai'] === 'ISSUE' && $v['trang_thai'] === 'DRAFT' ? ['km' => null, 'rates' => $this->fleet->rates((int)$v['kho_id'])] : null),
@@ -303,6 +312,45 @@ final class VoucherController extends Controller
      * từng dòng = số trên phiếu − phần thiếu ghi ở phiếu điều chỉnh của phiếu đến.
      * @return ?array{rows:list<array<string,mixed>>,in_id:int,when:?string,by:?string,note:string}
      */
+    /**
+     * Lộ trình giao hàng (kho → địa chỉ khách) của phiếu xuất giao tận nơi bằng xe của kho hoặc xe thuê ngoài; null nếu khách tự lấy hoặc chưa xác định được vị trí.
+     * Vị trí khách ở đây chỉ gần đúng theo tỉnh / thành (nếu kho và khách cùng tỉnh thì lệch nhẹ theo địa chỉ để thấy được đường đi); trình duyệt sẽ tìm lại chính xác theo địa chỉ.
+     * @param array<string,mixed> $v
+     */
+    private function deliveryRouteOf(array $v): ?array
+    {
+        if ($v['loai'] !== 'ISSUE' || $v['trang_thai'] !== 'CONFIRMED') {
+            return null;
+        }
+        $g = $this->deliveries->of((int)$v['id']);
+        if (!$g || $g['hinh_thuc'] === 'TU_LAY' || trim((string)$g['dia_chi']) === '') {
+            return null;
+        }
+        $wh = $this->db->one('SELECT ma, ten, dia_chi FROM kho WHERE id = ?', [(int)$v['kho_id']]);
+        $from = $wh ? \StockFlow\Domain\VnAddress::locate($wh['dia_chi']) : null;
+        $to = \StockFlow\Domain\VnAddress::locate((string)$g['dia_chi']);
+        $known = $to !== null;   // địa chỉ cũ gõ tay, không nhận ra tỉnh: giao quanh khu vực kho (demo), không tìm trên bản đồ để khỏi ra nhầm chỗ xa
+        $to ??= $from;
+        if (!$from || !$to) {
+            return null;
+        }
+        if (abs($from['lat'] - $to['lat']) < 0.02 && abs($from['lng'] - $to['lng']) < 0.02) {
+            $h = crc32((string)$g['dia_chi']);
+            $shift = fn(int $n) => (($n % 1000) / 1000 - 0.5) * 0.16;   // ±0,08° ≈ ±9 km quanh trung tâm tỉnh
+            [$dy, $dx] = [$shift($h), $shift(intdiv($h, 1000))];
+            $to['lat'] += abs($dy) < 0.03 ? ($dy < 0 ? -0.03 : 0.03) : $dy;
+            $to['lng'] += abs($dx) < 0.03 ? ($dx < 0 ? -0.03 : 0.03) : $dx;
+        }
+        $me = ['code' => $wh['ma'], 'name' => $wh['ten'], 'lat' => $from['lat'], 'lng' => $from['lng']];
+        ['ward' => $ward, 'province' => $province] = \StockFlow\Domain\VnAddress::parse((string)$g['dia_chi']);
+        return ['mode' => 'delivery', 'from' => $me, 'all' => [$me],
+                'to' => ['code' => 'KH', 'name' => (string)$g['nguoi_nhan'], 'addr' => (string)$g['dia_chi'], 'lat' => $to['lat'], 'lng' => $to['lng'], 'query' => $known ? $g['dia_chi'] . ', Việt Nam' : '',
+                         'ward' => $ward, 'wardQuery' => $known && $ward !== '' && $province !== '' ? "$ward, $province, Việt Nam" : '', 'seed' => crc32((string)$g['dia_chi'])],   // điểm giao demo: chọn ngẫu nhiên (cố định theo địa chỉ) trong phường
+                'arrived' => !empty($g['ngay_giao_den']),
+                'km' => (int)$g['km'], 'plate' => (string)($g['bien_so'] ?? ''), 'kind' => $g['kieu_xe'] ?? 'TAI',
+                'trucks' => [['plate' => (string)($g['bien_so'] ?? ''), 'kind' => $g['kieu_xe'] ?? 'TAI', 'me' => true, 'state' => 'moving', 'at' => 1, 'why' => '']]];
+    }
+
     /** Lộ trình minh hoạ kho đi → kho đến của chuyến đang chạy; null nếu không phải đang vận chuyển hoặc không xác định được vị trí kho. */
     private function routeOf(array $v, ?array $trip): ?array
     {
@@ -378,11 +426,15 @@ final class VoucherController extends Controller
                         $extra[(int)$vid][(int)$lineId] = $q;
                     }
                 }
+                $extraDrivers = [];   // tài xế của từng xe phụ: extra_driver[id xe] = id tài xế
+                foreach ($r->arr('extra_driver') as $vid => $did) {
+                    $extraDrivers[(int)$vid] = (int)$did;
+                }
                 $res = $this->transfers->dispatchConvoy($user, $id, (int)$r->int('vehicle_id'), $extra, $r->str('driver_ok') === '1', [
                     'hinh_thuc' => $r->str('hinh_thuc') === 'THUE_NGOAI' ? 'THUE_NGOAI' : 'NOI_BO',
                     'km' => StockRules::parseQty($r->str('km')) ?? 0, 'tien' => \StockFlow\Service\PricingService::parseMoney($r->str('tien')) ?? -1, 'ghi_chu' => $r->str('gia_note'),
-                    'ngoai' => ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type')],
-                ]);
+                    'ngoai' => $this->external($r),
+                ], (int)$r->int('driver_id') ?: null, $extraDrivers);
             } elseif ($v['loai'] === 'TRANSFER_IN') {   // nhận hàng: kho đến kiểm tra hàng đủ + đúng tài xế
                 $received = null;   // nhập số thực nhận từng dòng: received[id dòng] = số lượng
                 if ($raw = $r->arr('received')) {
@@ -402,11 +454,14 @@ final class VoucherController extends Controller
                 }
             } else {
                 $delivery = $v['loai'] === 'ISSUE' && $r->str('hinh_thuc') !== '' ? [   // xuất bán: khách tự lấy hoặc giao hàng (xe kho / thuê ngoài)
-                    'hinh_thuc' => $r->str('hinh_thuc'), 'thanh_toan' => $r->str('thanh_toan'), 'phuong_thuc_tt' => $r->str('pt_tt'), 'dia_chi' => $r->str('giao_dia_chi'), 'nguoi_nhan' => $r->str('giao_nguoi_nhan'), 'sdt_nhan' => $r->str('giao_sdt'), 'vehicle_id' => (int)$r->int('vehicle_id'), 'driver_ok' => $r->str('driver_ok') === '1',
+                    'hinh_thuc' => $r->str('hinh_thuc'), 'thanh_toan' => $r->str('thanh_toan'), 'phuong_thuc_tt' => $r->str('pt_tt'), 'dia_chi' => $this->deliveryAddress($r), 'nguoi_nhan' => $r->str('giao_nguoi_nhan'), 'sdt_nhan' => $r->str('giao_sdt'), 'vehicle_id' => (int)$r->int('vehicle_id'), 'driver_id' => (int)$r->int('driver_id'), 'driver_ok' => $r->str('driver_ok') === '1',
                     'km' => StockRules::parseQty($r->str('km')) ?? 0, 'tien' => \StockFlow\Service\PricingService::parseMoney($r->str('tien')) ?? -1, 'ghi_chu' => $r->str('gia_note'),
-                    'ngoai' => ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type')],
+                    'ngoai' => $this->external($r),
                 ] : null;
                 $res = $this->vouchers->confirm($user, $id, $delivery);
+                if ($delivery !== null && $delivery['hinh_thuc'] !== 'TU_LAY' && $r->str('save_cust') === '1' && (string)$v['doi_tac'] !== '') {   // «Lưu địa chỉ cho khách»: lần sau chọn khách là tự điền
+                    (new \StockFlow\Service\PartnerService($this->db, $this->auth, $this->audit))->rememberDelivery($user, (string)$v['doi_tac'], (string)$delivery['dia_chi'], (string)$delivery['nguoi_nhan'], (string)$delivery['sdt_nhan']);
+                }
             }
             if ($res['already']) {
                 $this->session->flash('ok', 'Phiếu đã được xác nhận trước đó — sổ phát sinh không ghi thêm.');
@@ -492,6 +547,68 @@ final class VoucherController extends Controller
             }
         }
         throw new DomainError('Xe được chọn không thuộc đợt điều chuyển này');
+    }
+
+    /** Địa chỉ khách hàng mới: ghép từ ba ô có gợi ý (số nhà · phường / xã · tỉnh / thành); form cũ chỉ có một ô thì dùng ô đó. */
+    private function custAddress(Request $r): string
+    {
+        if ($r->str('street') . $r->str('ward') . $r->str('province') !== '') {
+            return \StockFlow\Domain\VnAddress::composeLoose($r->str('street'), $r->str('ward'), $r->str('province'));
+        }
+        return $r->str('cust_address');
+    }
+
+    /** Km tự tính từ kho tới địa chỉ giao đang chọn trên form (JSON), cố định theo địa chỉ; km = null nếu chưa chọn đủ tỉnh / phường. */
+    public function deliveryKm(Request $r, array $p, ?User $user): Response
+    {
+        $this->need($user, Permission::XemPhieu);
+        $v = $this->repo->find((int)$p['id']);
+        $this->auth->requireVisible($user, (int)$v['kho_id']);
+        $km = null;
+        try {
+            $addr = \StockFlow\Domain\VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province'));
+            $km = \StockFlow\Domain\VnAddress::deliveryKm((string)$this->db->value('SELECT dia_chi FROM kho WHERE id = ?', [(int)$v['kho_id']]), $addr);
+        } catch (DomainError) {
+            // chưa chọn đủ địa chỉ: chưa tính
+        }
+        $nearer = null;   // khách ở xa kho này mà có kho khác gần hơn nhiều ⇒ nên xuất từ kho đó (đỡ tiền công, đỡ thời gian)
+        if ($km !== null && isset($addr)) {
+            foreach ($this->db->all('SELECT ma, ten, dia_chi FROM kho WHERE hoat_dong AND id <> ?', [(int)$v['kho_id']]) as $w) {
+                $k2 = \StockFlow\Domain\VnAddress::deliveryKm($w['dia_chi'], $addr);
+                if ($k2 !== null && $k2 + 100 < $km && ($nearer === null || $k2 < $nearer['km'])) {
+                    $nearer = ['ma' => $w['ma'], 'ten' => $w['ten'], 'km' => $k2];
+                }
+            }
+        }
+        return new Response(json_encode(['km' => $km, 'nearer' => $nearer], JSON_UNESCAPED_UNICODE), 200, ['Content-Type' => 'application/json; charset=utf-8']);
+    }
+
+    /** Địa chỉ giao hàng ghép từ ba ô có gợi ý (số nhà · phường / xã · tỉnh / thành), kiểm tra lại với danh mục hành chính; khách tự lấy thì không cần. */
+    private function deliveryAddress(Request $r): string
+    {
+        if (!in_array($r->str('hinh_thuc'), ['NOI_BO', 'THUE_NGOAI'], true)) {
+            return '';
+        }
+        return \StockFlow\Domain\VnAddress::compose($r->str('street'), $r->str('ward'), $r->str('province'));
+    }
+
+    /** Tài xế đã giao hàng tới nơi (nút demo): ghi nhận thời điểm, bản đồ giao hàng hiện xe đã tới đích. */
+    public function delivered(Request $r, array $p, ?User $user): Response
+    {
+        $id = (int)$p['id'];
+        return $this->act(fn() => $this->deliveries->markArrived($user, $id), 'Đã ghi nhận: tài xế đã giao hàng đến nơi.', "/vouchers/$id");
+    }
+
+    /** Thông tin đơn vị vận tải thuê ngoài trên form (tải trọng, GVW nhập theo tấn ⇒ kg). */
+    private function external(Request $r): array
+    {
+        $kg = function (string $key, string $label) use ($r): string {
+            $t = \StockFlow\Domain\TransportRules::parseDecimal($r->str($key)) ?? throw new DomainError("$label phải là số không âm (ví dụ 2,5)");
+            return $t > 0 ? (string)(int)round($t * 1000) : '';
+        };
+        return ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type'),
+                'tai_trong_kg' => $kg('ext_cap', 'Tải trọng xe'), 'gvw_kg' => $kg('ext_gvw', 'Khối lượng toàn bộ'),
+                'license_no' => $r->str('ext_lic_no'), 'license_class' => $r->str('ext_lic_class'), 'license_expiry' => $r->str('ext_lic_exp')];
     }
 
     /** Kho đi báo xe hỏng giữa đường: hàng tới muộn, kho đến chưa nhận được cho tới khi xe chạy tiếp. */

@@ -48,9 +48,11 @@
           if (!bad && sum < 1) { bad = 'Mỗi xe phụ phải chở ít nhất một mặt hàng — nhập số lượng ở bảng bên dưới.'; }
         });
         if (!bad && sels().some(function (s) { return !s.value; })) { bad = 'Có ô xe chở cùng chưa chọn xe — chọn xe hoặc bấm ✕ để bỏ.'; }
+        if (!bad && [].slice.call(rowsBox.querySelectorAll('[data-convoy-drv]')).some(function (d) { return !d.value; })) { bad = 'Chọn tài xế lái cho từng xe chở cùng.'; }
         hint.textContent = bad || (picked.length ? 'Tổng cộng ' + (picked.length + 1) + ' xe cùng chở, mỗi xe một phiếu riêng.' : '');
         hint.classList.toggle('neg', !!bad);
         box.dataset.invalid = bad ? '1' : '';
+        var crew = box.closest('[data-crew]'); if (crew && window.crewSync) { window.crewSync(crew); }   // lọc lại danh sách tài xế theo xe vừa chọn
         var sig = picked.join(',') + '|' + mainId;
         if (sig !== lastSig) { lastSig = sig; if (picked.length) { fill(picked); refresh(); } }   // thêm / bớt / đổi xe ⇒ chia đều lại, sau đó vẫn tự sửa số được
       }
@@ -59,7 +61,8 @@
       function fill(picked) {
         var n = picked.length + 1;
         lineRows.forEach(function (tr) {
-          var share = Math.floor(+tr.dataset.total / n);
+          var share = Math.floor(+tr.dataset.total / n), pack = +tr.dataset.pack || 1;
+          if (pack > 1 && share >= pack) { share = Math.floor(share / pack) * pack; }   // hàng đóng kiện: chia theo kiện nguyên, phần dư về xe chính
           picked.forEach(function (id) { var i = tr.querySelector('td[data-car="' + id + '"] input'); if (i) { i.value = share; } });
         });
       }

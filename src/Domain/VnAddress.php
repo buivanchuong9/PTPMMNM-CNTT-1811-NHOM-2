@@ -100,6 +100,69 @@ final class VnAddress
     }
 
     /**
+     * Như compose() nhưng phường / xã có thể để trống (địa chỉ khách hàng cũ chỉ có đến tỉnh): có tỉnh hợp lệ là nhận, trống cả ba ô ⇒ chuỗi rỗng.
+     * Có điền phường / xã thì vẫn kiểm tra thuộc đúng tỉnh.
+     */
+    public static function composeLoose(string $street, string $ward, string $province): string
+    {
+        if (trim($street) === '' && trim($ward) === '' && trim($province) === '') {
+            return '';
+        }
+        if (trim($ward) !== '') {
+            return self::compose($street, $ward, $province);
+        }
+        $street = trim((string)preg_replace('/\s+/u', ' ', $street));
+        if ($street === '' || mb_strlen($street) > 150 || preg_match('/[\r\n]/', $street)) {
+            throw new DomainError('Nhập số nhà, tên đường — tối đa 150 ký tự');
+        }
+        $p = self::findProvince($province) ?? throw new DomainError('Tỉnh / Thành phố không hợp lệ — hãy chọn từ danh sách gợi ý');
+        return $street . ', ' . $p['n'];
+    }
+
+    /**
+     * Kho gần nhất với một địa chỉ (theo tâm tỉnh, đường chim bay); cùng tỉnh thì kho ở tỉnh đó. null nếu không nhận ra tỉnh của địa chỉ.
+     * Dùng để phân khách hàng cho kho gần nhất: miền nào kho miền đó phục vụ — kho xa chở hàng tới khách chỉ tốn thêm.
+     * @param list<array{id:int|string,dia_chi:?string}> $warehouses
+     */
+    public static function nearest(array $warehouses, string $address): ?int
+    {
+        $to = self::locate($address);
+        if (!$to) {
+            return null;
+        }
+        $best = null;
+        $bestD = INF;
+        foreach ($warehouses as $w) {
+            $at = self::locate($w['dia_chi'] ?? null);
+            if (!$at) {
+                continue;
+            }
+            $d = self::haversine([$at['lat'], $at['lng']], [$to['lat'], $to['lng']]);
+            if ($d < $bestD) {
+                [$best, $bestD] = [(int)$w['id'], $d];
+            }
+        }
+        return $best;
+    }
+
+    /**
+     * Quãng đường giao hàng (km) từ kho tới địa chỉ khách, tính tự động và CỐ ĐỊNH theo địa chỉ (cùng địa chỉ luôn ra cùng số km).
+     * Khác tỉnh: đường bộ ước tính giữa hai tỉnh (xem roadKm). Cùng tỉnh: 3–20 km tuỳ địa chỉ (giao trong thành phố). null nếu không nhận ra tỉnh.
+     */
+    public static function deliveryKm(?string $warehouseAddress, string $deliveryAddress): ?int
+    {
+        $a = self::locate($warehouseAddress);
+        $b = self::locate($deliveryAddress);
+        if (!$a || !$b) {
+            return null;
+        }
+        if (abs($a['lat'] - $b['lat']) < 0.02 && abs($a['lng'] - $b['lng']) < 0.02) {
+            return 3 + (int)(crc32(self::fold($deliveryAddress)) % 18);
+        }
+        return self::roadKm($warehouseAddress, $deliveryAddress);
+    }
+
+    /**
      * Tách địa chỉ đã lưu về ba ô để điền sẵn vào form sửa. Địa chỉ cũ (không theo dạng chuẩn) được giữ nguyên trong ô «Số nhà, đường».
      * @return array{street:string,ward:string,province:string}
      */

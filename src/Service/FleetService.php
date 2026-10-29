@@ -233,10 +233,96 @@ final class FleetService
         } else {
             $vehicleId = $this->db->insert('INSERT INTO xe (bien_so, loai_xe, kho_goc_id, kho_hien_tai_id, tai_xe_id, thue_ngoai) VALUES (?,?,?,?,?,1)', [$plate, $type, $fromWh, $fromWh, $driverId]);
         }
+        // thông số xe + giấy phép lái xe của bên thuê ngoài (tuỳ chọn ở dịch vụ; form xuất kho bắt buộc nhập): đủ để kiểm tải trọng và hạng bằng
+        $specs = array_filter(['tai_trong_kg' => $c['tai_trong_kg'] ?? '', 'gvw_kg' => $c['gvw_kg'] ?? ''], fn($x) => trim((string)$x) !== '');
+        if ($specs) {
+            $s = $this->cleanSpecs($specs);
+            $this->db->exec('UPDATE xe SET tai_trong_kg = ?, gvw_kg = ? WHERE id = ?', [$s['tai_trong_kg'], $s['gvw_kg'], $vehicleId]);
+        }
+        if (trim((string)($c['license_no'] ?? '')) !== '' || trim((string)($c['license_class'] ?? '')) !== '') {
+            $l = $this->cleanLicense(['so_gplx' => $c['license_no'] ?? '', 'hang_gplx' => $c['license_class'] ?? '', 'han_gplx' => $c['license_expiry'] ?? '']);
+            $this->db->exec('UPDATE tai_xe SET so_gplx = ?, hang_gplx = ?, han_gplx = ? WHERE id = ?', [$l['so_gplx'], $l['hang_gplx'], $l['han_gplx'], $driverId]);
+        }
         return $vehicleId;
     }
 
     // ───── tra cứu ─────
+
+    // ───── tài xế và xe quản lý riêng: mỗi chuyến chọn xe + tài xế lúc xuất kho ─────
+
+    /** Tài xế đang chạy một chuyến chưa giao xong (chuyến điều chuyển). */
+    public function driverBusy(int $driverId): bool
+    {
+        return (bool)$this->db->value("SELECT 1 FROM chuyen_van_chuyen WHERE tai_xe_id = ? AND trang_thai = 'IN_TRANSIT'", [$driverId]);
+    }
+
+    /**
+     * Tài xế của kho có thể nhận chuyến mới: đang làm, không phải thuê ngoài, không đang chạy chuyến nào. Gồm cả hồ sơ bằng lái để lọc theo xe.
+     * @return list<array<string,mixed>>
+     */
+    public function availableDrivers(int $warehouseId): array
+    {
+        return $this->db->all(
+            "SELECT t.* FROM tai_xe t WHERE t.hoat_dong AND t.thue_ngoai = 0 AND t.kho_id = ?
+               AND NOT EXISTS (SELECT 1 FROM chuyen_van_chuyen c WHERE c.tai_xe_id = t.id AND c.trang_thai = 'IN_TRANSIT')
+             ORDER BY t.ho_ten", [$warehouseId]);
+    }
+
+    /**
+     * Kiểm tra và khoá tài xế được giao cho chuyến xuất từ kho $warehouseId: phải còn làm việc, thuộc kho này, không đang chạy chuyến khác.
+     * Xe và tài xế KHÔNG gắn cố định — người nào có bằng lái đúng hạng cho xe thì lái được; việc kiểm bằng lái do TransportService làm.
+     * @return array<string,mixed> dòng tai_xe
+     */
+    public function assignableDriver(int $driverId, int $warehouseId): array
+    {
+        $d = $this->db->one('SELECT * FROM tai_xe WHERE id = ? FOR UPDATE', [$driverId]);
+        if (!$d || (int)$d['thue_ngoai']) {
+            throw new DomainError('Tài xế không tồn tại');
+        }
+        if (!$d['hoat_dong']) {
+            throw new DomainError('Tài xế ' . $d['ho_ten'] . ' đã nghỉ — chọn tài xế khác lái thay');
+        }
+        if ((int)($d['kho_id'] ?? 0) !== $warehouseId) {
+            throw new DomainError('Tài xế ' . $d['ho_ten'] . ' thuộc kho khác — chọn tài xế của kho này');
+        }
+        if ($this->driverBusy($driverId)) {
+            throw new DomainError('Tài xế ' . $d['ho_ten'] . ' đang chạy một chuyến chưa giao xong');
+        }
+        return $d;
+    }
+
+    /** Thêm xe (không gắn tài xế) kèm thông số kỹ thuật, trong một giao dịch: lỗi thì không tạo xe. */
+    public function createVehicle(User $actor, string $plate, string $type, int $homeWarehouseId, ?array $specs = null): int
+    {
+        $this->requireHome($actor, $homeWarehouseId);
+        return $this->db->transaction(function () use ($actor, $plate, $type, $homeWarehouseId, $specs) {
+            $id = $this->addVehicle($actor, $plate, $type, $homeWarehouseId, null);
+            $specs === null || $this->setVehicleSpecs($actor, $id, $specs);
+            return $id;
+        });
+    }
+
+    /** Sửa biển số, loại xe, kho gốc và thông số kỹ thuật; không đụng tới tài xế (tài xế chọn theo từng chuyến). */
+    public function editVehicle(User $actor, int $vehicleId, string $plate, string $type, int $homeWarehouseId, ?array $specs = null): void
+    {
+        $this->auth->requirePermission($actor, Permission::QuanLyDoiXe);
+        $this->db->transaction(function () use ($actor, $vehicleId, $plate, $type, $homeWarehouseId, $specs) {
+            $v = $this->ownVehicle($actor, $vehicleId);
+            $this->requireHome($actor, $homeWarehouseId);
+            $this->updateVehicle($actor, $vehicleId, $plate, $type, $homeWarehouseId, $v['tai_xe_id'] !== null ? (int)$v['tai_xe_id'] : null);
+            $specs === null || $this->setVehicleSpecs($actor, $vehicleId, $specs);
+        });
+    }
+
+    /** Thêm tài xế (thuộc kho của người thêm) kèm giấy phép lái xe, trong một giao dịch. */
+    public function createDriver(User $actor, string $name, string $cccd, string $phone, ?array $license = null): int
+    {
+        return $this->db->transaction(function () use ($actor, $name, $cccd, $phone, $license) {
+            $id = $this->addDriver($actor, $name, $cccd, $phone);
+            $license === null || $this->setDriverLicense($actor, $id, $license);
+            return $id;
+        });
+    }
 
     /** Xe kèm vị trí hiện tại, kho đang tới và tài xế của chuyến đang chạy. @return list<array<string,mixed>> */
     public function vehicles(?int $wh = null): array
@@ -244,11 +330,13 @@ final class FleetService
         return $this->db->all(
             "SELECT x.*, g.ma AS goc_ma, h.ma AS ht_ma, h.ten AS ht_ten, d.ma AS den_ma, d.ten AS den_ten,
                     t.ho_ten AS tai_xe_ten, t.cccd AS tai_xe_cccd, t.so_dien_thoai AS tai_xe_sdt, t.hoat_dong AS tai_xe_hoat_dong,
-                    c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id
+                    t.so_gplx AS tx_so_gplx, t.hang_gplx AS tx_hang_gplx, t.ngay_sinh AS tx_ngay_sinh, t.ngay_cap_gplx AS tx_ngay_cap_gplx, t.han_gplx AS tx_han_gplx,
+                    t.noi_cap_gplx AS tx_noi_cap_gplx, t.han_kham_sk AS tx_han_kham_sk, t.diem_gplx AS tx_diem_gplx, t.anh_gplx AS tx_anh_gplx,
+                    c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id, tc.ho_ten AS chay_tai_xe, tc.id AS chay_tai_xe_id
              FROM xe x JOIN kho g ON g.id = x.kho_goc_id LEFT JOIN kho h ON h.id = x.kho_hien_tai_id LEFT JOIN kho d ON d.id = x.dang_den_kho_id
              LEFT JOIN tai_xe t ON t.id = x.tai_xe_id
              LEFT JOIN chuyen_van_chuyen c ON c.xe_id = x.id AND c.trang_thai = 'IN_TRANSIT'
-             LEFT JOIN phieu_nhap_xuat p ON p.id = c.phieu_di_id
+             LEFT JOIN phieu_nhap_xuat p ON p.id = c.phieu_di_id LEFT JOIN tai_xe tc ON tc.id = c.tai_xe_id
              WHERE x.thue_ngoai = 0" . ($wh !== null ? ' AND x.kho_goc_id = ' . (int)$wh : '') . "
              ORDER BY g.ma, x.bien_so");
     }
@@ -257,7 +345,7 @@ final class FleetService
     public function drivers(?int $wh = null, ?string $month = null): array
     {
         return $this->db->all(
-            "SELECT t.*, k.ma AS kho_ma, v.id AS xe_phu_trach_id, v.bien_so AS xe_phu_trach, c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id,
+            "SELECT t.*, k.ma AS kho_ma, v.id AS xe_phu_trach_id, v.bien_so AS xe_phu_trach, cx.bien_so AS xe_dang_chay, c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id,
                     (SELECT COUNT(*) FROM that_thoat_hang h WHERE h.tai_xe_id = t.id AND h.nguoi_chiu = 'TAI_XE') AS so_vu_mat,
                     (SELECT COALESCE(SUM(h.tien_tru_luong), 0) FROM that_thoat_hang h WHERE h.tai_xe_id = t.id AND h.ngay_tao >= ? AND h.ngay_tao < ?) AS tru_thang,
                     (SELECT COUNT(*) FROM chuyen_van_chuyen z WHERE z.tai_xe_id = t.id AND z.hinh_thuc = 'NOI_BO' AND z.trang_thai = 'DELIVERED' AND z.ngay_di >= ? AND z.ngay_di < ?)
@@ -267,7 +355,7 @@ final class FleetService
                     (SELECT COALESCE(SUM(z.tien_tra), 0) FROM chuyen_van_chuyen z WHERE z.tai_xe_id = t.id AND z.hinh_thuc = 'NOI_BO' AND z.trang_thai = 'DELIVERED' AND z.ngay_di >= ? AND z.ngay_di < ?)
                       + (SELECT COALESCE(SUM(g.tien_tra), 0) FROM giao_hang g WHERE g.tai_xe_id = t.id AND g.hinh_thuc = 'NOI_BO' AND g.ngay_tao >= ? AND g.ngay_tao < ?) AS tien_chuyen
              FROM tai_xe t LEFT JOIN kho k ON k.id = t.kho_id LEFT JOIN xe v ON v.tai_xe_id = t.id
-             LEFT JOIN chuyen_van_chuyen c ON c.tai_xe_id = t.id AND c.trang_thai = 'IN_TRANSIT'
+             LEFT JOIN chuyen_van_chuyen c ON c.tai_xe_id = t.id AND c.trang_thai = 'IN_TRANSIT' LEFT JOIN xe cx ON cx.id = c.xe_id
              LEFT JOIN phieu_nhap_xuat p ON p.id = c.phieu_di_id
              WHERE t.thue_ngoai = 0" . ($wh !== null ? ' AND t.kho_id = ' . (int)$wh : '') . "
              ORDER BY t.ho_ten", [...($r = self::monthRange($month)), ...$r, ...$r, ...$r, ...$r, ...$r, ...$r]);
@@ -282,6 +370,39 @@ final class FleetService
     {
         $month = $month !== null && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) ? $month : date('Y-m');
         return [$month . '-01 00:00:00', date('Y-m-d H:i:s', strtotime($month . '-01 +1 month'))];
+    }
+
+    /**
+     * Các chuyến THẬT của từng tài xế trong tháng (xem chi tiết ở tab «Điểm & thu nhập»): chuyến điều chuyển (mọi tình trạng, chỉ chuyến đã giao mới tính tiền)
+     * và đơn giao hàng cho khách. Mới nhất trước.
+     * @param list<int> $driverIds
+     * @return array<int,list<array<string,mixed>>> id tài xế ⇒ danh sách chuyến
+     */
+    public function driverTrips(array $driverIds, ?string $month = null): array
+    {
+        $driverIds = array_values(array_filter(array_map('intval', $driverIds)));
+        if ($driverIds === []) {
+            return [];
+        }
+        $in = implode(',', $driverIds);
+        [$from, $to] = self::monthRange($month);
+        $rows = $this->db->all(
+            "SELECT 'DIEU_CHUYEN' AS loai, c.id AS id, c.tai_xe_id, c.ngay_di AS ngay, c.trang_thai, c.hinh_thuc, c.km, c.tien_tra, x.bien_so,
+                    pd.id AS phieu_id, pd.ma AS phieu_ma, c.kho_di_id AS kho_phieu_id, k1.ma AS tu, k2.ma AS den, c.sai_lech
+             FROM chuyen_van_chuyen c JOIN xe x ON x.id = c.xe_id JOIN phieu_nhap_xuat pd ON pd.id = c.phieu_di_id
+             JOIN kho k1 ON k1.id = c.kho_di_id JOIN kho k2 ON k2.id = c.kho_den_id
+             WHERE c.tai_xe_id IN ($in) AND c.ngay_di >= ? AND c.ngay_di < ?
+             UNION ALL
+             SELECT 'GIAO_KHACH', g.id, g.tai_xe_id, g.ngay_tao, 'DELIVERED', g.hinh_thuc, g.km, g.tien_tra, x.bien_so,
+                    p.id, p.ma, g.kho_id, k.ma, g.dia_chi, ''
+             FROM giao_hang g JOIN phieu_nhap_xuat p ON p.id = g.phieu_nhap_xuat_id JOIN kho k ON k.id = g.kho_id LEFT JOIN xe x ON x.id = g.xe_id
+             WHERE g.tai_xe_id IN ($in) AND g.ngay_tao >= ? AND g.ngay_tao < ?
+             ORDER BY ngay DESC, id DESC", [$from, $to, $from, $to]);
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int)$r['tai_xe_id']][] = $r;
+        }
+        return $out;
     }
 
     public function lossRecords(int $limit = 20, ?int $wh = null, ?string $month = null): array
@@ -465,19 +586,16 @@ final class FleetService
         });
     }
 
-    /** Sửa lương tháng và điểm của tài xế (VD: khôi phục điểm sau khi xử lý xong). */
-    public function updateDriverPay(User $actor, int $driverId, int $salary, int $score): void
+    /** Sửa điểm uy tín của tài xế (VD: khôi phục điểm sau khi xử lý xong). Tài xế không có lương cố định: thu nhập chỉ gồm tiền từng chuyến đã giao (trừ phần phạt khi mất hàng). */
+    public function updateDriverScore(User $actor, int $driverId, int $score): void
     {
         $this->auth->requirePermission($actor, Permission::QuanLyDoiXe);
         $d = $this->ownDriver($actor, $driverId);
-        if ($salary < 0 || $salary > 1_000_000_000) {
-            throw new DomainError('Lương không hợp lệ');
-        }
         if ($score < 0 || $score > self::MAX_SCORE) {
             throw new DomainError('Điểm từ 0 đến ' . self::MAX_SCORE);
         }
-        $this->db->exec('UPDATE tai_xe SET luong = ?, diem = ? WHERE id = ?', [$salary, $score, $driverId]);
-        $this->audit->record($actor->id, 'driver.pay', 'driver', $driverId, $d['ho_ten'] . ' · lương ' . number_format($salary, 0, ',', '.') . ' đ · ' . $score . ' điểm');
+        $this->db->exec('UPDATE tai_xe SET diem = ? WHERE id = ?', [$score, $driverId]);
+        $this->audit->record($actor->id, 'driver.pay', 'driver', $driverId, $d['ho_ten'] . ' · ' . $score . ' điểm');
     }
 
     /** Các phản hồi của quản trị cho một phiếu đến (mới nhất trước). @return list<array<string,mixed>> */
@@ -498,7 +616,7 @@ final class FleetService
     public function availableVehicles(int $warehouseId): array
     {
         return $this->db->all(
-            'SELECT x.id, x.bien_so, x.loai_xe, x.tai_xe_id, t.ho_ten, t.cccd, t.hoat_dong AS tai_xe_hoat_dong
+            'SELECT x.id, x.bien_so, x.loai_xe, x.kieu_xe, x.dung_tich_cc, x.tai_trong_kg, x.gvw_kg, x.ro_mooc_kg, x.tai_xe_id, t.ho_ten, t.cccd, t.hoat_dong AS tai_xe_hoat_dong
              FROM xe x LEFT JOIN tai_xe t ON t.id = x.tai_xe_id WHERE x.hoat_dong AND x.thue_ngoai = 0 AND x.kho_hien_tai_id = ? ORDER BY x.bien_so', [$warehouseId]);
     }
 
@@ -556,12 +674,14 @@ final class FleetService
      * Lỗi ở phần xe (trùng biển số, kho đủ xe…) thì không có tài xế nào được tạo.
      * @return array{vehicle_id:int,driver_id:int}
      */
-    public function addVehicleWithDriver(User $actor, string $plate, string $type, int $homeWarehouseId, string $driverName, string $driverCccd, string $driverPhone): array
+    public function addVehicleWithDriver(User $actor, string $plate, string $type, int $homeWarehouseId, string $driverName, string $driverCccd, string $driverPhone, ?array $specs = null, ?array $license = null): array
     {
         $this->requireHome($actor, $homeWarehouseId);
-        return $this->db->transaction(function () use ($actor, $plate, $type, $homeWarehouseId, $driverName, $driverCccd, $driverPhone) {
+        return $this->db->transaction(function () use ($actor, $plate, $type, $homeWarehouseId, $driverName, $driverCccd, $driverPhone, $specs, $license) {
             $driverId = $this->resolveDriver($actor, $driverName, $driverCccd, $driverPhone, null, $homeWarehouseId);
             $vehicleId = $this->addVehicle($actor, $plate, $type, $homeWarehouseId, $driverId);
+            $specs === null || $this->setVehicleSpecs($actor, $vehicleId, $specs);        // thông số xe + bằng lái khai luôn lúc thêm: lỗi thì cả xe lẫn tài xế không được tạo
+            $license === null || $this->setDriverLicense($actor, $driverId, $license);
             return ['vehicle_id' => $vehicleId, 'driver_id' => $driverId];
         });
     }
@@ -571,15 +691,17 @@ final class FleetService
      * tài xế mới được tạo (hoặc dùng lại tài xế cùng CCCD đang rảnh), còn hồ sơ tài xế cũ được GIỮ NGUYÊN (các chuyến cũ vẫn ghi đúng người đã chạy):
      * xoá nếu chưa từng chạy chuyến nào, ngược lại chuyển sang «Ngừng dùng».
      */
-    public function updateVehicleWithDriver(User $actor, int $vehicleId, string $plate, string $type, int $homeWarehouseId, string $driverName, string $driverCccd, string $driverPhone): void
+    public function updateVehicleWithDriver(User $actor, int $vehicleId, string $plate, string $type, int $homeWarehouseId, string $driverName, string $driverCccd, string $driverPhone, ?array $specs = null, ?array $license = null): void
     {
         $this->auth->requirePermission($actor, Permission::QuanLyDoiXe);
-        $this->db->transaction(function () use ($actor, $vehicleId, $plate, $type, $homeWarehouseId, $driverName, $driverCccd, $driverPhone) {
+        $this->db->transaction(function () use ($actor, $vehicleId, $plate, $type, $homeWarehouseId, $driverName, $driverCccd, $driverPhone, $specs, $license) {
             $v = $this->ownVehicle($actor, $vehicleId);
             $this->requireHome($actor, $homeWarehouseId);
             $oldId = $v['tai_xe_id'] !== null ? (int)$v['tai_xe_id'] : null;
             $newId = $this->resolveDriver($actor, $driverName, $driverCccd, $driverPhone, $oldId, $homeWarehouseId);
             $this->updateVehicle($actor, $vehicleId, $plate, $type, $homeWarehouseId, $newId);
+            $specs === null || $this->setVehicleSpecs($actor, $vehicleId, $specs);
+            $license === null || $this->setDriverLicense($actor, $newId, $license);
             if ($oldId !== null && $oldId !== $newId) {
                 if ($this->db->value('SELECT 1 FROM chuyen_van_chuyen WHERE tai_xe_id = ?', [$oldId])) {
                     $this->setDriverActive($actor, $oldId, false);
@@ -683,6 +805,250 @@ final class FleetService
         return [$plate, $type];
     }
 
+    // ───── thông số kỹ thuật của xe & giấy phép lái xe của tài xế ─────
+
+    private static function isDate(string $s): bool
+    {
+        $d = \DateTime::createFromFormat('Y-m-d', $s);
+        return $d !== false && $d->format('Y-m-d') === $s;
+    }
+
+    /**
+     * Kiểm tra thông số xe. Số 0 hoặc rỗng = chưa khai (cho phép: dữ liệu cũ khai dần, thiếu số liệu chỉ bị cảnh báo khi chọn xe).
+     * @param array<string,mixed> $v tai_trong_kg, gvw_kg, ro_mooc_kg, loai_thung, thung_dai_mm/rong/cao, tong_dai_mm/rong/cao, so_truc, han_dang_kiem, han_bao_hiem
+     * @return array<string,mixed>
+     */
+    private function cleanSpecs(array $v): array
+    {
+        $int = function (string $k, int $lo, int $hi, string $label) use ($v): int {
+            $raw = trim((string)($v[$k] ?? ''));
+            if ($raw === '') {
+                return 0;
+            }
+            $n = filter_var($raw, FILTER_VALIDATE_INT);
+            if ($n === false || ($n !== 0 && ($n < $lo || $n > $hi))) {
+                throw new DomainError("$label không hợp lệ (từ " . number_format($lo, 0, ',', '.') . ' đến ' . number_format($hi, 0, ',', '.') . ')');
+            }
+            return $n;
+        };
+        $out = [
+            'tai_trong_kg' => $int('tai_trong_kg', 10, 60000, 'Tải trọng (kg)'),
+            'gvw_kg' => $int('gvw_kg', 500, 60000, 'Khối lượng toàn bộ (kg)'),
+            'ro_mooc_kg' => $int('ro_mooc_kg', 100, 60000, 'Khối lượng rơ moóc (kg)'),
+            'thung_dai_mm' => $int('thung_dai_mm', 200, 20000, 'Chiều dài thùng (mm)'),
+            'thung_rong_mm' => $int('thung_rong_mm', 200, 4000, 'Chiều rộng thùng (mm)'),
+            'thung_cao_mm' => $int('thung_cao_mm', 200, 5000, 'Chiều cao thùng (mm)'),
+            'tong_dai_mm' => $int('tong_dai_mm', 500, 30000, 'Chiều dài xe (mm)'),
+            'tong_rong_mm' => $int('tong_rong_mm', 300, 4000, 'Chiều rộng xe (mm)'),
+            'tong_cao_mm' => $int('tong_cao_mm', 500, 6000, 'Chiều cao xe (mm)'),
+            'so_truc' => $int('so_truc', 2, 10, 'Số trục'),
+            'dung_tich_cc' => $int('dung_tich_cc', 50, 2000, 'Dung tích xi-lanh (cm³)'),
+        ];
+        $kind = trim((string)($v['kieu_xe'] ?? '')) ?: 'TAI';
+        if (!isset(\StockFlow\Domain\TransportRules::VEHICLE_KINDS[$kind])) {
+            throw new DomainError('Kiểu xe không hợp lệ');
+        }
+        $out['kieu_xe'] = $kind;
+        if ($kind === 'MAY' && $out['tai_trong_kg'] > 300) {
+            throw new DomainError('Xe máy chở tối đa 300 kg — hàng nặng hơn dùng ô tô hoặc xe tải');
+        }
+        $box = [$out['thung_dai_mm'], $out['thung_rong_mm'], $out['thung_cao_mm']];
+        if (count(array_filter($box)) % 3 !== 0) {
+            throw new DomainError('Kích thước lòng thùng: nhập đủ cả dài, rộng, cao (hoặc để trống cả ba)');
+        }
+        if ($out['gvw_kg'] > 0 && $out['tai_trong_kg'] > 0 && $out['gvw_kg'] < $out['tai_trong_kg']) {
+            throw new DomainError('Khối lượng toàn bộ (GVW) phải lớn hơn hoặc bằng tải trọng — GVW gồm cả xe không và hàng');
+        }
+        $type = trim((string)($v['loai_thung'] ?? ''));
+        if ($type !== '' && !isset(\StockFlow\Domain\TransportRules::BODY_TYPES[$type])) {
+            throw new DomainError('Loại thùng không hợp lệ');
+        }
+        $out['loai_thung'] = $type;
+        foreach (['han_dang_kiem' => 'Hạn đăng kiểm', 'han_bao_hiem' => 'Hạn bảo hiểm TNDS'] as $k => $label) {
+            $d = trim((string)($v[$k] ?? ''));
+            if ($d !== '' && !self::isDate($d)) {
+                throw new DomainError("$label không phải ngày hợp lệ");
+            }
+            $out[$k] = $d === '' ? null : $d;
+        }
+        return $out;
+    }
+
+    /**
+     * Kiểm tra giấy phép lái xe và hồ sơ tài xế. Chưa khai gì thì để trống hết; đã khai hạng thì phải có số bằng và ngược lại.
+     * Hạng bằng có thời hạn mà chưa nhập hạn thì tự tính từ ngày cấp (theo thời hạn của hạng).
+     * @param array<string,mixed> $v so_gplx, hang_gplx, ngay_sinh, ngay_cap_gplx, han_gplx, noi_cap_gplx, han_kham_sk, diem_gplx
+     * @return array<string,mixed>
+     */
+    private function cleanLicense(array $v): array
+    {
+        $today = date('Y-m-d');
+        $no = strtoupper(preg_replace('/\s+/', '', (string)($v['so_gplx'] ?? '')) ?? '');
+        $class = trim((string)($v['hang_gplx'] ?? ''));
+        if ($class !== '' && !isset(\StockFlow\Domain\TransportRules::CLASSES[$class])) {
+            throw new DomainError('Hạng giấy phép lái xe không hợp lệ');
+        }
+        if (($class === '') !== ($no === '')) {
+            throw new DomainError('Khai giấy phép lái xe: nhập cả số bằng và hạng bằng (hoặc để trống cả hai)');
+        }
+        if ($no !== '' && !preg_match('/^[0-9A-Z]{6,20}$/', $no)) {
+            throw new DomainError('Số giấy phép lái xe gồm 6–20 chữ và số');
+        }
+        $date = function (string $k, string $label) use ($v): ?string {
+            $d = trim((string)($v[$k] ?? ''));
+            if ($d === '') {
+                return null;
+            }
+            if (!self::isDate($d)) {
+                throw new DomainError("$label không phải ngày hợp lệ");
+            }
+            return $d;
+        };
+        $birth = $date('ngay_sinh', 'Ngày sinh');
+        $issued = $date('ngay_cap_gplx', 'Ngày cấp bằng');
+        $expiry = $date('han_gplx', 'Hạn bằng lái');
+        $health = $date('han_kham_sk', 'Hạn giấy khám sức khoẻ');
+        if ($birth !== null && \StockFlow\Domain\TransportRules::ageOn($birth, $today) < 18) {
+            throw new DomainError('Tài xế phải từ 18 tuổi trở lên');
+        }
+        if ($issued !== null && $issued > $today) {
+            throw new DomainError('Ngày cấp bằng không được ở tương lai');
+        }
+        if ($class !== '' && $birth !== null && \StockFlow\Domain\TransportRules::ageOn($birth, $issued ?? $today) < \StockFlow\Domain\TransportRules::minAge($class)) {
+            throw new DomainError('Chưa đủ ' . \StockFlow\Domain\TransportRules::minAge($class) . ' tuổi tại thời điểm được cấp ' . \StockFlow\Domain\TransportRules::label($class) . ' — kiểm tra lại ngày sinh hoặc ngày cấp');
+        }
+        if ($issued !== null && $expiry !== null && $expiry < $issued) {
+            throw new DomainError('Hạn bằng lái phải sau ngày cấp');
+        }
+        $years = $class !== '' ? (int)\StockFlow\Domain\TransportRules::CLASSES[$class][2] : 0;
+        if ($expiry === null && $issued !== null && $years > 0) {
+            $expiry = date('Y-m-d', strtotime("$issued +$years years"));
+        }
+        $place = trim(preg_replace('/\s+/u', ' ', (string)($v['noi_cap_gplx'] ?? '')) ?? '');
+        if (mb_strlen($place) > 120) {
+            throw new DomainError('Nơi cấp bằng tối đa 120 ký tự');
+        }
+        $points = trim((string)($v['diem_gplx'] ?? ''));
+        $points = $points === '' ? 12 : filter_var($points, FILTER_VALIDATE_INT);
+        if ($points === false || $points < 0 || $points > 12) {
+            throw new DomainError('Điểm giấy phép lái xe từ 0 đến 12');
+        }
+        return ['so_gplx' => $no, 'hang_gplx' => $class, 'ngay_sinh' => $birth, 'ngay_cap_gplx' => $issued, 'han_gplx' => $expiry,
+                'noi_cap_gplx' => $place, 'han_kham_sk' => $health, 'diem_gplx' => $points];
+    }
+
+    /** Lưu thông số kỹ thuật của xe (kho gốc của xe tự khai). */
+    public function setVehicleSpecs(User $actor, int $vehicleId, array $v): void
+    {
+        $x = $this->ownVehicle($actor, $vehicleId);
+        $s = $this->cleanSpecs($v);
+        $cols = array_keys($s);
+        $this->db->exec('UPDATE xe SET ' . implode(', ', array_map(fn($c) => "$c = ?", $cols)) . ' WHERE id = ?', [...array_values($s), $vehicleId]);
+        $need = \StockFlow\Domain\TransportRules::needFor($s);
+        $this->audit->record($actor->id, 'vehicle.specs', 'vehicle', $vehicleId, $x['bien_so'] . ' · tải ' . $s['tai_trong_kg'] . ' kg · GVW ' . $s['gvw_kg'] . ' kg' . ($need ? ' · cần hạng ' . $need : ''));
+    }
+
+    /** Lưu giấy phép lái xe và hồ sơ của tài xế (kho quản lý tài xế tự khai). */
+    public function setDriverLicense(User $actor, int $driverId, array $v): void
+    {
+        $d = $this->ownDriver($actor, $driverId);
+        $s = $this->cleanLicense($v);
+        $cols = array_keys($s);
+        $this->db->exec('UPDATE tai_xe SET ' . implode(', ', array_map(fn($c) => "$c = ?", $cols)) . ' WHERE id = ?', [...array_values($s), $driverId]);
+        $this->audit->record($actor->id, 'driver.license', 'driver', $driverId, $d['ho_ten'] . ' · ' . ($s['hang_gplx'] !== '' ? 'hạng ' . $s['hang_gplx'] . ' · ' . $s['so_gplx'] : 'chưa khai bằng'));
+    }
+
+    public const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
+    private const PHOTO_TYPES = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
+    private const PHOTO_MIME = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
+    private const PHOTO_NAME = '/^d\d+_[a-f0-9]{12}\.(jpg|png|webp)$/';
+
+    private static function photoDir(): string
+    {
+        $dir = \StockFlow\Core\Config::storage('licenses');
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new DomainError('Không tạo được thư mục lưu ảnh bằng lái');
+        }
+        return $dir;
+    }
+
+    /**
+     * Đính ảnh giấy phép lái xe cho tài xế (kho quản lý tài xế): kiểm tra nội dung thật của file, lưu vào storage/licenses, ảnh cũ bị xoá.
+     * @return string tên file đã lưu
+     */
+    public function saveLicensePhoto(User $actor, int $driverId, string $tmpPath, int $size): string
+    {
+        $d = $this->ownDriver($actor, $driverId);
+        if ($size <= 0 || !is_file($tmpPath)) {
+            throw new DomainError('Hãy chọn một ảnh');
+        }
+        if ($size > self::PHOTO_MAX_BYTES) {
+            throw new DomainError('Ảnh quá lớn — tối đa 3 MB');
+        }
+        $info = @getimagesize($tmpPath);
+        if (!$info || !isset(self::PHOTO_TYPES[$info[2]])) {
+            throw new DomainError('Chỉ nhận ảnh JPG, PNG hoặc WebP');
+        }
+        if ($info[0] < 200 || $info[1] < 200 || $info[0] > 8000 || $info[1] > 8000) {
+            throw new DomainError('Kích thước ảnh phải từ 200×200 đến 8000×8000 điểm ảnh — chụp rõ cả tấm bằng');
+        }
+        $name = sprintf('d%d_%s.%s', $driverId, bin2hex(random_bytes(6)), self::PHOTO_TYPES[$info[2]]);
+        $dest = self::photoDir() . '/' . $name;
+        if (!@copy($tmpPath, $dest)) {
+            throw new DomainError('Không lưu được ảnh. Hãy thử lại.');
+        }
+        @chmod($dest, 0644);
+        try {
+            $this->db->exec('UPDATE tai_xe SET anh_gplx = ? WHERE id = ?', [$name, $driverId]);
+        } catch (\Throwable $e) {
+            @unlink($dest);
+            throw $e;
+        }
+        $this->dropPhotoFile((string)($d['anh_gplx'] ?? ''), $name);
+        $this->audit->record($actor->id, 'driver.license_photo', 'driver', $driverId, $d['ho_ten'] . ' · đã đính ảnh bằng lái');
+        return $name;
+    }
+
+    public function removeLicensePhoto(User $actor, int $driverId): void
+    {
+        $d = $this->ownDriver($actor, $driverId);
+        $this->db->exec('UPDATE tai_xe SET anh_gplx = NULL WHERE id = ?', [$driverId]);
+        $this->dropPhotoFile((string)($d['anh_gplx'] ?? ''), '');
+        $this->audit->record($actor->id, 'driver.license_photo', 'driver', $driverId, $d['ho_ten'] . ' · gỡ ảnh bằng lái');
+    }
+
+    private function dropPhotoFile(string $old, string $keep): void
+    {
+        if ($old !== '' && $old !== $keep && preg_match(self::PHOTO_NAME, $old)) {
+            @unlink(self::photoDir() . '/' . $old);
+        }
+    }
+
+    /** File ảnh bằng lái để phục vụ; null nếu chưa có / file đã mất. Đường dẫn chỉ lấy từ tên do hệ thống sinh trong CSDL, không từ yêu cầu. @return ?array{path:string,mime:string} */
+    public function licensePhotoFile(User $actor, int $driverId): ?array
+    {
+        $name = $this->licensePhotoOf($actor, $driverId);
+        if (!$name || !preg_match(self::PHOTO_NAME, $name)) {
+            return null;
+        }
+        $path = self::photoDir() . '/' . $name;
+        return is_file($path) ? ['path' => $path, 'mime' => self::PHOTO_MIME[substr($name, strrpos($name, '.') + 1)]] : null;
+    }
+
+    /** Tài xế (id) cho trang xem ảnh bằng lái: chỉ trả đường dẫn nếu người xem có quyền xem đội xe và tài xế thuộc phạm vi kho của họ. */
+    public function licensePhotoOf(User $actor, int $driverId): ?string
+    {
+        $this->auth->requirePermission($actor, Permission::XemDoiXe);
+        $d = $this->db->one('SELECT kho_id, anh_gplx FROM tai_xe WHERE id = ?', [$driverId]);
+        if (!$d || !$d['anh_gplx']) {
+            return null;
+        }
+        if (!$actor->isAdmin && (int)($d['kho_id'] ?? 0) !== (int)$actor->warehouseId) {
+            throw new \StockFlow\Domain\Forbidden('Chỉ xem được ảnh bằng lái của tài xế kho mình');
+        }
+        return (string)$d['anh_gplx'];
+    }
+
     /** Ngừng / dùng lại xe. Xe đang chạy không ngừng được. */
     public function setVehicleActive(User $actor, int $vehicleId, bool $active): void
     {
@@ -722,7 +1088,7 @@ final class FleetService
     }
 
     /** Sửa thông tin tài xế (không sửa được khi tài xế đang có chuyến chưa giao xong — kho đến đang đối chiếu theo thông tin này). */
-    public function updateDriver(User $actor, int $driverId, string $name, string $cccd, string $phone): void
+    public function updateDriver(User $actor, int $driverId, string $name, string $cccd, string $phone, ?array $license = null): void
     {
         $this->ownDriver($actor, $driverId);
         if ($this->db->value("SELECT 1 FROM chuyen_van_chuyen WHERE tai_xe_id = ? AND trang_thai = 'IN_TRANSIT'", [$driverId])) {
@@ -730,6 +1096,7 @@ final class FleetService
         }
         [$name, $cccd, $phone] = $this->cleanDriver($name, $cccd, $phone, $driverId);
         $this->db->exec('UPDATE tai_xe SET ho_ten = ?, cccd = ?, so_dien_thoai = ? WHERE id = ?', [$name, $cccd, $phone, $driverId]);
+        $license === null || $this->setDriverLicense($actor, $driverId, $license);
         $this->audit->record($actor->id, 'driver.update', 'driver', $driverId, $name);
     }
 

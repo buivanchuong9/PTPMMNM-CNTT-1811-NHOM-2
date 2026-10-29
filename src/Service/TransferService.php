@@ -22,7 +22,7 @@ use StockFlow\Domain\VoucherType;
 final class TransferService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
-                                private Authorizer $auth, private AuditLog $audit, private StockQuery $query, private FleetService $fleet) {}
+                                private Authorizer $auth, private AuditLog $audit, private StockQuery $query, private FleetService $fleet, private TransportService $transport) {}
 
     /** @param list<array{item_id:int,batch_id:int,qty:int}> $lines @return array{voucher:array,created:bool} */
     public function createDraft(User $user, int $fromWh, int $toWh, array $lines, string $note, ?string $idempotencyKey): array
@@ -153,14 +153,14 @@ final class TransferService
      * @param ?array<string,mixed> $pay null = không ghi tiền công (chuyến cũ / kiểm thử)
      * @return array{voucher:array,already:bool}
      */
-    public function dispatch(User $user, int $outId, int $vehicleId, bool $driverConfirmed, ?array $pay = null, bool $checkFefo = true): array
+    public function dispatch(User $user, int $outId, int $vehicleId, bool $driverConfirmed, ?array $pay = null, bool $checkFefo = true, ?int $driverId = null): array
     {
         $peek = $this->repo->find($outId);
         if ($peek['loai'] !== VoucherType::TransferOut->value) {
             throw new DomainError('Đây không phải phiếu điều chuyển đi');
         }
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanPhieu);
-        return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed, $pay, $checkFefo) {
+        return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed, $pay, $checkFefo, $driverId) {
             $out = $this->repo->lock($outId);
             $xe = $tx = null;
             $trip = ['hinh_thuc' => 'NOI_BO', 'km' => 0, 'don_gia_km' => 0, 'tien_goi_y' => 0, 'tien_tra' => 0, 'don_vi_van_tai' => '', 'ghi_chu_gia' => ''];
@@ -182,16 +182,24 @@ final class TransferService
                 if (!$xe || !$xe['hoat_dong']) {
                     throw new DomainError('Xe không tồn tại hoặc đã ngừng hoạt động');
                 }
+                if (($xe['kieu_xe'] ?? 'TAI') === 'MAY') {
+                    throw new DomainError('Xe máy chỉ dùng giao hàng cho khách, không chạy điều chuyển giữa các kho — chọn ô tô hoặc xe tải');
+                }
                 if ((int)($xe['kho_hien_tai_id'] ?? 0) !== (int)$out['kho_id']) {
                     throw new DomainError('Xe ' . $xe['bien_so'] . ' hiện không ở kho đi — chọn xe đang đứng tại kho này');
                 }
-                $tx = $xe['tai_xe_id'] ? $this->db->one('SELECT * FROM tai_xe WHERE id = ? FOR UPDATE', [(int)$xe['tai_xe_id']]) : null;
-                if (!$tx) {
-                    throw new DomainError('Xe ' . $xe['bien_so'] . ' chưa có tài xế phụ trách — liên hệ quản trị hệ thống');
+                if ($driverId !== null && !$external) {
+                    $tx = $this->fleet->assignableDriver($driverId, (int)$out['kho_id']);   // xe và tài xế không gắn cố định: tài xế nào có bằng đúng hạng, đang rảnh đều lái được
+                } else {
+                    $tx = $xe['tai_xe_id'] ? $this->db->one('SELECT * FROM tai_xe WHERE id = ? FOR UPDATE', [(int)$xe['tai_xe_id']]) : null;   // thuê ngoài: tài xế đi kèm xe của đơn vị vận tải
+                    if (!$tx) {
+                        throw new DomainError('Chọn tài xế lái xe ' . $xe['bien_so']);
+                    }
+                    if (!$tx['hoat_dong']) {
+                        throw new DomainError('Tài xế ' . $tx['ho_ten'] . ' đã nghỉ — chọn tài xế khác lái thay');
+                    }
                 }
-                if (!$tx['hoat_dong']) {
-                    throw new DomainError('Tài xế ' . $tx['ho_ten'] . ' của xe ' . $xe['bien_so'] . ' đã ngừng dùng');
-                }
+                $this->transport->assertCanCarry($vehicleId, $this->repo->lines($outId), (int)$tx['id']);   // đủ tải trọng, thể tích, giấy tờ xe, bằng lái đúng hạng — vi phạm thật thì chặn
             }
             $res = $this->confirm($user, $outId, $checkFefo);
             if (!$res['already'] && $xe && $tx) {
@@ -215,14 +223,14 @@ final class TransferService
      * Phiếu nháp gốc được tách thành mỗi xe một phiếu điều chuyển riêng (nên nhận hàng, thu hồi, sổ cái chạy theo từng xe như thường) rồi xuất kho cùng lúc;
      * phiếu gốc bị huỷ kèm ghi chú. Các phiếu cùng đợt được gom trong dot_dieu_chuyen để hiện nối đuôi nhau trên bản đồ.
      * Chỉ dùng xe của kho (tiền công xe phụ = km × đơn giá gợi ý). Hàng xuất theo hạn dùng được kiểm trên cả lô một lần.
-     * @param array<int,array<int,int>> $extra id xe phụ ⇒ [id dòng phiếu ⇒ số lượng xe đó chở]
+     * @param array<int,array<int,int>> $extra id xe phụ ⇒ [id dòng phiếu ⇒ số lượng xe đó chở] · $mainDriverId, $extraDrivers = tài xế lái xe chính / từng xe phụ (id xe ⇒ id tài xế)
      * @return array{voucher:array,already:bool,split:list<int>} voucher = phiếu của xe chính
      */
-    public function dispatchConvoy(User $user, int $outId, int $mainVehicleId, array $extra, bool $driverConfirmed, array $pay): array
+    public function dispatchConvoy(User $user, int $outId, int $mainVehicleId, array $extra, bool $driverConfirmed, array $pay, ?int $mainDriverId = null, array $extraDrivers = []): array
     {
         $extra = array_filter(array_map(fn($q) => array_filter(array_map('intval', $q), fn($n) => $n > 0), $extra), fn($q) => $q !== []);
         if ($extra === []) {
-            return $this->dispatch($user, $outId, $mainVehicleId, $driverConfirmed, $pay) + ['split' => []];
+            return $this->dispatch($user, $outId, $mainVehicleId, $driverConfirmed, $pay, true, $mainDriverId) + ['split' => []];
         }
         $peek = $this->repo->find($outId);
         if ($peek['loai'] !== VoucherType::TransferOut->value) {
@@ -232,7 +240,7 @@ final class TransferService
         if (($pay['hinh_thuc'] ?? 'NOI_BO') !== 'NOI_BO') {
             throw new DomainError('Chia hàng cho nhiều xe chỉ áp dụng với xe của kho — thuê đơn vị vận tải ngoài thì chở bằng một xe');
         }
-        return $this->db->transaction(function () use ($user, $outId, $mainVehicleId, $extra, $driverConfirmed, $pay) {
+        return $this->db->transaction(function () use ($user, $outId, $mainVehicleId, $extra, $driverConfirmed, $pay, $mainDriverId, $extraDrivers) {
             $out = $this->repo->lock($outId);
             if ($out['trang_thai'] !== 'DRAFT') {
                 throw new DomainError('Chỉ chia hàng cho nhiều xe khi phiếu còn là bản nháp');
@@ -290,7 +298,7 @@ final class TransferService
                     'ghi_chu' => mb_substr(trim((string)$out['ghi_chu']) . ($out['ghi_chu'] !== '' ? ' · ' : '') . 'tách từ ' . $out['ma'], 0, 255), 'nguoi_lap_id' => (int)$out['nguoi_lap_id'],
                 ], $vlines);
                 $legPay = $newIds === [] ? $pay : ['hinh_thuc' => 'NOI_BO', 'km' => $km, 'tien' => (int)($this->fleet->quote($from, $to, 'NOI_BO', $km)['amount'] ?? 0), 'ghi_chu' => 'Xe cùng đợt — tiền công theo gợi ý'];
-                $this->dispatch($user, $newId, $vid, $driverConfirmed, $legPay, false);
+                $this->dispatch($user, $newId, $vid, $driverConfirmed, $legPay, false, $newIds === [] ? $mainDriverId : (($extraDrivers[$vid] ?? 0) ?: null));   // mỗi xe một tài xế riêng: tài xế đã nhận xe trước thì lượt sau báo đang chạy
                 $newIds[] = $newId;
                 $this->db->exec('INSERT INTO dot_dieu_chuyen (dot_id, phieu_di_id, thu_tu) VALUES (?,?,?)', [$newIds[0], $newId, count($newIds)]);
             }

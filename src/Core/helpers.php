@@ -76,7 +76,7 @@ function audit_label(string $action): string
     static $map = [
         'voucher.create' => 'Lập phiếu', 'voucher.confirm' => 'Xác nhận & ghi sổ', 'voucher.cancel' => 'Huỷ phiếu', 'voucher.correct' => 'Lập phiếu điều chỉnh',
         'transfer.create' => 'Lập phiếu điều chuyển', 'transfer.dispatch' => 'Xuất kho đi', 'transfer.vehicle' => 'Chọn xe & tài xế',
-        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.loss' => 'Xác nhận mất hàng', 'transfer.recall' => 'Thu hồi chuyến', 'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm, lương tài xế', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
+        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.loss' => 'Xác nhận mất hàng', 'transfer.recall' => 'Thu hồi chuyến', 'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm tài xế', 'voucher.delivered' => 'Tài xế đã giao đến nơi', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
     ];
     return $map[$action] ?? $action;
 }
@@ -132,6 +132,44 @@ function pack_label(int $qty, int $pack): string
     $full = intdiv($qty, $pack);
     $rest = $qty % $pack;
     return trim(($full > 0 ? n($full) . ' kiện' : '') . ($rest > 0 ? ($full > 0 ? ' + ' : '') . n($rest) . ' lẻ' : ''));
+}
+
+/** Đường dẫn file tĩnh kèm số phiên bản theo thời điểm sửa file: sửa CSS / JS là trình duyệt tự nạp lại, không phải Ctrl+F5. */
+function asset_url(string $path): string
+{
+    $file = \StockFlow\Core\Config::root() . '/public' . $path;
+    return $path . (is_file($file) ? '?v=' . filemtime($file) : '');
+}
+
+/** Gram ⇒ chữ dễ đọc: 350 ⇒ «350 g», 17500 ⇒ «17,5 kg». 0 ⇒ chuỗi rỗng. */
+function weight_label(int $grams): string
+{
+    if ($grams <= 0) {
+        return '';
+    }
+    return $grams < 1000 ? number_format($grams, 0, ',', '.') . ' g' : rtrim(rtrim(number_format($grams / 1000, 2, ',', '.'), '0'), ',') . ' kg';
+}
+
+/** Ba cạnh mm ⇒ «18 × 9,5 × 5,5 cm». Thiếu cạnh nào thì rỗng. */
+function size_label(int $l, int $w, int $h): string
+{
+    if ($l <= 0 || $w <= 0 || $h <= 0) {
+        return '';
+    }
+    $cm = fn(int $mm) => rtrim(rtrim(number_format($mm / 10, 1, ',', '.'), '0'), ',');
+    return $cm($l) . ' × ' . $cm($w) . ' × ' . $cm($h) . ' cm';
+}
+
+/**
+ * Cân nặng (gram) của $qty đơn vị một mặt hàng: kiện nguyên tính theo cân cả kiện (đã khai, hoặc tự tính = số đơn vị × cân đơn vị), phần lẻ theo cân đơn vị.
+ * @param array<string,mixed> $item dòng mat_hang (quy_cach_lo, khoi_luong_g, kien_g)
+ */
+function stock_weight_g(array $item, int $qty): int
+{
+    $pack = max(1, (int)($item['quy_cach_lo'] ?? 1));
+    $unit = (int)($item['khoi_luong_g'] ?? 0);
+    $box = (int)($item['kien_g'] ?? 0) > 0 ? (int)$item['kien_g'] : $pack * $unit;
+    return intdiv($qty, $pack) * $box + ($qty % $pack) * $unit;
 }
 
 /** Số tiền bằng chữ cho chứng từ in: 4428000 → «Bốn triệu bốn trăm hai mươi tám nghìn đồng». */

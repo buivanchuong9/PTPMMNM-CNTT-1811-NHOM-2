@@ -47,7 +47,7 @@ same([$trip($out1)['trang_thai'], $score()], ['IN_TRANSIT', 100], 'các lần b�
 
 section('Tài xế chịu: trừ lương mặc định đủ giá trị, trừ 10 điểm');
 $bx = $f->stock($f->wb, 'x');
-$fleet->updateDriverPay($f->approverA, $driver, 9_000_000, 100);
+$fleet->updateDriverScore($f->approverA, $driver, 100);
 same($fleet->tripGoodsValue($out1), 20000, 'giá trị hàng theo giá gốc');
 $fleet->confirmLoss($f->approverA, $in1, 'Mất hàng, không liên lạc được 48 giờ', 'TAI_XE');
 $t = $trip($out1);
@@ -57,7 +57,7 @@ same($score(), 90, 'tài xế bị trừ 10 điểm');
 $loss = $fleet->lossRecords(5)[0];
 same([$loss['nguoi_chiu'], (int)$loss['gia_tri'], (int)$loss['tien_tru_luong'], (int)$loss['diem_tru']], ['TAI_XE', 20000, 20000, 10], 'ghi nhận thất thoát: giá trị, tiền trừ lương, điểm trừ');
 $d = array_values(array_filter($fleet->drivers(), fn($x) => (int)$x['id'] === $driver))[0];
-same([(int)$d['luong'], (int)$d['tru_thang'], (int)$d['so_vu_mat']], [9_000_000, 20000, 1], 'trang tài xế: lương, đã trừ tháng này, số vụ mất');
+same([(int)$d['tru_thang'], (int)$d['so_vu_mat']], [20000, 1], 'trang tài xế: đã trừ tháng này, số vụ mất');
 same($f->db->one('SELECT kho_hien_tai_id, dang_den_kho_id FROM xe WHERE id = ?', [$xe]), ['kho_hien_tai_id' => $f->wa, 'dang_den_kho_id' => null], 'xe về kho gốc, sẵn sàng chạy tiếp');
 same(count(array_filter($fleet->missingTrips(), fn($m) => (int)$m['phieu_den_id'] === $in1)), 0, 'chuyến rời mục «chưa thấy đâu»');
 throws(fn() => $fleet->confirmLoss($f->approverA, $in1, 'Lại', 'TAI_XE'), DomainError::class, 'chuyến đã đóng không xác nhận lần hai');
@@ -92,13 +92,13 @@ $d = fn(string $m) => array_values(array_filter($fleet->drivers(null, $m), fn($x
 same([(int)$d('2000-01')['tru_thang'], (int)$d($month)['tru_thang']], [0, 20000 + 4500], 'lương trừ theo đúng tháng được chọn');
 same(FleetService::monthRange('2026-12')[1], '2027-01-01 00:00:00', 'khoảng tháng 12 kết thúc đầu tháng 1 năm sau');
 
-section('Sửa lương, điểm');
-throws(fn() => $fleet->updateDriverPay($f->approverB, $driver, 1, 1), Forbidden::class, 'quản lý kho khác không sửa lương tài xế của kho này');
-throws(fn() => $fleet->updateDriverPay($f->admin, $driver, 1, 1), Forbidden::class, 'admin chỉ xem, không sửa lương tài xế');
-throws(fn() => $fleet->updateDriverPay($f->approverA, $driver, -1, 50), DomainError::class, 'lương âm bị từ chối');
-throws(fn() => $fleet->updateDriverPay($f->approverA, $driver, 1000, 101), DomainError::class, 'điểm quá 100 bị từ chối');
-$fleet->updateDriverPay($f->approverA, $driver, 9_500_000, 80);
-same([(int)$f->db->value('SELECT luong FROM tai_xe WHERE id = ?', [$driver]), $score()], [9_500_000, 80], 'lưu lương và khôi phục điểm');
+section('Sửa điểm (không còn lương cố định)');
+throws(fn() => $fleet->updateDriverScore($f->approverB, $driver, 1), Forbidden::class, 'quản lý kho khác không sửa điểm tài xế của kho này');
+throws(fn() => $fleet->updateDriverScore($f->admin, $driver, 1), Forbidden::class, 'admin chỉ xem, không sửa điểm tài xế');
+throws(fn() => $fleet->updateDriverScore($f->approverA, $driver, -1), DomainError::class, 'điểm âm bị từ chối');
+throws(fn() => $fleet->updateDriverScore($f->approverA, $driver, 101), DomainError::class, 'điểm quá 100 bị từ chối');
+$fleet->updateDriverScore($f->approverA, $driver, 80);
+same($score(), 80, 'khôi phục điểm');
 
 section('Phạm vi kho: mỗi quản lý chỉ thấy đội xe của kho mình, admin xem tất cả');
 $ids = fn(array $rows) => array_map('intval', array_column($rows, 'id'));

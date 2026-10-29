@@ -42,7 +42,7 @@ $tones = ['' => 'all', 'PENDING' => 'warn', 'APPROVED' => 'ok', 'REJECTED' => 'b
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canReview): ?>
-<dialog id="approve-dlg" class="dlg" aria-labelledby="approve-dlg-t">
+<dialog id="approve-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="approve-dlg-t">
   <form method="post" action="/proposals" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="approve-dlg-t">Chấp nhận đề xuất</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted" data-dlg-label></p>
@@ -52,7 +52,7 @@ $tones = ['' => 'all', 'PENDING' => 'warn', 'APPROVED' => 'ok', 'REJECTED' => 'b
     <div class="actions"><button type="submit">Chấp nhận và tạo mặt hàng</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
-<dialog id="reject-dlg" class="dlg" aria-labelledby="reject-dlg-t">
+<dialog id="reject-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="reject-dlg-t">
   <form method="post" action="/proposals" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="reject-dlg-t">Từ chối đề xuất</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted" data-dlg-label></p>

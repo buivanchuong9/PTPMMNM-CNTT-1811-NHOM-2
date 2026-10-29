@@ -97,6 +97,19 @@ function cmdSeed(array $argv): int
         echo "✔ Đã đặt thời hạn bảo hành mẫu cho $n mặt hàng điện tử
 ";
     }
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillTransport(connect())) {   // CSDL demo có từ trước khi có tải trọng / bằng lái
+        echo "✔ Đã nạp cân nặng, thông số xe và bằng lái tài xế mẫu ($n dòng)
+";
+    }
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillDecouple(connect())) {   // xe và tài xế không gắn cố định + tài xế dự phòng
+        echo "✔ Đã tách xe khỏi tài xế và thêm tài xế dự phòng ($n dòng)\n";
+    }
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillMotorbikes(connect())) {   // xe máy giao đơn nhỏ + tài xế có bằng mô tô
+        echo "✔ Đã thêm xe máy giao hàng và tài xế bằng mô tô ($n dòng)\n";
+    }
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillRegionalCustomers(connect())) {   // khách hàng quanh từng kho
+        echo "✔ Đã nạp khách hàng theo từng miền và gán kho phụ trách ($n dòng)\n";
+    }
     return $rc;
 }
 

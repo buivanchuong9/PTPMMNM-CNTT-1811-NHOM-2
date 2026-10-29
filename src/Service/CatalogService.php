@@ -217,6 +217,45 @@ final class CatalogService
         });
     }
 
+    /**
+     * Cân nặng (gram) và kích thước (mm) của MỘT đơn vị tính và của MỘT KIỆN (thùng đóng sẵn gồm quy_cach_lo đơn vị). 0 = chưa khai.
+     * Cân nặng kiện = cả bì; để 0 thì tự tính bằng số đơn vị × cân nặng đơn vị.
+     * @return array{khoi_luong_g:int,dai_mm:int,rong_mm:int,cao_mm:int,kien_g:int,kien_dai_mm:int,kien_rong_mm:int,kien_cao_mm:int}
+     */
+    public static function cleanLogistics(int $weightG, int $length, int $width, int $height, int $kienG = 0, int $kienL = 0, int $kienW = 0, int $kienH = 0): array
+    {
+        foreach ([[$weightG, 'Cân nặng một đơn vị'], [$kienG, 'Cân nặng một kiện']] as [$g, $label]) {
+            if ($g < 0 || $g > 20_000_000) {
+                throw new DomainError("$label phải từ 0 đến 20.000 kg");
+            }
+        }
+        foreach ([$length, $width, $height, $kienL, $kienW, $kienH] as $d) {
+            if ($d < 0 || $d > 20_000) {
+                throw new DomainError('Mỗi cạnh của hàng tối đa 2.000 cm (20 m)');
+            }
+        }
+        foreach ([[$length, $width, $height, 'hàng (1 đơn vị)'], [$kienL, $kienW, $kienH, 'kiện']] as [$x, $y, $z, $what]) {
+            if (count(array_filter([$x, $y, $z])) % 3 !== 0) {
+                throw new DomainError("Kích thước $what: nhập đủ cả dài, rộng, cao (hoặc để trống cả ba)");
+            }
+        }
+        return ['khoi_luong_g' => $weightG, 'dai_mm' => $length, 'rong_mm' => $width, 'cao_mm' => $height,
+                'kien_g' => $kienG, 'kien_dai_mm' => $kienL, 'kien_rong_mm' => $kienW, 'kien_cao_mm' => $kienH];
+    }
+
+    /** Lưu cân nặng + kích thước của mặt hàng và của kiện (quản trị). */
+    public function setItemLogistics(User $actor, int $itemId, int $weightG, int $length, int $width, int $height, int $kienG = 0, int $kienL = 0, int $kienW = 0, int $kienH = 0): void
+    {
+        $this->auth->requireAdmin($actor);
+        $c = self::cleanLogistics($weightG, $length, $width, $height, $kienG, $kienL, $kienW, $kienH);
+        $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
+        $this->db->exec('UPDATE mat_hang SET khoi_luong_g = ?, dai_mm = ?, rong_mm = ?, cao_mm = ?, kien_g = ?, kien_dai_mm = ?, kien_rong_mm = ?, kien_cao_mm = ? WHERE id = ?',
+            [...array_values($c), $itemId]);
+        $dim = fn(int $x, int $y, int $z) => $x ? $x / 10 . '×' . $y / 10 . '×' . $z / 10 . ' cm' : 'chưa khai kích thước';
+        $this->audit->record($actor->id, 'item.logistics', 'item', $itemId, $item['ma_hang'] . ' · ' . ($c['khoi_luong_g'] / 1000) . ' kg · ' . $dim($c['dai_mm'], $c['rong_mm'], $c['cao_mm'])
+            . ' · kiện ' . ($c['kien_g'] ? $c['kien_g'] / 1000 . ' kg' : 'tự tính cân') . ' · ' . $dim($c['kien_dai_mm'], $c['kien_rong_mm'], $c['kien_cao_mm']));
+    }
+
     /** Thời hạn bảo hành (tháng): 0 = mặt hàng không bảo hành. */
     private static function checkWarranty(int $months): void
     {

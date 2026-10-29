@@ -67,9 +67,25 @@ final class AdminController extends Controller
         return Response::redirect('/inventory');
     }
 
+    /**
+     * Cân nặng (kg) + dài, rộng, cao (cm) của 1 đơn vị VÀ của 1 kiện nhập trên form hàng hoá ⇒ gram và mm; kiểm tra TRƯỚC khi tạo / sửa mặt hàng.
+     * @return array{int,int,int,int,int,int,int,int} gram, dài, rộng, cao (đơn vị), gram, dài, rộng, cao (kiện)
+     */
+    private function logistics(Request $r): array
+    {
+        $num = function (string $key, string $label) use ($r): float {
+            return \StockFlow\Domain\TransportRules::parseDecimal($r->str($key)) ?? throw new DomainError("$label phải là số không âm (ví dụ 2,5)");
+        };
+        $out = [(int)round($num('weight_kg', 'Cân nặng') * 1000), (int)round($num('dim_l', 'Chiều dài') * 10), (int)round($num('dim_w', 'Chiều rộng') * 10), (int)round($num('dim_h', 'Chiều cao') * 10),
+                (int)round($num('weight_kien', 'Cân nặng kiện') * 1000), (int)round($num('kien_l', 'Chiều dài kiện') * 10), (int)round($num('kien_w', 'Chiều rộng kiện') * 10), (int)round($num('kien_h', 'Chiều cao kiện') * 10)];
+        CatalogService::cleanLogistics(...$out);
+        return $out;
+    }
+
     public function addItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
+            $logi = $this->logistics($r);
             $cost = \StockFlow\Service\PricingService::parseMoney($r->str('cost'));
             if ($cost === null || $cost < 1) {   // kiểm tra giá TRƯỚC khi tạo mặt hàng
                 throw new DomainError('Nhập giá gốc lớn hơn 0 (đồng / 1 đơn vị tính)');
@@ -77,14 +93,17 @@ final class AdminController extends Controller
             $id = $this->catalog->addItem($user, $r->str('sku'), $r->str('name'), (int)$r->int('unit_id'), $r->str('track_batch') === '1', StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, StockRules::parseQty($r->str('pack_size')) ?? 0, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'), false, null, StockRules::parseQty($r->str('warranty_months') ?: '0') ?? -1);
             $this->partners->setItemSuppliers($user, $id, $r->arr('supplier_ids'));
             $this->pricing->setCost($user, $id, $cost, (int)$r->int('vat'), 'Giá gốc khi tạo mặt hàng');
+            $this->catalog->setItemLogistics($user, $id, ...$logi);
         }, 'Đã thêm mặt hàng.', '/inventory');
     }
 
     public function updateItem(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
+            $logi = $this->logistics($r);
             $this->catalog->updateItem($user, (int)$r->int('item_id'), (int)($r->int('pack_size') ?? 0), StockRules::parseQty($r->str('reorder_level') ?: '0') ?? -1, $r->int('category_id') ?: throw new DomainError('Chọn danh mục (loại hàng hoá) cho mặt hàng'), StockRules::parseQty($r->str('warranty_months') ?: '0') ?? -1);
             $this->partners->setItemSuppliers($user, (int)$r->int('item_id'), $r->arr('supplier_ids'));
+            $this->catalog->setItemLogistics($user, (int)$r->int('item_id'), ...$logi);
         }, 'Đã cập nhật mặt hàng.', '/inventory');
     }
 

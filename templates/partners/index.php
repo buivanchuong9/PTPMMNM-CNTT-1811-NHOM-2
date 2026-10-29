@@ -3,7 +3,7 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
 $tabs = ['' => 'Tất cả'] + $types;
 $tone = ['' => 'all', 'SUPPLIER' => 'info', 'CUSTOMER' => 'ok'];
 $form = function (string $id, string $title, string $action, bool $edit) use ($types, $csrf, $items, $units, $categories): void { ?>
-<dialog id="<?= $id ?>" class="dlg dlg-wide" aria-labelledby="<?= $id ?>-t">
+<dialog id="<?= $id ?>" class="dlg dlg-form-wide dlg-xl" aria-labelledby="<?= $id ?>-t">
   <form method="post" action="<?= $action ?>" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><?php if ($edit): ?><input type="hidden" name="partner_id"><?php endif; ?>
     <div class="dlg-head"><h2 id="<?= $id ?>-t"><?= e($title) ?></h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Mã đối tác<input name="code" required minlength="2" maxlength="30" pattern="[A-Za-z0-9._\-]{2,30}" title="2–30 ký tự: chữ không dấu, số, . _ -" placeholder="NCC-001" autocomplete="off"></label>
@@ -12,7 +12,7 @@ $form = function (string $id, string $title, string $action, bool $edit) use ($t
     <label>Người liên hệ<input name="contact" maxlength="120" autocomplete="off"></label>
     <label>Số điện thoại<input name="phone" inputmode="tel" maxlength="15" pattern="[0-9 .+\-]{8,15}" autocomplete="off"></label>
     <label>Email<input type="email" name="email" maxlength="120" autocomplete="off"></label>
-    <label>Địa chỉ<input name="address" maxlength="255" autocomplete="off"></label>
+    <?php $addr = []; $addrRequired = false; include __DIR__ . '/../partials/address_fields.php'; ?>
     <label>Ghi chú<input name="note" maxlength="255" autocomplete="off"></label>
     <fieldset class="sup-pick"><legend>Mặt hàng cung cấp (chỉ với nhà cung cấp)</legend>
       <?php foreach ($items as $it): ?><label class="check"><input type="checkbox" name="item_ids[]" value="<?= (int)$it['id'] ?>" data-item-check> <b><?= e($it['ma_hang']) ?></b> <?= e($it['ten']) ?></label>
@@ -62,7 +62,7 @@ $form = function (string $id, string $title, string $action, bool $edit) use ($t
       <td><b><?= hl($x['ma'], $q) ?></b><?= new_tag($changes, $x['id']) ?></td><td><?= hl($x['ten'], $q) ?><?= $x['ghi_chu'] !== '' ? '<br><small class="muted">' . e($x['ghi_chu']) . '</small>' : '' ?></td>
       <td><span class="tag <?= $sup ? 'tag-info' : 'tag-ok' ?>"><?= e($types[$x['loai']]) ?></span></td>
       <td class="wrap"><?= $x['nguoi_lien_he'] !== '' ? '<b>' . hl($x['nguoi_lien_he'], $q) . '</b><br>' : '' ?><small class="muted"><?= trim($x['so_dien_thoai'] . ' ' . $x['email']) !== '' ? hl(trim($x['so_dien_thoai'] . ' ' . $x['email']), $q) : '—' ?></small></td>
-      <td class="muted wrap"><?= e($x['dia_chi'] ?: '—') ?></td>
+      <td class="muted wrap"><?= e($x['dia_chi'] ?: '—') ?><?= !$sup && !empty($x['kho_ma']) ? '<br><span class="wh-code">' . e($x['kho_ma']) . '</span> <small>kho phụ trách (gần nhất)</small>' : '' ?></td>
       <td class="wrap"><?php if (!$sup): ?><span class="muted">—</span><?php elseif (!$x['items']): ?><span class="muted">Chưa gắn mặt hàng</span><?php else: ?>
         <?php // hàng khớp từ khoá / mặt hàng đang lọc / danh mục đang lọc xếp lên đầu để thấy ngay vì sao đối tác hiện ra
         $hit = fn(array $it) => ($item && (int)$it['id'] === $item) || ($q !== '' && str_contains(fold_vn($it['sku']), fold_vn($q))) || ($category && !$item && ($category === -1 ? !(int)($catOf[$it['id']] ?? 0) : (int)($catOf[$it['id']] ?? 0) === $category));
@@ -71,7 +71,7 @@ $form = function (string $id, string $title, string $action, bool $edit) use ($t
       <td><?= $x['hoat_dong'] ? '<span class="tag tag-ok">Đang hợp tác</span>' : '<span class="tag tag-danger">Ngừng hợp tác</span>' ?></td>
       <?php if ($canEdit): ?><td><div class="inline-form">
         <button type="button" class="btn-ghost btn-sm" data-dialog-open="partner-edit-dlg" data-fill-label="<?= e($x['ma'] . ' — ' . $x['ten']) ?>"
-          data-fill="<?= e(json_encode(['partner_id' => (string)$x['id'], 'code' => $x['ma'], 'name' => $x['ten'], 'type' => $x['loai'], 'contact' => $x['nguoi_lien_he'], 'phone' => $x['so_dien_thoai'], 'email' => $x['email'], 'address' => $x['dia_chi'], 'note' => $x['ghi_chu'], 'item_ids' => implode(',', array_column($x['items'], 'id'))], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
+          data-fill="<?= e(json_encode(['partner_id' => (string)$x['id'], 'code' => $x['ma'], 'name' => $x['ten'], 'type' => $x['loai'], 'contact' => $x['nguoi_lien_he'], 'phone' => $x['so_dien_thoai'], 'email' => $x['email'], 'address' => $x['dia_chi'], ...\StockFlow\Domain\VnAddress::parse($x['dia_chi']), 'note' => $x['ghi_chu'], 'item_ids' => implode(',', array_column($x['items'], 'id'))], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
         <form method="post" action="/partners/active" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="partner_id" value="<?= (int)$x['id'] ?>"><input type="hidden" name="active" value="<?= $x['hoat_dong'] ? '0' : '1' ?>">
           <button class="btn-ghost btn-sm"><?= $x['hoat_dong'] ? 'Ngừng' : 'Dùng lại' ?></button></form>
       </div></td><?php endif; ?></tr>

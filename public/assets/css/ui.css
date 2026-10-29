@@ -738,3 +738,41 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .car-pick { margin: 0 0 4px; font-size: 15px; }
 .route-truck.returning { border-color: #f59e0b; background: #fffbeb; }
 .route-truck.returning svg { transform: scaleX(-1); }
+.load-sum { border: 1px solid var(--line); background: var(--surface, #fff); border-radius: 12px; padding: 10px 14px; margin: 4px 0 12px; display: grid; gap: 6px; }
+.load-sum p { margin: 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.specs { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: grid; gap: 10px; }
+.specs legend { font-weight: 600; padding: 0 6px; }
+.logi { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: grid; gap: 8px; }
+.logi legend { font-weight: 600; padding: 0 6px; }
+.spec-cell { min-width: 230px; line-height: 1.6; }
+
+.logi-cell div + div { margin-top: 6px; }
+.pack-line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 12px; }
+.pack-info { font-size: 12px; }
+.loose-opt { display: inline-flex; gap: 4px; align-items: center; color: var(--muted, #64748b); }
+
+/* Khung nhiều cột trong hộp thoại (giấy phép lái xe, thông số xe, kích thước hàng): tự co cột theo bề rộng, không tràn ngang */
+.specs, .logi { min-width: 0; }
+.specs .row-3, .logi .row-3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
+.specs label, .logi label { min-width: 0; }
+.specs input:not([type=checkbox]), .specs select, .logi input:not([type=checkbox]) { width: 100%; min-width: 0; box-sizing: border-box; }
+dialog.dlg { overflow-x: hidden; }
+
+/* Hộp thoại nhập liệu rộng cho màn hình máy tính: xếp ô thành 3 cột, khung nhiều ô chiếm cả hàng */
+.dlg-xl { width: min(1120px, calc(100% - 48px)); }
+.dlg-xl .form { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 18px; }
+.dlg-xl .form > .dlg-head, .dlg-xl .form > .actions, .dlg-xl .form > fieldset, .dlg-xl .form > p, .dlg-xl .form > .dlg-sub, .dlg-xl .form > .row-3, .dlg-xl .form > div, .dlg-xl .form > label.check { grid-column: 1 / -1; }
+.dlg-xl .specs .row-3, .dlg-xl .logi .row-3 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important; }
+@media (max-width: 900px) { .dlg-xl .form { grid-template-columns: minmax(0, 1fr); } }
+.specs-grid { gap: 12px 16px; align-items: end; }
+.dlg-xl .specs-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+@media (max-width: 1000px) { .dlg-xl .specs-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important; } }
+.trips-btn { white-space: nowrap; }
+.has-trips-open > td { background: var(--accent-soft, rgba(238, 77, 45, .06)); }
+.trips-row > td { padding: 0 !important; background: var(--surface-2, rgba(100, 116, 139, .06)); }
+.trips-box { padding: 10px 14px 14px 28px; }
+.trips-box .dense { background: var(--surface, #fff); border-radius: 10px; }
+.trips-box tfoot td { border-top: 1px solid var(--line); }
+.trips-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 10px 4px 0; }
+.route-map-sm { height: 380px; }
+.route-actions { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }

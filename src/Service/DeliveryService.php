@@ -17,7 +17,7 @@ final class DeliveryService
     public const METHODS = ['TIEN_MAT' => 'Tiền mặt', 'CHUYEN_KHOAN' => 'Chuyển khoản'];
     public const MODES = ['TU_LAY' => 'Khách tự đến lấy', 'NOI_BO' => 'Giao bằng xe của kho', 'THUE_NGOAI' => 'Thuê đơn vị vận tải ngoài'];
 
-    public function __construct(private Db $db, private FleetService $fleet, private AuditLog $audit) {}
+    public function __construct(private Db $db, private FleetService $fleet, private AuditLog $audit, private TransportService $transport, private Authorizer $auth) {}
 
     /**
      * Gọi trong giao dịch ghi sổ phiếu xuất. $d: hinh_thuc, dia_chi, vehicle_id, driver_ok, km, tien, ghi_chu, ngoai[company, driver, cccd, phone, plate, type].
@@ -74,10 +74,16 @@ final class DeliveryService
         if ($mode === 'NOI_BO' && ((int)$xe['thue_ngoai'] || (int)($xe['kho_hien_tai_id'] ?? 0) !== $wh)) {
             throw new DomainError('Xe ' . $xe['bien_so'] . ' hiện không ở kho này — chọn xe đang đứng tại kho');
         }
-        $tx = $xe['tai_xe_id'] ? $this->db->one('SELECT * FROM tai_xe WHERE id = ?', [(int)$xe['tai_xe_id']]) : null;
-        if (!$tx || !$tx['hoat_dong']) {
-            throw new DomainError('Xe ' . $xe['bien_so'] . ' chưa có tài xế phụ trách đang làm việc');
+        $driverId = (int)($d['driver_id'] ?? 0);
+        if ($mode === 'NOI_BO' && $driverId) {
+            $tx = $this->fleet->assignableDriver($driverId, $wh);   // tài xế chọn theo chuyến, không gắn cố định với xe
+        } else {
+            $tx = $xe['tai_xe_id'] ? $this->db->one('SELECT * FROM tai_xe WHERE id = ?', [(int)$xe['tai_xe_id']]) : null;
+            if (!$tx || !$tx['hoat_dong']) {
+                throw new DomainError('Chọn tài xế lái xe ' . $xe['bien_so']);
+            }
         }
+        $this->transport->assertCanCarry($vehicleId, $this->db->all('SELECT mat_hang_id, so_luong FROM chi_tiet_phieu_nhap_xuat WHERE phieu_nhap_xuat_id = ?', [(int)$voucher['id']]), (int)$tx['id']);
         $this->db->exec(
             'INSERT INTO giao_hang (phieu_nhap_xuat_id, kho_id, hinh_thuc, xe_id, tai_xe_id, km, don_gia_km, tien_goi_y, tien_tra, don_vi_van_tai, dia_chi, nguoi_nhan, sdt_nhan, ghi_chu_gia, nguoi_giao_id, thanh_toan, phuong_thuc_tt, so_tien)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -98,11 +104,31 @@ final class DeliveryService
         return $sum;
     }
 
+    /**
+     * Ghi nhận tài xế đã giao hàng tới nơi (nút demo trên phiếu xuất): người có chức năng xác nhận phiếu ở kho phát hành. Chỉ đơn giao tận nơi; gọi lại không ghi đè thời điểm đầu.
+     * @return bool true nếu vừa ghi nhận, false nếu đã ghi nhận từ trước
+     */
+    public function markArrived(User $user, int $voucherId): bool
+    {
+        $v = $this->db->one('SELECT id, kho_id, ma, loai, trang_thai FROM phieu_nhap_xuat WHERE id = ?', [$voucherId]) ?? throw new DomainError('Không tìm thấy phiếu');
+        $this->auth->require($user, (int)$v['kho_id'], \StockFlow\Domain\Permission::XacNhanPhieu);
+        $g = $this->db->one('SELECT id, hinh_thuc, ngay_giao_den FROM giao_hang WHERE phieu_nhap_xuat_id = ?', [$voucherId]);
+        if (!$g || $g['hinh_thuc'] === 'TU_LAY') {
+            throw new DomainError('Phiếu này không có giao hàng tận nơi');
+        }
+        if ($g['ngay_giao_den'] !== null) {
+            return false;
+        }
+        $this->db->exec('UPDATE giao_hang SET ngay_giao_den = CURRENT_TIMESTAMP WHERE id = ? AND ngay_giao_den IS NULL', [(int)$g['id']]);
+        $this->audit->record($user->id, 'voucher.delivered', 'voucher', $voucherId, $v['ma'] . ' · tài xế đã giao đến nơi');
+        return true;
+    }
+
     /** Thông tin giao hàng của một phiếu xuất (kèm xe, tài xế); null nếu chưa ghi nhận. */
     public function of(int $voucherId): ?array
     {
         return $this->db->one(
-            'SELECT g.*, x.bien_so, x.loai_xe, t.ho_ten AS tai_xe_ten, t.cccd, t.so_dien_thoai
+            'SELECT g.*, x.bien_so, x.loai_xe, x.kieu_xe, x.dung_tich_cc, t.ho_ten AS tai_xe_ten, t.cccd, t.so_dien_thoai
              FROM giao_hang g LEFT JOIN xe x ON x.id = g.xe_id LEFT JOIN tai_xe t ON t.id = g.tai_xe_id WHERE g.phieu_nhap_xuat_id = ?',
             [$voucherId]
         );

@@ -1,14 +1,33 @@
 <?php /** @var list<array> $vehicles @var list<array> $drivers @var list<array> $trips @var list<array> $warehouses */
 $issues = count($missing);
+use StockFlow\Domain\TransportRules;
+$tonne = fn($kg) => (int)$kg > 0 ? rtrim(rtrim(number_format($kg / 1000, 2, ',', '.'), '0'), ',') : '';   // kg → «2,5» tấn
+$metre = fn($mm) => (int)$mm > 0 ? rtrim(rtrim(number_format($mm / 1000, 2, ',', '.'), '0'), ',') : '';
+/** Dữ liệu điền sẵn vào hộp thoại sửa: thông số xe (kg, mm ⇒ tấn, mét) */
+$specFill = fn(array $x) => ['cap_t' => $tonne($x['tai_trong_kg']), 'gvw_t' => $tonne($x['gvw_kg']), 'trailer_t' => $tonne($x['ro_mooc_kg']), 'body_type' => (string)$x['loai_thung'],
+    'box_l' => $metre($x['thung_dai_mm']), 'box_w' => $metre($x['thung_rong_mm']), 'box_h' => $metre($x['thung_cao_mm']), 'tot_l' => $metre($x['tong_dai_mm']), 'tot_w' => $metre($x['tong_rong_mm']), 'tot_h' => $metre($x['tong_cao_mm']),
+    'axles' => (int)$x['so_truc'] ?: '', 'vehicle_kind' => (string)($x['kieu_xe'] ?? 'TAI'), 'engine_cc' => (int)($x['dung_tich_cc'] ?? 0) ?: '', 'reg_exp' => (string)($x['han_dang_kiem'] ?? ''), 'ins_exp' => (string)($x['han_bao_hiem'] ?? '')];
+/** Giấy phép lái xe: các cột của bảng tai_xe (hoặc có tiền tố tx_ khi lấy từ dòng xe) */
+$licFill = fn(array $d, string $pre = '') => ['gplx_no' => (string)($d[$pre . 'so_gplx'] ?? ''), 'gplx_class' => (string)($d[$pre . 'hang_gplx'] ?? ''), 'birth' => (string)($d[$pre . 'ngay_sinh'] ?? ''), 'gplx_issued' => (string)($d[$pre . 'ngay_cap_gplx'] ?? ''),
+    'gplx_expiry' => (string)($d[$pre . 'han_gplx'] ?? ''), 'gplx_place' => (string)($d[$pre . 'noi_cap_gplx'] ?? ''), 'health_exp' => (string)($d[$pre . 'han_kham_sk'] ?? ''), 'gplx_points' => (string)($d[$pre . 'diem_gplx'] ?? '')];
+/** Thẻ giấy tờ: hết hạn (đỏ) · sắp hết hạn (vàng) · còn hạn (xanh) · chưa khai (vàng) — cùng quy tắc với lúc chọn xe */
+$today = date('Y-m-d');
+$soon = date('Y-m-d', strtotime('+30 days'));
+$docTag = function (?string $date, string $name) use ($today, $soon): string {
+    if (!$date) { return '<span class="tag tag-warn">' . e($name) . ': chưa khai</span>'; }
+    $d = date('d/m/Y', strtotime($date));
+    return $date < $today ? '<span class="tag tag-danger">' . e($name) . ' hết hạn ' . $d . '</span>' : ($date <= $soon ? '<span class="tag tag-warn">' . e($name) . ' sắp hết hạn ' . $d . '</span>' : '<span class="tag tag-ok">' . e($name) . ' đến ' . $d . '</span>');
+};
 ?>
 <header class="page-head"><div><h1>Đội xe &amp; tài xế</h1></div>
   <div class="actions">
-    <?php if ($canManage): ?><button type="button" data-dialog-open="vehicle-dlg"><?= icon('plus') ?>Thêm xe</button><?php endif; ?>
+    <?php if ($canManage): ?><button type="button" data-dialog-open="vehicle-dlg"><?= icon('plus') ?>Thêm xe</button>
+      <button type="button" class="btn-ghost" data-dialog-open="driver-dlg"><?= icon('plus') ?>Thêm tài xế</button><?php endif; ?>
   </div></header>
 <?php if (!$canManage): ?><p class="muted small">Chỉ xem — đội xe do quản lý từng kho quản lý (thêm xe, tài xế, xử lý mất hàng, trừ điểm &amp; lương).</p><?php endif; ?>
 
 <?php
-$tabs = ['chuyen' => ['Chuyến gần đây', $pgT->total + 0, $issues], 'xe' => ['Xe & tài xế', $pgV->total, 0], 'diem' => ['Điểm & lương', $pgD->total, 0], 'thatthoat' => ['Thất thoát', $pgL->total, 0], 'gia' => ['Đơn giá & quãng đường', null, 0]];
+$tabs = ['chuyen' => ['Chuyến gần đây', $pgT->total + 0, $issues], 'xe' => ['Xe', $pgV->total, 0], 'taixe' => ['Tài xế', $pgD->total, 0], 'diem' => ['Điểm & lương', $pgD->total, 0], 'thatthoat' => ['Thất thoát', $pgL->total, 0], 'gia' => ['Đơn giá & quãng đường', null, 0], 'quydinh' => ['Quy định vận tải', null, 0]];
 $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : '', 'kho' => $khoSel ?: '', 'tt' => $status, 'ai' => $bearer]);
 ?>
 <nav class="tabs" aria-label="Mục đội xe" data-live="tabs">
@@ -17,7 +36,7 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
   <?php endforeach; ?>
 </nav>
 
-<?php if ($tab !== 'gia'): ?>
+<?php if (!in_array($tab, ['gia', 'quydinh'], true)): ?>
 <form class="filters" method="get" action="/fleet">
   <input type="hidden" name="tab" value="<?= e($tab) ?>">
   <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Tìm biển số, tài xế, mã phiếu, lý do…" aria-label="Tìm kiếm trong đội xe">
@@ -96,25 +115,35 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
 </section>
 <?php elseif ($tab === 'xe'): ?>
 <section class="card flush">
-  <div class="card-head pad"><h2>Xe <span class="count"><?= n($pgV->total) ?></span></h2><span class="muted small">kho tự thêm, đổi, ngừng hoặc xoá xe — không giới hạn số xe</span></div>
+  <div class="card-head pad"><h2>Xe <span class="count"><?= n($pgV->total) ?></span></h2><span class="muted small">xe quản lý riêng, không gắn tài xế cố định — mỗi chuyến chọn tài xế lúc xuất kho · không giới hạn số xe</span></div>
   <div class="table-wrap"><table class="dense">
-    <thead><tr><th>Biển số</th><th>Loại xe</th><th>Kho gốc</th><th>Đang ở / đang tới</th><th>Tài xế phụ trách</th><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
+    <thead><tr><th>Biển số</th><th>Loại xe</th><th>Tải trọng · kích thước · giấy tờ</th><th>Kho gốc</th><th>Đang ở / đang tới</th><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
     <tbody>
     <?php foreach ($vehicles as $x): $moving = $x['dang_den_kho_id'] !== null; ?>
       <tr class="<?= $x['hoat_dong'] ? '' : 'row-off' ?><?= is_new($changes, $x['id']) ? ' is-new' : '' ?>">
         <td><b><?= e($x['bien_so']) ?></b><?= new_tag($changes, $x['id']) ?></td>
         <td><?= e($x['loai_xe'] ?: '—') ?></td>
+        <td class="spec-cell"><?php
+          $need = TransportRules::needFor($x);
+          $isMoto = ($x['kieu_xe'] ?? 'TAI') === 'MAY';
+          if (($x['kieu_xe'] ?? 'TAI') !== 'TAI') { echo '<span class="tag tag-info">' . e(TransportRules::VEHICLE_KINDS[$x['kieu_xe']] ?? '') . '</span> '; }
+          if ($isMoto) { echo (int)$x['dung_tich_cc'] > 0 ? '<small class="muted">' . (int)$x['dung_tich_cc'] . ' cm³ → cần bằng ' . e((string)$need) . '</small><br>' : '<span class="tag tag-warn">Dung tích: chưa khai</span><br>'; }
+          echo (int)$x['tai_trong_kg'] > 0 ? '<b>' . ((int)$x['tai_trong_kg'] < 1000 ? e(n($x['tai_trong_kg'])) . ' kg' : e($tonne($x['tai_trong_kg'])) . ' tấn') . '</b>' : '<span class="tag tag-warn">Tải trọng: chưa khai</span>';
+          echo (int)$x['gvw_kg'] > 0 ? ' <small class="muted">· GVW ' . e($tonne($x['gvw_kg'])) . ' tấn → cần bằng ' . e($need) . '</small>' : '';
+          if ((int)$x['thung_dai_mm'] > 0) { echo '<br><small class="muted">' . e(TransportRules::BODY_TYPES[$x['loai_thung']] ?? 'Thùng') . ' ' . e($metre($x['thung_dai_mm'])) . '×' . e($metre($x['thung_rong_mm'])) . '×' . e($metre($x['thung_cao_mm'])) . ' m · ' . e(number_format(TransportRules::cubicMeters((int)$x['thung_dai_mm'], (int)$x['thung_rong_mm'], (int)$x['thung_cao_mm']), 1, ',', '.')) . ' m³</small>'; }
+          if ((int)$x['tong_dai_mm'] > 0) { echo '<br><small class="muted">Cả xe ' . e($metre($x['tong_dai_mm'])) . '×' . e($metre($x['tong_rong_mm'])) . '×' . e($metre($x['tong_cao_mm'])) . ' m (dài×rộng×cao)</small>'; }
+          echo '<br>' . ($isMoto ? '' : $docTag($x['han_dang_kiem'] ?? null, 'Đăng kiểm') . ' ') . $docTag($x['han_bao_hiem'] ?? null, 'Bảo hiểm');
+        ?></td>
         <td><span class="wh-code"><?= e($x['goc_ma']) ?></span></td>
         <td><?= $moving
-            ? '<span class="tag tag-info">Đang chạy</span> <span class="arrow">→</span> <span class="wh-code">' . e($x['den_ma']) . '</span> ' . e($x['den_ten'])
+            ? '<span class="tag tag-info">Đang chạy</span> <span class="arrow">→</span> <span class="wh-code">' . e($x['den_ma']) . '</span> ' . e($x['den_ten']) . (!empty($x['chay_tai_xe']) ? '<br><small class="muted">tài xế ' . e($x['chay_tai_xe']) . '</small>' : '')
             : '<span class="wh-code">' . e($x['ht_ma']) . '</span> ' . e($x['ht_ten']) ?></td>
-        <td><?= $x['tai_xe_ten'] ? '<b>' . e($x['tai_xe_ten']) . '</b>' . (!$x['tai_xe_hoat_dong'] ? ' <span class="tag tag-danger">Ngừng dùng</span>' : '') . '<br><small class="muted">CCCD ' . e($x['tai_xe_cccd']) . ($x['tai_xe_sdt'] ? ' · ' . e($x['tai_xe_sdt']) : '') . ($moving && $x['phieu_ma'] ? ' · <a href="/vouchers/' . (int)$x['phieu_id'] . '">' . e($x['phieu_ma']) . '</a>' : '') . '</small>' : '<span class="tag tag-warn">Chưa có tài xế</span>' ?></td>
         <td><?= !$x['hoat_dong'] ? '<span class="tag tag-danger">Ngừng dùng</span>' : ($moving ? '<span class="tag tag-info">Trên đường</span>' : '<span class="tag tag-ok">Sẵn sàng</span>') ?></td>
         <?php if ($canManage): ?><td>
           <div style="display:grid;gap:6px">
           <div class="inline-form">
             <button type="button" class="btn-ghost btn-sm" data-dialog-open="vehicle-edit-dlg" data-fill-label="<?= e($x['bien_so']) ?>"
-              data-fill="<?= e(json_encode(['vehicle_id' => (int)$x['id'], 'plate' => $x['bien_so'], 'type' => $x['loai_xe'], 'warehouse_id' => (string)$x['kho_goc_id'], 'driver_name' => (string)($x['tai_xe_ten'] ?? ''), 'driver_cccd' => (string)($x['tai_xe_cccd'] ?? ''), 'driver_phone' => (string)($x['tai_xe_sdt'] ?? '')], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
+              data-fill="<?= e(json_encode(['vehicle_id' => (int)$x['id'], 'plate' => $x['bien_so'], 'type' => $x['loai_xe'], 'warehouse_id' => (string)$x['kho_goc_id']] + $specFill($x), JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
             <?php if (!$moving): ?><form method="post" action="/fleet/vehicles/delete" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$x['id'] ?>">
               <button class="btn-danger btn-sm" data-confirm="Xoá xe <?= e($x['bien_so']) ?>? Chỉ xoá được xe chưa từng chạy chuyến nào.">Xoá</button></form><?php endif; ?>
           </div>
@@ -130,64 +159,103 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
           </div>
         </td><?php endif; ?>
       </tr>
-    <?php endforeach; if (!$vehicles): ?><tr><td colspan="7" class="empty"><?= $filtered ? 'Không có xe nào khớp bộ lọc.' : 'Chưa có xe nào.' . ($canManage ? ' Bấm «Thêm xe» (kèm thông tin tài xế) để bắt đầu.' : '') ?></td></tr><?php endif; ?>
+    <?php endforeach; if (!$vehicles): ?><tr><td colspan="7" class="empty"><?= $filtered ? 'Không có xe nào khớp bộ lọc.' : 'Chưa có xe nào.' . ($canManage ? ' Bấm «Thêm xe» để bắt đầu.' : '') ?></td></tr><?php endif; ?>
     </tbody></table></div><?= pager($pgV) ?>
 </section>
 
-<?php $spare = array_values(array_filter($allDrivers, fn($d) => $d['xe_phu_trach_id'] === null)); if ($spare): ?>
+<?php elseif ($tab === 'taixe'): ?>
 <section class="card flush">
-  <div class="card-head pad"><h2>Tài xế chưa gắn xe</h2><span class="muted small">hồ sơ cũ — muốn dùng lại thì nhập CCCD này khi thêm hoặc sửa xe</span></div>
+  <div class="card-head pad"><h2>Tài xế <span class="count"><?= n($pgD->total) ?></span></h2><span class="muted small">quản lý riêng, không gắn với xe nào — ai có bằng lái đúng hạng cho xe, đang rảnh và thuộc kho đi thì lái được; tài xế nghỉ thì chọn người khác lái thay</span></div>
   <div class="table-wrap"><table class="dense">
-    <thead><tr><th>Họ tên</th><th>CCCD</th><th>Điện thoại</th><th>Xe phụ trách</th><th>Chuyến đang chạy</th><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
+    <thead><tr><th>Tài xế</th><th>Tuổi</th><th>Giấy phép lái xe</th><th>Khám sức khoẻ</th><th>Điểm GPLX</th><?php if (!$canManage): ?><th>Kho</th><?php endif; ?><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
     <tbody>
-    <?php foreach ($spare as $d): $busy = $d['chuyen_id'] !== null; ?>
+    <?php foreach ($drivers as $d): $busy = $d['chuyen_id'] !== null; $cls = (string)$d['hang_gplx'];
+          $age = ($d['ngay_sinh'] ?? '') !== '' ? TransportRules::ageOn((string)$d['ngay_sinh'], $today) : null;
+          $young = $age !== null && $cls !== '' && isset(TransportRules::CLASSES[$cls]) && $age < TransportRules::minAge($cls); ?>
       <tr class="<?= $d['hoat_dong'] ? '' : 'row-off' ?>">
-        <td><b><?= e($d['ho_ten']) ?></b></td>
-        <td><?= e($d['cccd']) ?></td>
-        <td><?= e($d['so_dien_thoai'] ?: '—') ?></td>
-        <td><?= $d['xe_phu_trach'] ? '<b>' . e($d['xe_phu_trach']) . '</b>' : '<span class="muted">Chưa gắn xe</span>' ?></td>
-        <td><?= $busy ? '<a href="/vouchers/' . (int)$d['phieu_id'] . '">' . e($d['phieu_ma']) . '</a> <small class="muted">· xe ' . e($d['bien_so']) . '</small>' : '<span class="muted">—</span>' ?></td>
-        <td><?= !$d['hoat_dong'] ? '<span class="tag tag-danger">Ngừng dùng</span>' : ($busy ? '<span class="tag tag-info">Đang chạy</span>' : '<span class="tag tag-ok">Rảnh</span>') ?></td>
+        <td><b><?= e($d['ho_ten']) ?></b><br><small class="muted">CCCD <?= e($d['cccd']) ?><?= $d['so_dien_thoai'] ? ' · ' . e($d['so_dien_thoai']) : '' ?></small></td>
+        <td class="nw"><?= $age === null ? '<span class="tag tag-warn">Chưa khai</span>' : '<span class="tag ' . ($young ? 'tag-danger' : 'tag-muted') . '">' . (int)$age . ' tuổi</span>' ?></td>
+        <td class="spec-cell"><?php if ($cls !== ''): ?>
+          <span class="tag tag-ok">Bằng <?= e($cls) ?></span> <small class="muted"><?= e($d['so_gplx']) ?></small> <?= $docTag($d['han_gplx'] ?? null, 'Hạn') ?>
+          <br><small class="muted">lái được <?= e(TransportRules::reach($cls)) ?><?= $young ? ' · <b class="neg">chưa đủ ' . TransportRules::minAge($cls) . ' tuổi cho hạng này</b>' : '' ?></small>
+          <?php else: ?><span class="tag tag-warn">Chưa khai bằng lái</span><?php endif; ?>
+          <?php if (!empty($d['anh_gplx'])): ?><br><a href="/fleet/drivers/<?= (int)$d['id'] ?>/license" target="_blank" rel="noopener"><small>Xem ảnh bằng</small></a><?php endif; ?></td>
+        <td><?= $docTag($d['han_kham_sk'] ?? null, 'Khám SK') ?></td>
+        <td class="nw"><?= (int)($d['diem_gplx'] ?? 12) ?>/12</td>
+        <?php if (!$canManage): ?><td><span class="wh-code"><?= e($d['kho_ma'] ?? '—') ?></span></td><?php endif; ?>
+        <td><?= !$d['hoat_dong'] ? '<span class="tag tag-danger">Nghỉ</span>' : ($busy ? '<span class="tag tag-info">Đang chạy</span><br><small class="muted">xe ' . e($d['xe_dang_chay']) . ' · <a href="/vouchers/' . (int)$d['phieu_id'] . '">' . e($d['phieu_ma']) . '</a></small>' : '<span class="tag tag-ok">Rảnh</span>') ?></td>
         <?php if ($canManage): ?><td><?php if (!$busy): ?>
+          <div style="display:grid;gap:6px">
           <div class="inline-form">
             <button type="button" class="btn-ghost btn-sm" data-dialog-open="driver-edit-dlg" data-fill-label="<?= e($d['ho_ten']) ?>"
-              data-fill="<?= e(json_encode(['driver_id' => (int)$d['id'], 'full_name' => $d['ho_ten'], 'cccd' => $d['cccd'], 'phone' => $d['so_dien_thoai']], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
+              data-fill="<?= e(json_encode(['driver_id' => (int)$d['id'], 'full_name' => $d['ho_ten'], 'cccd' => $d['cccd'], 'phone' => $d['so_dien_thoai']] + $licFill($d), JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
+            <button type="button" class="btn-ghost btn-sm" data-dialog-open="license-photo-dlg" data-fill-label="<?= e($d['ho_ten']) ?>" data-fill="<?= e(json_encode(['driver_id' => (int)$d['id']])) ?>"><?= !empty($d['anh_gplx']) ? 'Đổi ảnh bằng' : 'Đính ảnh bằng' ?></button>
+          </div>
+          <div class="inline-form">
             <form method="post" action="/fleet/drivers/active" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="driver_id" value="<?= (int)$d['id'] ?>"><input type="hidden" name="active" value="<?= $d['hoat_dong'] ? '0' : '1' ?>">
-              <button class="btn-ghost btn-sm" data-confirm="<?= $d['hoat_dong'] ? 'Ngừng dùng tài xế này?' : 'Dùng lại tài xế này?' ?>"><?= $d['hoat_dong'] ? 'Ngừng dùng' : 'Dùng lại' ?></button></form>
+              <button class="btn-ghost btn-sm" data-confirm="<?= $d['hoat_dong'] ? 'Cho tài xế này nghỉ? Sẽ không chọn được cho chuyến mới.' : 'Cho tài xế này làm việc lại?' ?>"><?= $d['hoat_dong'] ? 'Cho nghỉ' : 'Làm lại' ?></button></form>
             <form method="post" action="/fleet/drivers/delete" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="driver_id" value="<?= (int)$d['id'] ?>">
               <button class="btn-danger btn-sm" data-confirm="Xoá tài xế <?= e($d['ho_ten']) ?>? Chỉ xoá được tài xế chưa từng chạy chuyến nào.">Xoá</button></form>
-          </div>
+          </div></div>
           <?php else: ?><span class="muted small">Đang chạy — chưa sửa được</span><?php endif; ?></td><?php endif; ?>
       </tr>
-    <?php endforeach; ?>
-    </tbody></table></div>
-</section>
-<?php endif; ?>
-
-<?php elseif ($tab === 'diem'): ?>
-<section class="card flush">
-  <div class="card-head pad"><h2>Điểm &amp; lương tài xế <small class="muted">tháng <?= e(date('m/Y', strtotime($month . '-01'))) ?></small></h2></div>
-  <div class="table-wrap"><table class="dense">
-    <thead><tr><th>Tài xế</th><?php if (!$canManage): ?><th>Kho</th><?php endif; ?><th>Điểm</th><th>Chuyến · km</th><th>Tiền chuyến</th><th>Lương cố định</th><th>Đã trừ <?= e(date('m/Y', strtotime($month . '-01'))) ?></th><th>Thực nhận</th><th>Số vụ mất</th><?php if ($canManage): ?><th></th><?php endif; ?></tr></thead>
-    <tbody>
-    <?php foreach ($drivers as $d): $cut = (int)$d['tru_thang']; $score = (int)$d['diem']; ?>
-      <tr class="<?= $d['hoat_dong'] ? '' : 'row-off' ?>">
-        <td><b><?= e($d['ho_ten']) ?></b><?= $d['xe_phu_trach'] ? '<br><small class="muted">xe ' . e($d['xe_phu_trach']) . '</small>' : '' ?></td>
-        <?php if (!$canManage): ?><td><span class="wh-code"><?= e($d['kho_ma'] ?? '—') ?></span></td><?php endif; ?>
-        <td><span class="tag <?= $score >= 80 ? 'tag-ok' : ($score >= 50 ? 'tag-warn' : 'tag-danger') ?>"><?= $score ?>/<?= (int)\StockFlow\Service\FleetService::MAX_SCORE ?></span></td>
-        <td class="nw"><?= (int)$d['so_chuyen'] ? e(n($d['so_chuyen'])) . ' chuyến<br><small class="muted">' . e(n($d['tong_km'])) . ' km</small>' : '<span class="muted">—</span>' ?></td>
-        <td><?= (int)$d['tien_chuyen'] > 0 ? '<b>' . e(n($d['tien_chuyen'])) . ' đ</b>' : '<span class="muted">—</span>' ?></td>
-        <td><?= (int)$d['luong'] > 0 ? e(n($d['luong'])) . ' đ' : '<span class="muted">—</span>' ?></td>
-        <td><?= $cut > 0 ? '<span class="tag tag-danger">−' . e(n($cut)) . ' đ</span>' : '<span class="muted">—</span>' ?></td>
-        <td><?php $pay = (int)$d['luong'] + (int)$d['tien_chuyen'] - $cut; ?><?= (int)$d['luong'] + (int)$d['tien_chuyen'] > 0 ? '<b>' . e(n(max(0, $pay))) . ' đ</b>' : '<span class="muted">—</span>' ?></td>
-        <td><?= (int)$d['so_vu_mat'] ?: '<span class="muted">0</span>' ?></td>
-        <?php if ($canManage): ?><td><button type="button" class="btn-ghost btn-sm" data-dialog-open="driver-pay-dlg" data-fill-label="<?= e($d['ho_ten']) ?>"
-              data-fill="<?= e(json_encode(['driver_id' => (int)$d['id'], 'salary' => (string)(int)$d['luong'], 'score' => (string)$score], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button></td><?php endif; ?>
-      </tr>
-    <?php endforeach; if (!$drivers): ?><tr><td colspan="10" class="empty"><?= $filtered ? 'Không có tài xế nào khớp bộ lọc.' : 'Chưa có tài xế.' ?></td></tr><?php endif; ?>
+    <?php endforeach; if (!$drivers): ?><tr><td colspan="8" class="empty"><?= $filtered ? 'Không có tài xế nào khớp bộ lọc.' : 'Chưa có tài xế.' . ($canManage ? ' Bấm «Thêm tài xế» để bắt đầu.' : '') ?></td></tr><?php endif; ?>
     </tbody></table></div><?= pager($pgD) ?>
 </section>
 
+<?php elseif ($tab === 'diem'): ?>
+<section class="card flush">
+  <div class="card-head pad"><h2>Điểm &amp; thu nhập tài xế <small class="muted">tháng <?= e(date('m/Y', strtotime($month . '-01'))) ?></small></h2></div>
+  <div class="table-wrap"><table class="dense">
+    <thead><tr><th>Tài xế</th><?php if (!$canManage): ?><th>Kho</th><?php endif; ?><th>Điểm</th><th>Chuyến · km</th><th>Tiền chuyến</th><th>Đã trừ <?= e(date('m/Y', strtotime($month . '-01'))) ?></th><th>Thực nhận</th><th>Số vụ mất</th><?php if ($canManage): ?><th></th><?php endif; ?></tr></thead>
+    <tbody>
+    <?php foreach ($drivers as $d): $cut = (int)$d['tru_thang']; $score = (int)$d['diem']; ?>
+      <tr class="<?= $d['hoat_dong'] ? '' : 'row-off' ?>">
+        <td><b><?= e($d['ho_ten']) ?></b><?= $d['xe_dang_chay'] ? '<br><small class="muted">đang lái xe ' . e($d['xe_dang_chay']) . '</small>' : '' ?></td>
+        <?php if (!$canManage): ?><td><span class="wh-code"><?= e($d['kho_ma'] ?? '—') ?></span></td><?php endif; ?>
+        <td><span class="tag <?= $score >= 80 ? 'tag-ok' : ($score >= 50 ? 'tag-warn' : 'tag-danger') ?>"><?= $score ?>/<?= (int)\StockFlow\Service\FleetService::MAX_SCORE ?></span></td>
+        <?php $dt = $driverTrips[(int)$d['id']] ?? []; ?>
+        <td class="nw"><?php if ($dt): ?><button type="button" class="link-btn trips-btn" data-trips-toggle="<?= (int)$d['id'] ?>" aria-expanded="false" title="Xem từng chuyến"><b><?= (int)$d['so_chuyen'] ? e(n($d['so_chuyen'])) . ' chuyến' : 'Xem ' . count($dt) . ' chuyến' ?></b> ▾</button><?= (int)$d['so_chuyen'] ? '<br><small class="muted">' . e(n($d['tong_km'])) . ' km</small>' : '' ?>
+          <?php else: ?><span class="muted">—</span><?php endif; ?></td>
+        <td><?= (int)$d['tien_chuyen'] > 0 ? '<b>' . e(n($d['tien_chuyen'])) . ' đ</b>' : '<span class="muted">—</span>' ?></td>
+        <td><?= $cut > 0 ? '<span class="tag tag-danger">−' . e(n($cut)) . ' đ</span>' : '<span class="muted">—</span>' ?></td>
+        <td><?php $pay = (int)$d['tien_chuyen'] - $cut; ?><?= (int)$d['tien_chuyen'] > 0 ? '<b>' . e(n(max(0, $pay))) . ' đ</b>' : '<span class="muted">—</span>' ?></td>
+        <td><?= (int)$d['so_vu_mat'] ?: '<span class="muted">0</span>' ?></td>
+        <?php if ($canManage): ?><td><button type="button" class="btn-ghost btn-sm" data-dialog-open="driver-pay-dlg" data-fill-label="<?= e($d['ho_ten']) ?>"
+              data-fill="<?= e(json_encode(['driver_id' => (int)$d['id'], 'score' => (string)$score], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button></td><?php endif; ?>
+      </tr>
+      <?php if ($dt): $sumPay = 0; ?>
+      <tr class="trips-row" id="trips-<?= (int)$d['id'] ?>" hidden><td colspan="<?= $canManage ? 8 : 8 ?>">
+        <div class="trips-box">
+          <table class="dense">
+            <thead><tr><th>Ngày</th><th>Loại</th><th>Phiếu</th><th>Tuyến / nơi giao</th><th>Xe</th><th class="num">Km</th><th class="num">Tiền công</th><th>Tình trạng</th></tr></thead>
+            <tbody>
+            <?php foreach ($dt as $t):
+                  $paid = $t['trang_thai'] === 'DELIVERED' && $t['hinh_thuc'] === 'NOI_BO'; $sumPay += $paid ? (int)$t['tien_tra'] : 0;
+                  [$stL, $stT] = match ($t['trang_thai']) { 'DELIVERED' => ['Đã giao', 'tag-ok'], 'IN_TRANSIT' => ['Đang chạy', 'tag-info'], 'RECALLED' => ['Đã thu hồi', 'tag-warn'], 'LOST' => ['Mất hàng', 'tag-danger'], default => [$t['trang_thai'], 'tag-muted'] }; ?>
+              <tr class="<?= $paid ? '' : 'row-off' ?>">
+                <td class="nw"><?= e(dt($t['ngay'])) ?></td>
+                <td><?= $t['loai'] === 'GIAO_KHACH' ? '<span class="tag tag-muted">Giao khách</span>' : '<span class="tag tag-info">Điều chuyển</span>' ?></td>
+                <td><?php if ($isAdmin || (int)$t['kho_phieu_id'] === (int)$myWh): ?><a href="/vouchers/<?= (int)$t['phieu_id'] ?>"><?= e($t['phieu_ma']) ?></a><?php else: ?><span title="Phiếu của kho khác — chỉ kho xuất phát và quản trị xem được"><?= e($t['phieu_ma']) ?></span><?php endif; ?></td>
+                <td><?= $t['loai'] === 'GIAO_KHACH' ? '<span class="wh-code">' . e($t['tu']) . '</span> <span class="arrow">→</span> ' . e($t['den']) : '<span class="wh-code">' . e($t['tu']) . '</span> <span class="arrow">→</span> <span class="wh-code">' . e($t['den']) . '</span>' ?></td>
+                <td><?= e($t['bien_so'] ?? '—') ?></td>
+                <td class="num"><?= (int)$t['km'] > 0 ? e(n($t['km'])) : '<span class="muted">—</span>' ?></td>
+                <td class="num"><?= (int)$t['tien_tra'] > 0 ? '<b>' . e(n($t['tien_tra'])) . ' đ</b>' : '<span class="muted">—</span>' ?></td>
+                <td><span class="tag <?= $stT ?>"><?= e($stL) ?></span><?= !$paid && $t['trang_thai'] !== 'DELIVERED' ? ' <small class="muted">chưa tính tiền</small>' : '' ?><?= (int)$t['km'] === 0 && $paid ? ' <small class="muted">chưa nhập km</small>' : '' ?></td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+            <tfoot><tr><td colspan="6" class="num muted">Tổng tiền các chuyến đã giao trong tháng (cả <?= count($dt) ?> chuyến)</td><td class="num"><b><?= e(n($sumPay)) ?> đ</b></td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </td></tr>
+      <?php endif; ?>
+    <?php endforeach; if (!$drivers): ?><tr><td colspan="9" class="empty"><?= $filtered ? 'Không có tài xế nào khớp bộ lọc.' : 'Chưa có tài xế.' ?></td></tr><?php endif; ?>
+    </tbody></table></div><?= pager($pgD) ?>
+</section>
+
+<?php elseif ($tab === 'quydinh'): ?>
+<?php require __DIR__ . '/fleet_rules.php'; ?>
 <?php elseif ($tab === 'gia'): ?>
 <section class="card pad">
   <h2>Đơn giá mỗi km</h2>
@@ -244,38 +312,32 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
 </div>
 
 <?php if ($canManage): ?>
-<dialog id="vehicle-dlg" class="dlg" aria-labelledby="vehicle-dlg-t">
+<dialog id="vehicle-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="vehicle-dlg-t">
   <form method="post" action="/fleet/vehicles" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="vehicle-dlg-t">Thêm xe</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Biển số<input name="plate" required maxlength="15" autocomplete="off" placeholder="vd: 30H-123.45" title="Ví dụ 30H-123.45 hoặc 51C-12345"></label>
     <label>Loại xe<input name="type" maxlength="60" autocomplete="off" placeholder="vd: Xe tải 2 tấn"></label>
     <label>Kho gốc<select name="warehouse_id" required><?= wh_options($warehouses, null, 'Chọn kho…') ?></select></label>
-    <p class="dlg-sub"><b>Tài xế phụ trách</b></p>
-    <label>Họ tên<input name="driver_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
-    <label>Số CCCD<input name="driver_cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" placeholder="12 chữ số" title="Số CCCD gồm đúng 12 chữ số"></label>
-    <label>Số điện thoại<input name="driver_phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
-    <p class="muted small">Xe mới đứng ở kho gốc. Kho có bao nhiêu xe cũng được; xe đi điều chuyển sẽ tự cập nhật vị trí.</p>
+    <?php require __DIR__ . '/../partials/vehicle_specs_fields.php'; ?>
+    <p class="muted small">Xe không gắn tài xế cố định: mỗi chuyến chọn tài xế lúc xuất kho (thêm tài xế ở mục «Tài xế»). Xe mới đứng ở kho gốc; xe đi điều chuyển sẽ tự cập nhật vị trí.
     <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm xe</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
 
-<dialog id="vehicle-edit-dlg" class="dlg" aria-labelledby="vehicle-edit-t">
+<dialog id="vehicle-edit-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="vehicle-edit-t">
   <form method="post" action="/fleet/vehicles/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="vehicle_id" value="">
     <div class="dlg-head"><h2 id="vehicle-edit-t">Sửa xe</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Xe: <b data-dlg-label></b></p>
     <label>Biển số<input name="plate" required maxlength="15" autocomplete="off" title="Ví dụ 30H-123.45 hoặc 51C-12345"></label>
     <label>Loại xe<input name="type" maxlength="60" autocomplete="off"></label>
     <label>Kho gốc<select name="warehouse_id" required><?= wh_options($warehouses, null, 'Chọn kho…') ?></select></label>
-    <p class="dlg-sub"><b>Tài xế phụ trách</b></p>
-    <label>Họ tên<input name="driver_name" required maxlength="120" autocomplete="off"></label>
-    <label>Số CCCD<input name="driver_cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" title="Số CCCD gồm đúng 12 chữ số"></label>
-    <label>Số điện thoại<input name="driver_phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
-    <p class="muted small">Đổi kho gốc không dời xe đi đâu — vị trí xe đổi bằng ô «Đặt vị trí» ở danh sách. Đổi sang CCCD khác nghĩa là người khác lên thay: hồ sơ người cũ được giữ cho các chuyến đã chạy.</p>
+    <?php require __DIR__ . '/../partials/vehicle_specs_fields.php'; ?>
+    <p class="muted small">Đổi kho gốc không dời xe đi đâu — vị trí xe đổi bằng ô «Đặt vị trí» ở danh sách.
     <div class="actions"><button type="submit">Lưu thay đổi</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
 
-<dialog id="loss-adj-dlg" class="dlg" aria-labelledby="loss-adj-t">
+<dialog id="loss-adj-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="loss-adj-t">
   <form method="post" action="/fleet/losses/adjust" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="loss_id" value="">
     <div class="dlg-head"><h2 id="loss-adj-t">Sửa mức xử lý thất thoát</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Phiếu: <b data-dlg-label></b></p>
@@ -286,23 +348,48 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
   </form>
 </dialog>
 
-<dialog id="driver-pay-dlg" class="dlg" aria-labelledby="driver-pay-t">
+<dialog id="driver-pay-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="driver-pay-t">
   <form method="post" action="/fleet/drivers/pay" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="driver_id" value="">
-    <div class="dlg-head"><h2 id="driver-pay-t">Điểm &amp; lương tài xế</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <div class="dlg-head"><h2 id="driver-pay-t">Điểm tài xế</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Tài xế: <b data-dlg-label></b></p>
-    <label>Lương cố định tháng (đ, chưa gồm tiền chạy theo km)<input name="salary" required inputmode="numeric" autocomplete="off" placeholder="VD: 9000000"></label>
     <label>Điểm (0–<?= (int)\StockFlow\Service\FleetService::MAX_SCORE ?>)<input name="score" required type="number" min="0" max="<?= (int)\StockFlow\Service\FleetService::MAX_SCORE ?>"></label>
     <div class="actions"><button type="submit">Lưu</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>
 
-<dialog id="driver-edit-dlg"class="dlg" aria-labelledby="driver-edit-t">
+<dialog id="driver-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="driver-dlg-t">
+  <form method="post" action="/fleet/drivers" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+    <div class="dlg-head"><h2 id="driver-dlg-t">Thêm tài xế</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <label>Họ tên<input name="full_name" required maxlength="120" autocomplete="off" placeholder="VD: Nguyễn Văn A"></label>
+    <label>Số CCCD<input name="cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" placeholder="12 chữ số" title="Số CCCD gồm đúng 12 chữ số"></label>
+    <label>Số điện thoại<input name="phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
+    <?php require __DIR__ . '/../partials/license_fields.php'; ?>
+    <p class="muted small">Tài xế thuộc kho của bạn, không gắn với xe nào. Mỗi chuyến, người xuất kho chọn xe và tài xế — hệ thống chỉ cho chọn tài xế có bằng lái đúng hạng cho xe đó.</p>
+    <div class="actions"><button type="submit"><?= icon('plus') ?>Thêm tài xế</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+
+<dialog id="license-photo-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="license-photo-t">
+  <form method="post" action="/fleet/drivers/license-photo" enctype="multipart/form-data" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="driver_id" value="">
+    <div class="dlg-head"><h2 id="license-photo-t">Ảnh giấy phép lái xe</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
+    <p class="muted dlg-sub">Tài xế: <b data-dlg-label></b></p>
+    <label>Chọn ảnh (JPG, PNG hoặc WebP, tối đa 3 MB)<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></label>
+    <p class="muted small">Chụp rõ cả tấm bằng (mặt có số, hạng, ngày cấp, hạn). Ảnh chỉ người xem đội xe của kho này và quản trị mới xem được. Ảnh mới thay ảnh cũ.</p>
+    <div class="actions"><button type="submit">Đính ảnh</button>
+      <button type="submit" class="btn-ghost btn-danger-ghost" formaction="/fleet/drivers/license-photo/remove" formnovalidate data-confirm="Gỡ ảnh giấy phép lái xe của tài xế này?">Gỡ ảnh hiện có</button>
+      <button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
+  </form>
+</dialog>
+
+<dialog id="driver-edit-dlg" class="dlg dlg-form-wide dlg-xl"
+ aria-labelledby="driver-edit-t">
   <form method="post" action="/fleet/drivers/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="driver_id" value="">
     <div class="dlg-head"><h2 id="driver-edit-t">Sửa tài xế</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Tài xế: <b data-dlg-label></b></p>
     <label>Họ tên<input name="full_name" required maxlength="120" autocomplete="off"></label>
     <label>Số CCCD<input name="cccd" required inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" title="Số CCCD gồm đúng 12 chữ số"></label>
     <label>Số điện thoại<input name="phone" inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số, bắt đầu bằng 0"></label>
+    <?php require __DIR__ . '/../partials/license_fields.php'; ?>
     <div class="actions"><button type="submit">Lưu thay đổi</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
   </form>
 </dialog>

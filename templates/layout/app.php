@@ -74,17 +74,17 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="spa-layout" content="app">
 <title><?= e($title ? $title . ' • ' : '') ?><?= e(APP_NAME) ?></title>
-<script src="/assets/js/theme.js"></script>
+<script src="<?= asset_url('/assets/js/theme.js') ?>"></script>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="/assets/img/favicon.png">
 <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
 <link rel="preload" href="/assets/vendor/fonts/bvp-vietnamese-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/css/app.css">
-<link rel="stylesheet" href="/assets/css/theme.css">
-<link rel="stylesheet" href="/assets/css/ui.css">
-<link rel="stylesheet" href="/assets/css/dark.css">
-<link rel="stylesheet" href="/assets/css/dialog.css">
-<link rel="stylesheet" href="/assets/css/scan.css">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/app.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/theme.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/ui.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/dark.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/dialog.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/scan.css') ?>">
 </head>
 <body class="app-shell<?= !empty($compact) ? ' compact' : '' ?>">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -198,11 +198,15 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <?php endif; ?>
 <?php if (!empty($old)): ?><div id="old-input" hidden data-action="<?= e($old['action']) ?>" data-old="<?= e(json_encode($old['data'], JSON_UNESCAPED_UNICODE)) ?>"></div><?php endif; ?>
 <script src="/assets/vendor/chart.umd.min.js" defer></script>
-<script src="/assets/js/dialog-fx.js" defer></script>
-<script src="/assets/js/app.js" defer></script>
-<script src="/assets/js/address.js" defer></script>
-<script src="/assets/js/route-map.js" defer></script>
-<script src="/assets/js/convoy.js" defer></script>
-<?php if ($canScan): ?><script src="/assets/js/scan.js" defer></script><?php endif; ?>
+<script src="<?= asset_url('/assets/js/dialog-fx.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/app.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/address.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/route-map.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/convoy.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/crew.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/delivery-km.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/trips.js') ?>" defer></script>
+<script src="<?= asset_url('/assets/js/logistics.js') ?>" defer></script>
+<?php if ($canScan): ?><script src="<?= asset_url('/assets/js/scan.js') ?>" defer></script><?php endif; ?>
 </body>
 </html>
