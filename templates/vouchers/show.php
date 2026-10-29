@@ -1,4 +1,4 @@
-<?php /** @var array $v @var array $lines @var array $check @var array $movements @var ?array $pair @var ?array $correction @var ?array $original @var array $trail @var ?array $manager */
+<?php /** @var array $v @var array $lines @var array $check @var array $movements @var ?array $pair @var ?array $correction @var ?array $original @var array $trail @var ?array $manager @var ?array $route */
 $isXfer = in_array($v['loai'], ['TRANSFER_OUT', 'TRANSFER_IN'], true);
 $draft = $v['trang_thai'] === 'DRAFT';
 $cancelled = $v['trang_thai'] === 'CANCELLED';
@@ -126,6 +126,17 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
     </section>
     <?php endif; $actionHtml = ob_get_clean(); if (!$recvForm) { echo $actionHtml; } ?>
 
+
+    <?php if (!empty($route)): ?>
+    <section class="card flush route-card">
+      <div class="card-head pad"><h2>Lộ trình</h2><span class="muted small"><span class="wh-code"><?= e($route['from']['code']) ?></span> → <span class="wh-code"><?= e($route['to']['code']) ?></span><?= $route['km'] > 0 ? ' · ' . e(n($route['km'])) . ' km' : '' ?> · xe <?= e($route['plate']) ?></span></div>
+      <div id="route-map" class="route-map" data-route="<?= e(json_encode($route, JSON_UNESCAPED_UNICODE)) ?>"></div>
+      <div class="route-foot pad"><small class="muted">Minh hoạ lộ trình, không phải vị trí GPS thật.</small><button type="button" class="btn-ghost" id="route-replay"><?= icon('truck') ?>Chạy lại</button></div>
+    </section>
+    <link rel="stylesheet" href="/assets/vendor/leaflet/leaflet.css">
+    <script src="/assets/vendor/leaflet/leaflet.js" defer></script>
+    <script src="/assets/js/route-map.js" defer></script>
+    <?php endif; ?>
 
     <section class="card flush">
       <div class="card-head pad"><h2>Dòng hàng <span class="count"><?= n(count($lines)) ?></span></h2>

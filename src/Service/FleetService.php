@@ -87,6 +87,21 @@ final class FleetService
         return $km === null || $km === false ? null : (int)$km;
     }
 
+    /**
+     * Quãng đường dùng để điền sẵn vào form: số đã khai báo, nếu chưa có thì ước tính theo địa chỉ hai kho.
+     * @return array{km:?int,estimated:bool}
+     */
+    public function distanceHint(int $a, int $b): array
+    {
+        $km = $this->distance($a, $b);
+        if ($km !== null) {
+            return ['km' => $km, 'estimated' => false];
+        }
+        $addr = fn(int $id) => $this->db->value('SELECT dia_chi FROM kho WHERE id = ?', [$id]);
+        $est = \StockFlow\Domain\VnAddress::roadKm($addr($a) ?: null, $addr($b) ?: null);
+        return ['km' => $est, 'estimated' => $est !== null];
+    }
+
     public function setDistance(User $actor, int $mine, int $other, int $km): void
     {
         $this->requireHome($actor, $mine);

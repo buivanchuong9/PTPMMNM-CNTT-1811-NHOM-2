@@ -231,7 +231,7 @@ final class App
     private function secure(Response $r): Response
     {
         return new Response($r->body, $r->status, $r->headers + [
-            'Content-Security-Policy' => "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'",
+            'Content-Security-Policy' => "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://router.project-osrm.org; frame-ancestors 'none'; form-action 'self'",
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'DENY',
             'Referrer-Policy' => 'same-origin',

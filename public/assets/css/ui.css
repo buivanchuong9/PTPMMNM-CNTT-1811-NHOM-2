@@ -707,3 +707,14 @@ tr.is-new .muted, tr.is-new small { font-weight: 600; }
 .create-card .cc-tx small { color: var(--muted, #6b7280); line-height: 1.35; }
 .create-card .cc-go { margin-left: auto; font-style: normal; font-size: 1.25rem; color: var(--cc); opacity: .55; transition: transform .15s, opacity .15s; }
 .create-card:hover .cc-go { transform: translateX(3px); opacity: 1; }
+
+/* Bản đồ lộ trình chuyến điều chuyển */
+.route-map { height: 520px; background: #e8eef3; }
+.route-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 10px; padding-bottom: 12px; }
+.route-dot { width: 12px; height: 12px; border-radius: 50%; background: #64748b; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.route-dot.on { background: var(--brand, #2563eb); width: 16px; height: 16px; }
+.route-dot.dest { background: #16a34a; }
+.route-pin { background: var(--brand, #2563eb); color: #fff; font: 600 11px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 8px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.25); transform: translate(-50%, -100%); position: relative; top: -6px; }
+.route-pin.dest { background: #16a34a; }
+.route-truck { width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 2px solid #f59e0b; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.route-truck svg { width: 18px; height: 18px; stroke: #b45309; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
