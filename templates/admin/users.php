@@ -30,7 +30,7 @@ $whOptions = fn(?int $sel = null) => '<option value="">Chọn kho…</option>' .
     <?php endforeach; if (!$users): ?><tr><td colspan="5" class="empty">Không có tài khoản phù hợp<?= $total ? ' (' . n($total) . ' tài khoản trong hệ thống).' : '.' ?></td></tr><?php endif; ?>
     </tbody></table></div><?= pager($pg) ?></section>
 
-<dialog id="user-edit-dlg" class="dlg" aria-labelledby="user-edit-t">
+<dialog id="user-edit-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="user-edit-t">
   <form method="post" action="/users/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value=""><input type="hidden" name="active" value="">
     <div class="dlg-head"><h2 id="user-edit-t">Sửa tài khoản</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Tài khoản: <b data-dlg-label></b></p>
@@ -46,7 +46,7 @@ $whOptions = fn(?int $sel = null) => '<option value="">Chọn kho…</option>' .
   </form>
 </dialog>
 
-<dialog id="user-dlg" class="dlg" aria-labelledby="user-dlg-t">
+<dialog id="user-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="user-dlg-t">
   <form method="post" action="/users" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="user-dlg-t">Tạo tài khoản</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
       <label>Vai trò<select name="role" required data-role-select><?php foreach (array_reverse($accountRoles) as $ar): ?><option value="<?= e($ar->value) ?>"<?= $ar === \StockFlow\Domain\AccountRole::Staff ? ' selected' : '' ?>><?= e($ar->label()) ?></option><?php endforeach; ?></select></label>

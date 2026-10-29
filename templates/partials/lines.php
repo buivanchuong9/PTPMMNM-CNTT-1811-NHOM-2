@@ -45,7 +45,15 @@ if (!empty($autoLots)) {   // phiếu xuất / điều chuyển đi: mỗi mặt
         $pickRows[] = $g;
     }
 }
-$pickItems = array_map(fn($p) => (!empty($p['lots']) ? ['lots' => $p['lots']] : []) + [
+/** Quy cách + cân nặng + thể tích của 1 đơn vị và của 1 kiện (hiệu dụng: chưa khai kiện thì lấy số đơn vị × của 1 đơn vị) — để dòng phiếu hiện «= 5 kiện + 3 lẻ · 123 kg · 0,4 m³». */
+$packData = function (array $p): array {
+    $pack = max(1, (int)($p['quy_cach_lo'] ?? 1));
+    $g = (int)($p['khoi_luong_g'] ?? 0);
+    $unitM3 = ((int)($p['dai_mm'] ?? 0) > 0 && (int)($p['rong_mm'] ?? 0) > 0 && (int)($p['cao_mm'] ?? 0) > 0) ? (int)$p['dai_mm'] * (int)$p['rong_mm'] * (int)$p['cao_mm'] / 1e9 : 0.0;
+    $boxM3 = ((int)($p['kien_dai_mm'] ?? 0) > 0 && (int)($p['kien_rong_mm'] ?? 0) > 0 && (int)($p['kien_cao_mm'] ?? 0) > 0) ? (int)$p['kien_dai_mm'] * (int)$p['kien_rong_mm'] * (int)$p['kien_cao_mm'] / 1e9 : $pack * $unitM3;
+    return ['pack' => $pack, 'g' => $g, 'kg' => (int)($p['kien_g'] ?? 0) > 0 ? (int)$p['kien_g'] : $pack * $g, 'v' => round($unitM3, 6), 'kv' => round($boxM3, 6)];
+};
+$pickItems = array_map(fn($p) => (!empty($p['lots']) ? ['lots' => $p['lots']] : []) + $packData($p) + [
     'k' => $p['mat_hang_id'] . ':' . $p['lo_hang_id'], 'sku' => $p['ma_hang'], 'name' => $p['ten'], 'unit' => $p['unit'],
     'cat' => (int)($p['danh_muc_id'] ?? 0), 'sup' => $itemSuppliers[$p['mat_hang_id']] ?? [], 'lot' => $p['quan_ly_lo'] ? $p['so_lo'] : '', 'exp' => $p['quan_ly_lo'] && $p['han_dung'] ? dt($p['han_dung'], false) : '', 'tracked' => (bool)$p['quan_ly_lo'], 'cost' => (int)($p['gia_von'] ?? 0),
 ], $pickRows);

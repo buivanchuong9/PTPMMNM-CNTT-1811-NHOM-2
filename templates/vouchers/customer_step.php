@@ -10,7 +10,8 @@ $hidden = function (string $name, mixed $value): string { return '<input type="h
   <div class="row-3">
     <label>Người liên hệ<input name="cust_contact" maxlength="120" autocomplete="off" required autofocus value="<?= e($post['cust_contact'] ?? '') ?>"></label>
     <label>Số điện thoại<input name="cust_phone" inputmode="tel" maxlength="15" pattern="[0-9 .+\-]{8,15}" title="8–15 chữ số" autocomplete="off" required value="<?= e($post['cust_phone'] ?? '') ?>"></label>
-    <label>Địa chỉ<input name="cust_address" maxlength="255" autocomplete="off" required value="<?= e($post['cust_address'] ?? '') ?>"></label>
   </div>
+  <p class="muted small" style="margin:0"><b>Địa chỉ khách hàng</b> — chọn tỉnh, phường theo gợi ý; lưu một lần, các lần xuất sau chọn khách là tự điền địa chỉ giao hàng.</p>
+  <?php $addr = ['street' => $post['street'] ?? '', 'ward' => $post['ward'] ?? '', 'province' => $post['province'] ?? '']; $addrRequired = true; include __DIR__ . '/../partials/address_fields.php'; ?>
   <div class="actions"><button type="submit">Lưu khách hàng &amp; lập phiếu xuất</button><a class="btn btn-ghost" href="/vouchers/new?type=ISSUE">Quay lại</a></div>
 </form>

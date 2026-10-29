@@ -52,7 +52,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canHandle): ?>
-<dialog id="warranty-dlg" class="dlg" aria-labelledby="warranty-dlg-t">
+<dialog id="warranty-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="warranty-dlg-t">
   <form method="post" action="/warranty" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="warranty-dlg-t">Nhận hàng bảo hành</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <?php if ($myWarehouse): ?><?= wh_fixed($myWarehouse, 'Nhận tại kho', 'wh') ?><?php endif; ?>

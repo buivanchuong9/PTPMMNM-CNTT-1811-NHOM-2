@@ -10,7 +10,8 @@
   <button type="button" class="btn-ghost convoy-add" data-convoy-add>＋ Thêm xe chở cùng</button>
   <template data-convoy-tpl>
     <div class="convoy-row"><select data-convoy-sel aria-label="Xe chở cùng"><option value="">Chọn xe…</option>
-      <?php foreach ($ready as $x): ?><option value="<?= (int)$x['id'] ?>"><?= e($x['bien_so'] . ' — ' . $x['ho_ten']) ?></option><?php endforeach; ?></select>
+      <?php foreach ($ready as $x): ?><option value="<?= (int)$x['id'] ?>" data-need="<?= e((string)\StockFlow\Domain\TransportRules::needFor($x)) ?>"><?= e($x['bien_so'] . (['MAY' => ' (xe máy)', 'OTO_NHO' => ' (ô tô nhỏ)'][$x['kieu_xe'] ?? 'TAI'] ?? '')) ?></option><?php endforeach; ?></select>
+      <select data-convoy-drv aria-label="Tài xế lái xe này"><option value="">Chọn tài xế…</option><?= $driverOptions() ?></select>
       <button type="button" class="btn-ghost" data-convoy-del aria-label="Bỏ xe này" title="Bỏ xe này">✕</button></div>
   </template>
   <div class="table-wrap" data-convoy-table hidden>
@@ -19,8 +20,8 @@
         <?php foreach ($ready as $x): ?><th class="num" data-car="<?= (int)$x['id'] ?>" hidden><?= e($x['bien_so']) ?></th><?php endforeach; ?></tr></thead>
       <tbody>
       <?php foreach ($convoyLines as $l): ?>
-        <tr data-line data-total="<?= (int)$l['so_luong'] ?>"><td><b><?= e($l['ma_hang']) ?></b> <small class="muted"><?= $l['so_lo'] === 'NOLOT' ? '' : 'lô ' . e($l['so_lo']) ?></small></td>
-          <td class="num"><?= n($l['so_luong']) ?></td>
+        <tr data-line data-total="<?= (int)$l['so_luong'] ?>" data-pack="<?= max(1, (int)($l['quy_cach_lo'] ?? 1)) ?>"><td><b><?= e($l['ma_hang']) ?></b> <small class="muted"><?= $l['so_lo'] === 'NOLOT' ? '' : 'lô ' . e($l['so_lo']) ?></small></td>
+          <td class="num"><?= n($l['so_luong']) ?><?= ($pl = pack_label((int)$l['so_luong'], (int)($l['quy_cach_lo'] ?? 1))) !== '' ? '<br><small class="muted">' . e($pl) . '</small>' : '' ?></td>
           <td class="num"><b data-main>0</b></td>
           <?php foreach ($ready as $x): ?><td class="num" data-car="<?= (int)$x['id'] ?>" hidden><input type="number" class="qty-input" min="0" max="<?= (int)$l['so_luong'] ?>" step="1" value="0" name="extra[<?= (int)$x['id'] ?>][<?= (int)$l['id'] ?>]" disabled aria-label="<?= e($x['bien_so'] . ' chở ' . $l['ma_hang']) ?>"></td><?php endforeach; ?>
         </tr>

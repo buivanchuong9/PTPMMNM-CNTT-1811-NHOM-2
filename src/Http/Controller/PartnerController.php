@@ -24,7 +24,7 @@ final class PartnerController extends Controller
     public function index(Request $r, array $p, ?User $user): Response
     {
         $this->need($user, Permission::XemDanhMuc);
-        $all = $this->partners->all();
+        $all = $this->partners->all($user?->isAdmin ? null : ($user?->warehouseId ?? 0));   // quản trị thấy tất cả; kho chỉ thấy khách của kho mình
         $type = isset(PartnerService::TYPES[$r->str('type')]) ? $r->str('type') : '';
         $q = fold_vn($r->search('q'));   // không phân biệt hoa thường và dấu
         $counts = ['' => count($all), 'SUPPLIER' => 0, 'CUSTOMER' => 0];
@@ -52,7 +52,7 @@ final class PartnerController extends Controller
 
     private function fields(Request $r): array
     {
-        return [$r->str('code'), $r->str('name'), $r->str('type'), $r->str('contact'), $r->str('phone'), $r->str('email'), $r->str('address'), $r->str('note')];
+        return [$r->str('code'), $r->str('name'), $r->str('type'), $r->str('contact'), $r->str('phone'), $r->str('email'), \StockFlow\Domain\VnAddress::composeLoose($r->str('street'), $r->str('ward'), $r->str('province')) ?: $r->str('address'), $r->str('note')];
     }
 
     /** Các dòng «hàng mới do nhà cung cấp cung cấp» trên form: [sku, tên, đơn vị, danh mục, theo lô]. */

@@ -167,7 +167,7 @@ $qcLabels = \StockFlow\Service\SupplierReturnService::REASONS;
     <div><b>Người lập phiếu</b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= e($v['creator_name']) ?></span></div>
     <div><b>Thủ kho / Quản lý kho</b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= e($v['approver_name'] ?? '') ?></span></div>
     <?php if ($qcRows): ?><div><b>Người kiểm tra chất lượng</b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"></span></div><?php endif; ?>
-    <div><b><?= e($third) ?></b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= $trip && in_array($loai, ['TRANSFER_OUT', 'TRANSFER_IN'], true) ? e($trip['tai_xe_ten']) : '' ?></span></div>
+    <div><b><?= e($third) ?></b><i>(ký, ghi rõ họ tên)</i><div class="space"></div><span class="who"><?= $trip && in_array($loai, ['TRANSFER_OUT', 'TRANSFER_IN'], true) ? e($trip['tai_xe_ten']) : (!empty($delivery['ngay_giao_den']) ? e($delivery['nguoi_nhan']) : '') ?></span></div>
   </div>
   <p class="foot">Phiếu đã ghi sổ lúc <?= e(dt($when)) ?> · <?= e($v['ma']) ?> · in từ hệ thống <?= e(APP_NAME) ?></p>
 </main>

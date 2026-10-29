@@ -68,6 +68,8 @@ final class App
         $r->post('/vouchers/{id}/cancel', [C\VoucherController::class, 'cancel']);
         $r->post('/vouchers/{id}/recall', [C\VoucherController::class, 'recall']);
         $r->post('/vouchers/{id}/breakdown', [C\VoucherController::class, 'breakdown']);
+        $r->post('/vouchers/{id}/delivered', [C\VoucherController::class, 'delivered']);
+        $r->get('/vouchers/{id}/delivery-km', [C\VoucherController::class, 'deliveryKm']);
         $r->post('/vouchers/{id}/resume', [C\VoucherController::class, 'resume']);
         $r->post('/vouchers/{id}/not-received', [C\VoucherController::class, 'notReceived']);
         $r->post('/vouchers/{id}/correct', [C\VoucherController::class, 'correct']);
@@ -140,6 +142,11 @@ final class App
         $r->post('/users/active', [C\AdminController::class, 'setUserActive']);
         $r->post('/users/password', [C\AdminController::class, 'resetUserPassword']);
         $r->get('/fleet', [C\FleetController::class, 'index']);
+        $r->post('/fleet/rules', [C\FleetController::class, 'saveRules']);
+        $r->post('/fleet/drivers', [C\FleetController::class, 'addDriver']);
+        $r->post('/fleet/drivers/license-photo', [C\FleetController::class, 'licensePhotoUpload']);
+        $r->post('/fleet/drivers/license-photo/remove', [C\FleetController::class, 'licensePhotoRemove']);
+        $r->get('/fleet/drivers/{id}/license', [C\FleetController::class, 'licensePhoto']);
         $r->post('/fleet/trips/reply', [C\FleetController::class, 'reply']);
         $r->post('/fleet/trips/loss', [C\FleetController::class, 'confirmLoss']);
         $r->post('/fleet/losses/adjust', [C\FleetController::class, 'adjustLoss']);
@@ -233,7 +240,7 @@ final class App
     private function secure(Response $r): Response
     {
         return new Response($r->body, $r->status, $r->headers + [
-            'Content-Security-Policy' => "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://router.project-osrm.org; frame-ancestors 'none'; form-action 'self'",
+            'Content-Security-Policy' => "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://router.project-osrm.org https://nominatim.openstreetmap.org; frame-ancestors 'none'; form-action 'self'",
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'DENY',
             'Referrer-Policy' => 'same-origin',

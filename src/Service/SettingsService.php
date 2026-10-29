@@ -62,6 +62,35 @@ final class SettingsService
         ];
     }
 
+    /** Quy định vận tải đang áp dụng (xem TransportRules::DEFAULT_LIMITS): mặc định của dự án, ghi đè bằng giá trị quản trị đã lưu. @return array<string,int> */
+    public function transport(): array
+    {
+        $stored = $this->scope('transport', 0);
+        $out = [];
+        foreach (\StockFlow\Domain\TransportRules::DEFAULT_LIMITS as $k => $default) {
+            $out[$k] = isset($stored[$k]) && ctype_digit($stored[$k]) ? (int)$stored[$k] : $default;
+        }
+        return $out;
+    }
+
+    /** Quản trị chỉnh quy định vận tải (hệ số quy đổi, tỉ lệ xếp hàng, giới hạn khổ xe, số ngày báo sắp hết hạn). */
+    public function saveTransport(User $actor, array $v): void
+    {
+        $this->auth->requireAdmin($actor);
+        $range = ['quy_doi_kg_m3' => [100, 1000, 'Hệ số quy đổi (kg/m³)'], 'xep_hang_pct' => [30, 100, 'Tỉ lệ xếp hàng (%)'], 'cao_max_mm' => [2000, 6000, 'Chiều cao tối đa (mm)'],
+                  'rong_max_mm' => [1500, 4000, 'Chiều rộng tối đa (mm)'], 'dai_max_mm' => [4000, 25000, 'Chiều dài tối đa (mm)'], 'canh_bao_han_ngay' => [0, 180, 'Số ngày báo sắp hết hạn']];
+        $log = [];
+        foreach ($range as $k => [$lo, $hi, $label]) {
+            $n = filter_var(trim((string)($v[$k] ?? '')), FILTER_VALIDATE_INT);
+            if ($n === false || $n < $lo || $n > $hi) {
+                throw new DomainError("$label phải từ " . number_format($lo, 0, ',', '.') . ' đến ' . number_format($hi, 0, ',', '.'));
+            }
+            $this->put('transport', 0, $k, (string)$n);
+            $log[] = "$k=$n";
+        }
+        $this->audit->record($actor->id, 'settings.transport', 'settings', null, implode(' · ', $log));
+    }
+
     public function minPassword(): int
     {
         return $this->system()['min_password'];

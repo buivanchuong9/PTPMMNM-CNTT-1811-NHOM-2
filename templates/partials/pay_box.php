@@ -14,14 +14,35 @@ $fa = !empty($formId) ? ' form="' . e($formId) . '"' : '';
   <label data-paid-method hidden>Hình thức thanh toán<select name="pt_tt"<?= $fa ?>><option value="">Chọn…</option><?php foreach (\StockFlow\Service\DeliveryService::METHODS as $k => $label): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></label>
 </fieldset>
 <?php endif; ?>
-<div class="form pay-box" data-pay data-rate-own="<?= (int)$payInfo['rates']['noi_bo'] ?>" data-rate-hired="<?= (int)$payInfo['rates']['thue_ngoai'] ?>">
+<div class="form pay-box" data-pay<?= !empty($dm) && isset($v['id']) ? ' data-km-url="/vouchers/' . (int)$v['id'] . '/delivery-km"' : '' ?> data-rate-own="<?= (int)$payInfo['rates']['noi_bo'] ?>" data-rate-hired="<?= (int)$payInfo['rates']['thue_ngoai'] ?>">
   <div class="pay-mode">
     <?php if ($dm): ?><label class="check"><input type="radio" name="hinh_thuc" value="TU_LAY" checked<?= $fa ?>> Khách tự đến lấy (đơn nhỏ)</label><?php endif; ?>
     <label class="check"><input type="radio" name="hinh_thuc" value="NOI_BO"<?= !$dm && $ready ? ' checked' : '' ?><?= $ready ? '' : ' disabled' ?><?= $fa ?>> <?= $dm ? 'Giao bằng xe của kho' : 'Xe của kho' ?> (trả công tài xế theo km)</label>
     <label class="check"><input type="radio" name="hinh_thuc" value="THUE_NGOAI"<?= !$dm && !$ready ? ' checked' : '' ?><?= $fa ?>> Thuê đơn vị vận tải ngoài</label>
   </div>
-  <div data-pay-own<?= $dm || !$ready ? ' hidden' : '' ?>>
-    <label>Xe chở hàng (tài xế đi theo xe)<select name="vehicle_id"<?= $dm ? '' : ($ready ? ' required' : '') ?><?= $fa ?>><option value="">Chọn xe…</option><?php foreach ($ready as $x): ?><option value="<?= (int)$x['id'] ?>"><?= e($x['bien_so'] . ' — ' . $x['ho_ten'] . ' · CCCD ' . $x['cccd']) ?></option><?php endforeach; ?></select></label>
+  <?php
+// Xe và tài xế KHÔNG gắn cố định: chọn riêng. Tài xế nào có bằng đúng hạng cho xe đã chọn, đang rảnh và thuộc kho này thì lái được; danh sách tự lọc theo xe (crew.js).
+$crewDrivers = $drivers ?? [];
+$crewFit = $driverFit ?? [];
+$driverOptions = function () use ($crewDrivers, $crewFit): string {
+    $o = '';
+    foreach ($crewDrivers as $dr) {
+        $ft = $crewFit[(int)$dr['id']] ?? ['hard' => [], 'class' => '', 'age' => null];
+        $label = $dr['ho_ten'] . ($ft['class'] !== '' ? ' — bằng ' . $ft['class'] : ' — chưa khai bằng') . ($ft['age'] !== null ? ' · ' . $ft['age'] . ' tuổi' : '');
+        $o .= '<option value="' . (int)$dr['id'] . '" data-class="' . e($ft['class']) . '" data-bad="' . e($ft['hard'][0] ?? '') . '">' . e($label) . '</option>';
+    }
+    return $o;
+};
+?>
+<div data-pay-own data-crew="<?= e(json_encode(\StockFlow\Domain\TransportRules::coverTable())) ?>"<?= $dm || !$ready ? ' hidden' : '' ?>>
+    <label>Xe chở hàng (tài xế đi theo xe)<select name="vehicle_id"<?= $dm ? '' : ($ready ? ' required' : '') ?><?= $fa ?>><option value="">Chọn xe…</option><?php $rec = (int)($recommended ?? 0); $kindShort = ['MAY' => ' (xe máy)', 'OTO_NHO' => ' (ô tô nhỏ)', 'TAI' => ''];
+      $readySorted = $ready;
+      if ($rec) { usort($readySorted, fn($a, $b) => ((int)$b['id'] === $rec) <=> ((int)$a['id'] === $rec)); }   // xe khuyên dùng đứng đầu danh sách
+      foreach ($readySorted as $x): $ft = ($fit ?? [])[(int)$x['id']] ?? null;
+        // ghi chú đủ / không đủ điều kiện ngay trên từng xe; lỗi riêng của xe, tài xế (giấy tờ, bằng lái…) thì không cho chọn
+        $note = !$ft ? '' : ((int)$x['id'] === $rec && !$ft['hard'] && !$ft['load'] ? ' — ★ Khuyên dùng (nhỏ nhất vẫn đủ chở)' : ($ft['hard'] ? ' — ✘ ' . $ft['hard'][0] : ($ft['load'] ? ' — ⚠ không đủ tải một mình' : ($ft['warns'] ? ' — ⚠ chưa khai đủ thông số' : ' — ✔ đủ điều kiện')))); ?>
+      <option value="<?= (int)$x['id'] ?>" data-need="<?= e((string)\StockFlow\Domain\TransportRules::needFor($x)) ?>"<?= $ft && $ft['hard'] ? ' disabled' : '' ?><?= $rec && (int)$x['id'] === $rec && !$ft['hard'] && !$ft['load'] ? ' selected' : '' ?><?= $ft ? ' title="' . e(implode(' · ', array_merge($ft['hard'], $ft['load'], $ft['warns']))) . '"' : '' ?>><?= e($x['bien_so'] . ($kindShort[$x['kieu_xe'] ?? 'TAI'] ?? '') . ((int)($x['tai_trong_kg'] ?? 0) > 0 ? ' · ' . ((int)$x['tai_trong_kg'] < 1000 ? (int)$x['tai_trong_kg'] . ' kg' : rtrim(rtrim(number_format($x['tai_trong_kg'] / 1000, 2, ',', '.'), '0'), ',') . ' tấn') : '') . (($nd = \StockFlow\Domain\TransportRules::needFor($x)) ? ' · cần bằng ' . $nd : '') . $note) ?></option><?php endforeach; ?></select></label>
+    <label>Tài xế lái xe<select name="driver_id"<?= $dm ? '' : ($ready ? ' required' : '') ?><?= $fa ?>><option value="">Chọn tài xế…</option><?= $driverOptions() ?></select></label>
     <?php if (!$dm && !empty($convoyLines) && count($ready) >= 2): require __DIR__ . '/convoy_box.php'; endif; ?>
   </div>
   <fieldset class="notrecv" data-pay-ext hidden><legend>Thông tin đơn vị vận tải (bắt buộc đủ)</legend>
@@ -32,11 +53,18 @@ $fa = !empty($formId) ? ' form="' . e($formId) . '"' : '';
       <label>Điện thoại tài xế<input name="ext_phone" data-req inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" placeholder="10 chữ số"<?= $fa ?>></label>
       <label>Biển số xe<input name="ext_plate" data-req maxlength="15" autocomplete="off" placeholder="vd: 30H-123.45"<?= $fa ?>></label>
       <label>Loại xe<input name="ext_type" data-req maxlength="60" autocomplete="off" placeholder="vd: Xe tải 2 tấn"<?= $fa ?>></label>
+      <label>Tải trọng xe (tấn)<input name="ext_cap" data-req inputmode="decimal" maxlength="7" autocomplete="off" placeholder="vd: 2,5"<?= $fa ?>></label>
+      <label>Khối lượng toàn bộ GVW (tấn)<input name="ext_gvw" data-req inputmode="decimal" maxlength="7" autocomplete="off" placeholder="vd: 4,9" title="Ghi trên giấy đăng kiểm — quyết định hạng bằng lái cần có"<?= $fa ?>></label>
+      <label>Số giấy phép lái xe<input name="ext_lic_no" data-req maxlength="20" autocomplete="off"<?= $fa ?>></label>
+      <label>Hạng bằng<select name="ext_lic_class" data-req<?= $fa ?>><option value="">Chọn…</option><?php foreach (array_filter(\StockFlow\Domain\TransportRules::CLASSES, fn($k) => $k[4]) as $k => $cl): ?><option value="<?= e($k) ?>"><?= e($cl[0]) ?></option><?php endforeach; ?></select></label>
+      <label>Hạn bằng lái<input type="date" name="ext_lic_exp"<?= $fa ?>></label>
     </div>
   </fieldset>
   <div data-pay-fields<?= $dm ? ' hidden' : '' ?>>
     <?php if ($dm): ?>
-    <label>Địa chỉ giao hàng<input name="giao_dia_chi" data-need maxlength="255" autocomplete="off" value="<?= e($cust['dia_chi'] ?? '') ?>" placeholder="Số nhà, đường, phường, tỉnh"<?= $fa ?>></label>
+    <p class="muted small" style="margin:0"><b>Địa chỉ giao hàng</b> — chọn tỉnh, phường theo gợi ý; điểm giao trên bản đồ demo sẽ chọn ngẫu nhiên trong phường đó.</p>
+    <?php $addr = \StockFlow\Domain\VnAddress::parse($cust['dia_chi'] ?? ''); $addrNeed = true; include __DIR__ . '/address_fields.php'; ?>
+    <?php if (!empty($v['doi_tac'])): ?><label class="check"><input type="checkbox" name="save_cust" value="1" checked> Lưu địa chỉ và người nhận này cho khách «<?= e($v['doi_tac']) ?>» — lần sau chọn khách là tự điền</label><?php endif; ?>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Người nhận hàng<input name="giao_nguoi_nhan" data-need maxlength="120" autocomplete="off" value="<?= e(($cust['nguoi_lien_he'] ?? '') ?: ($cust['ten'] ?? '')) ?>"<?= $fa ?>></label>
       <label>Điện thoại người nhận<input name="giao_sdt" data-need inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" value="<?= e($cust['so_dien_thoai'] ?? '') ?>" placeholder="10 chữ số"<?= $fa ?>></label>

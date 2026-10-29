@@ -350,12 +350,15 @@
     };
     const refresh = () => {
       const trs = [...body.rows];
-      let total = 0;
+      let total = 0, grams = 0;
       trs.forEach((tr) => {
         const raw = tr.querySelector('input[data-qty]').value.trim();
         const s = rowStock(tr), cell = tr.querySelector('.stock-cell'), err = tr.querySelector('.row-err');
         const qty = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
         total += qty;
+        const itx = rowItem(tr), pinfo = tr.querySelector('.pack-info');
+        if (itx) grams += weightOf(itx, qty);
+        if (pinfo) pinfo.textContent = packInfo(itx, qty);
         if (tr.dataset.k.endsWith(':new')) showLotStock(tr, s, cell);
         else cell.textContent = s === null ? '—' : vn.format(s);
         let msg = '';
@@ -373,15 +376,31 @@
       empty.hidden = trs.length > 0;
       sum.hidden = trs.length === 0;
       sum.classList.remove('bad');
-      sum.textContent = `${trs.length} dòng · tổng ${vn.format(total)} đơn vị`;
+      sum.textContent = `${trs.length} dòng · tổng ${vn.format(total)} đơn vị${grams > 0 ? ' · nặng ≈ ' + kgText(grams) : ''}`;
     };
 
     // Cộng/trừ số lượng; tăng quá tồn thì giữ nguyên và báo ngay
+    // Mặt hàng đóng kiện (thùng): +/− nhảy cả kiện, dòng mới mặc định 1 kiện — kho xuất theo thùng chứ không theo từng cái; tick «lẻ» để +/− từng cái
+    const stepSize = (tr) => { const it = rowItem(tr); return it && it.pack > 1 && !tr.querySelector('.loose')?.checked ? it.pack : 1; };
+    const weightOf = (it, qty) => Math.floor(qty / (it.pack || 1)) * (it.kg || 0) + (qty % (it.pack || 1)) * (it.g || 0);   // gram
+    const volumeOf = (it, qty) => Math.floor(qty / (it.pack || 1)) * (it.kv || 0) + (qty % (it.pack || 1)) * (it.v || 0);   // m³
+    const kgText = (g) => (g >= 1000 ? vn.format(Math.round(g / 10) / 100) + ' kg' : vn.format(Math.round(g)) + ' g');
+    const packInfo = (it, qty) => {
+      if (!it || qty < 1) return '';
+      const pack = it.pack || 1, full = Math.floor(qty / pack), rest = qty % pack, out = [];
+      if (pack > 1) out.push('= ' + (full ? vn.format(full) + ' kiện' : '') + (rest ? (full ? ' + ' : '') + vn.format(rest) + ' lẻ' : ''));
+      const g = weightOf(it, qty), m3 = volumeOf(it, qty);
+      if (g > 0) out.push(kgText(g));
+      if (m3 > 0) out.push(vn.format(Math.round(m3 * 1000) / 1000) + ' m³');
+      if (g <= 0) out.push('chưa khai cân nặng');
+      return out.join(' · ');
+    };
     const bump = (tr, d) => {
       const q = tr.querySelector('input[data-qty]');
       const cur = /^\d+$/.test(q.value.trim()) ? parseInt(q.value, 10) : 0;
       const s = stockOf(tr.dataset.k);
       let next = Math.max(1, Math.min(1000000, cur + d));
+      if (Math.abs(d) > 1 && next < Math.abs(d)) next = Math.abs(d);   // bước theo kiện: tối thiểu 1 kiện
       if (d > 0 && check && s !== null && next > s) {
         next = Math.max(1, Math.min(cur || 1, s) || 1);
         q.value = next; if (tr._alloc) syncLots(tr); refresh();
@@ -398,7 +417,7 @@
       const lotRow = !!picker.dataset.auto && !!(i.lots && i.lots.length);   // xuất / điều chuyển hàng theo lô: ô chọn lô hiện sẵn
       let tr = newLot ? null : [...body.rows].find((r) => r.dataset.k === i.k);
       if (tr) {
-        bump(tr, 1);
+        bump(tr, stepSize(tr));
       } else {
         tr = body.insertRow();
         tr.dataset.k = i.k;
@@ -412,7 +431,7 @@
         const addLot = newLot ? '<div><button type="button" class="btn-ghost btn-sm add-lot">+ Thêm lô khác của hàng này</button></div>' : '';
         tr.innerHTML = `<td>${lotRow ? '<span class="auto-out"></span>' : `<input type="hidden" name="line[]" value="${esc(i.k)}">`}<b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}${lotCells}${addLot}</td>`
           + '<td class="num stock-cell"></td>'
-          + `<td class="num${lotRow ? ' qty-cell lot-cell' : ''}"><div class="qty-line">${lotRow ? '<div class="lot-chips"></div>' : ''}<div class="qty-box"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input${lotRow ? '' : ' name="qty[]"'} data-qty type="number" min="1" max="1000000" value="1" inputmode="numeric" aria-label="Số lượng"${lotRow ? ' placeholder="Chọn lô"' : ''}><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small></div></div><div class="row-err" role="alert" hidden></div></td>`
+          + `<td class="num${lotRow ? ' qty-cell lot-cell' : ''}"><div class="qty-line">${lotRow ? '<div class="lot-chips"></div>' : ''}<div class="qty-box"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input${lotRow ? '' : ' name="qty[]"'} data-qty type="number" min="1" max="1000000" value="${(i.pack || 1) > 1 ? i.pack : 1}" inputmode="numeric" aria-label="Số lượng"${lotRow ? ' placeholder="Chọn lô"' : ''}><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small></div></div><div class="pack-line">${(i.pack || 1) > 1 ? '<label class="loose-opt"><input type="checkbox" class="loose"> lẻ (bước 1 cái)</label>' : ''}<span class="pack-info muted"></span></div><div class="row-err" role="alert" hidden></div></td>`
           + (picker.dataset.newlots ? `<td class="bad-cell"><input name="bad[]" class="bad-qty" type="number" min="0" max="1000000" value="0" inputmode="numeric" aria-label="Số lượng không đạt chất lượng"><select name="bad_reason[]" class="bad-reason" aria-label="Tình trạng hàng không đạt" hidden><option value="">Tình trạng…</option>${(picker.dataset.badReasons ? JSON.parse(picker.dataset.badReasons) : []).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select><input name="bad_note[]" class="bad-note" maxlength="200" placeholder="Ghi chú" hidden></td>` : '')
           + '<td class="num"><button type="button" class="icon-btn remove-line" aria-label="Xoá dòng">✕</button></td>';
       }
@@ -453,7 +472,7 @@
         const it = rowItem(tr);
         if (it) add(it);
       } else if (step) {
-        bump(tr, +step.dataset.d);
+        bump(tr, +step.dataset.d * stepSize(tr));
       } else if (ev.target.closest('.remove-line')) { tr.remove(); refresh(); }
     });
     body.addEventListener('input', (ev) => {
@@ -1260,7 +1279,7 @@
 
   new MutationObserver(() => { initHScroll(); initTabScroll(); initStickyHead(); queueHeads(); }).observe(document.body, { childList: true, subtree: true });
 
-  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); };
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;

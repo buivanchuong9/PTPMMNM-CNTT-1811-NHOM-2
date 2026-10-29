@@ -75,6 +75,10 @@ foreach ($pages as $p) {
     same($status, 200, "admin GET $p ⇒ 200");
     truthy($noPhpError($body), "admin GET $p: không lộ lỗi PHP");
 }
+[$st, $adminInv] = $get('/inventory');
+truthy($st === 200 && $noPhpError($adminInv) && str_contains($adminInv, 'name="weight_kien"') && str_contains($adminInv, 'name="kien_l"'), 'quản trị: form hàng hoá có ô cân nặng và kích thước 1 kiện');
+[$st, $adminRules] = $get('/fleet?tab=quydinh');
+truthy($st === 200 && $noPhpError($adminRules) && str_contains($adminRules, 'Chỉnh quy định') && str_contains($adminRules, 'name="quy_doi_kg_m3"'), 'quản trị xem được «Quy định vận tải» kèm form chỉnh');
 // phiếu in để ký: chỉ phiếu đã ghi sổ; phiếu xuất có tiền + bằng chữ + 3 ô ký, điều chuyển có xe / tài xế
 $issuePrint = $f->draftIssue($f->wa, 'x', 1);
 $f->c->get(\StockFlow\Service\VoucherService::class)->confirm($f->approverA, (int)$issuePrint['id']);
@@ -108,13 +112,39 @@ foreach (['/', '/inventory', '/vouchers', '/vouchers/new?type=RECEIPT', '/vouche
 }
 same($get("/vouchers/{$pair['id']}")[0], 403, 'phiếu nhập xuất của kho B ⇒ 403');
 [, $draftPage] = $get("/vouchers/{$xferDraft['id']}");
-truthy(str_contains($draftPage, 'name="vehicle_id"') && str_contains($draftPage, 'name="driver_ok"') && !str_contains($draftPage, 'name="driver_id"'), 'phiếu điều chuyển nháp: chỉ chọn xe (tài xế đi theo xe) và tài xế xác nhận đủ hàng');
+truthy(str_contains($draftPage, 'name="vehicle_id"') && str_contains($draftPage, 'name="driver_ok"') && str_contains($draftPage, 'name="driver_id"'), 'phiếu điều chuyển nháp: chỉ chọn xe (tài xế đi theo xe) và tài xế xác nhận đủ hàng');
 truthy(str_contains($draftPage, 'data-convoy') && str_contains($draftPage, 'name="extra['), 'phiếu điều chuyển nháp có ≥ 2 xe sẵn sàng: hiện nút «Thêm xe chở cùng» dưới ô chọn xe');
 $f->db->exec('UPDATE kho SET dia_chi = ? WHERE id = ?', ['KCN Thăng Long, Đông Anh, Hà Nội', $f->wa]);   // bản đồ lộ trình cần địa chỉ nhận ra được tỉnh
 $f->db->exec('UPDATE kho SET dia_chi = ? WHERE id = ?', ['KCN Hoà Khánh, Liên Chiểu, Đà Nẵng', $f->wb]);
+// phiếu xuất giao tận nơi bằng xe của kho: có bản đồ lộ trình kho → địa chỉ khách (xe chạy 5 giây)
+$mv = $f->db->one('SELECT id FROM xe WHERE kho_goc_id = ? AND kho_hien_tai_id = ? AND hoat_dong ORDER BY id DESC LIMIT 1', [$f->wa, $f->wa]);
+$dIssue = $f->draftIssue($f->wa, 'x', 2);
+$f->c->get(\StockFlow\Service\VoucherService::class)->confirm($f->approverA, (int)$dIssue['id'], ['hinh_thuc' => 'NOI_BO', 'thanh_toan' => 'COD', 'dia_chi' => '12 Nguyễn Trãi, Phường Thanh Xuân, Thành phố Hà Nội',
+    'nguoi_nhan' => 'Nguyễn Thị Hoa', 'sdt_nhan' => '0912000111', 'vehicle_id' => (int)$mv['id'], 'driver_ok' => true, 'km' => 8, 'tien' => 40000, 'ghi_chu' => '']);
+[$st, $delPage] = $get("/vouchers/{$dIssue['id']}");
+truthy($st === 200 && $noPhpError($delPage) && str_contains($delPage, 'Lộ trình giao hàng') && str_contains($delPage, '&quot;mode&quot;:&quot;delivery&quot;') && str_contains($delPage, 'id="route-replay"'), 'phiếu xuất giao tận nơi: có bản đồ lộ trình kho → khách (xe chạy 5 giây)');
+$tuLay = $f->draftIssue($f->wa, 'x', 1);
+$f->c->get(\StockFlow\Service\VoucherService::class)->confirm($f->approverA, (int)$tuLay['id'], ['hinh_thuc' => 'TU_LAY', 'thanh_toan' => 'DA_TT', 'phuong_thuc_tt' => 'TIEN_MAT']);
+truthy(!str_contains($get("/vouchers/{$tuLay['id']}")[1], 'Lộ trình giao hàng'), 'khách tự lấy thì không có bản đồ giao hàng');
 $ts->reportBreakdown($f->approverA, (int)$xferGo['id'], 'Hỏng động cơ');
 [$st, $goPage] = $get("/vouchers/{$xferGo['id']}");
 truthy($st === 200 && $noPhpError($goPage) && str_contains($goPage, 'hỏng giữa đường') && str_contains($goPage, 'đã sửa xong, chạy tiếp') && str_contains($goPage, 'data-route') && str_contains($goPage, '&quot;broken&quot;'), 'kho đi thấy xe hỏng: cảnh báo, nút chạy tiếp và xe hỏng trên bản đồ');
+$f->db->exec('UPDATE mat_hang SET khoi_luong_g = 20000, dai_mm = 600, rong_mm = 400, cao_mm = 300 WHERE id = ?', [$f->it['x']['item']]);
+$f->db->exec('UPDATE xe SET tai_trong_kg = 1000 WHERE kho_goc_id = ?', [$f->wa]);
+[$st, $loadPage] = $get("/vouchers/{$xferDraft['id']}");
+truthy($st === 200 && $noPhpError($loadPage) && str_contains($loadPage, 'Hàng cần chở') && str_contains($loadPage, '20 kg') && str_contains($loadPage, '1 tấn') && str_contains($loadPage, 'name="ext_lic_class"'), 'phiếu điều chuyển nháp: tóm tắt tải hàng, tải trọng từng xe trong danh sách chọn, ô bằng lái cho xe thuê ngoài');
+[$st, $invPage] = $get('/inventory?q=' . $f->it['x']['ma_hang']);   // lọc theo SKU để không phụ thuộc phân trang
+truthy($st === 200 && $noPhpError($invPage) && str_contains($invPage, 'Cân nặng · kích thước') && str_contains($invPage, '<b>20 kg</b>') && str_contains($invPage, '60 × 40 × 30 cm'), 'trang Hàng hoá có cột cân nặng · kích thước của 1 đơn vị (20 kg, 60 × 40 × 30 cm)');
+[$st, $newIssue] = $get('/vouchers/new?type=ISSUE');
+truthy($st === 200 && $noPhpError($newIssue) && str_contains($newIssue, '&quot;pack&quot;') && str_contains($newIssue, '&quot;kg&quot;'), 'form phiếu xuất nhận quy cách + cân nặng để nhập theo kiện');
+[$st, $rulesPage] = $get('/fleet?tab=quydinh');
+truthy($st === 200 && $noPhpError($rulesPage) && str_contains($rulesPage, 'Hạng giấy phép lái xe') && str_contains($rulesPage, 'Xe nào cần bằng gì') && !str_contains($rulesPage, 'Chỉnh quy định'), 'quản lý kho xem được «Quy định vận tải» nhưng không có form chỉnh');
+[$st, $xePage] = $get('/fleet?tab=xe');
+truthy($st === 200 && $noPhpError($xePage) && str_contains($xePage, 'Tải trọng · kích thước · giấy tờ') && str_contains($xePage, 'name="cap_t"') && str_contains($xePage, 'name="gplx_class"'), 'tab Xe: cột tải trọng / giấy tờ / bằng lái và form khai thông số xe, bằng lái');
+[$st, $payTab] = $get('/fleet?tab=diem');
+truthy($st === 200 && $noPhpError($payTab) && str_contains($payTab, 'data-trips-toggle') && str_contains($payTab, 'id="trips-') && str_contains($payTab, 'Tổng tiền các chuyến đã giao'), 'tab Điểm & thu nhập: bấm «N chuyến» mở danh sách chuyến thật của tài xế');
+[$st, $driverTab] = $get('/fleet?tab=taixe');
+truthy($st === 200 && $noPhpError($driverTab) && str_contains($driverTab, 'Thêm tài xế') && str_contains($driverTab, 'name="gplx_class"') && str_contains($driverTab, 'không gắn với xe nào'), 'mục Tài xế: form thêm riêng (giấy phép lái xe, ngày sinh), không gắn với xe');
 [$st, $fleetPage] = $get('/fleet');
 truthy($st === 200 && $noPhpError($fleetPage) && str_contains($fleetPage, 'name="plate"'), 'quản lý kho A vào được trang Đội xe và thấy form thêm xe');
 foreach (['/fleet?q=khongco&tt=ready&ai=TAI_XE', '/fleet?thang=2000-01', '/fleet?thang=sai&tt=zzz&q=' . urlencode('30h')] as $p) {

@@ -61,7 +61,7 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
   <section class="card flush"><?= pager($pg) ?></section>
 
 <?php if ($user->isAdmin): ?>
-<dialog id="wh-dlg" class="dlg" aria-labelledby="wh-dlg-t">
+<dialog id="wh-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="wh-dlg-t">
   <form method="post" action="/warehouses" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="wh-dlg-t">Thêm kho</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <label>Mã kho<input name="code" required minlength="2" maxlength="20" pattern="[A-Za-z0-9_\-]{2,20}" title="2–20 ký tự: chữ không dấu, số, _ hoặc -" placeholder="VD: HP01" autocomplete="off"></label>
@@ -76,7 +76,7 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
 </dialog>
 <?php endif; ?>
 <?php if ($anyAddr): ?>
-<dialog id="addr-dlg" class="dlg dlg-wide" aria-labelledby="addr-dlg-t">
+<dialog id="addr-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="addr-dlg-t">
   <form method="post" action="/warehouses/address" class="form">
     <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <input type="hidden" name="warehouse_id" value="">
@@ -88,7 +88,7 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
 </dialog>
 <?php endif; ?>
 <?php if ($anyAdd): ?>
-<dialog id="staff-dlg" class="dlg" aria-labelledby="staff-dlg-title">
+<dialog id="staff-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="staff-dlg-title">
   <form method="post" action="/warehouses/staff" class="form">
     <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <input type="hidden" name="warehouse_id" value="">
@@ -102,7 +102,7 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
 </dialog>
 <?php endif; ?>
 <?php if ($anyEdit): ?>
-<dialog id="staff-edit-dlg" class="dlg" aria-labelledby="staff-edit-t">
+<dialog id="staff-edit-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="staff-edit-t">
   <form method="post" action="/warehouses/staff/update" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="user_id" value=""><input type="hidden" name="active" value="">
     <div class="dlg-head"><h2 id="staff-edit-t">Sửa nhân viên</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted dlg-sub">Nhân viên: <b data-dlg-label></b></p>

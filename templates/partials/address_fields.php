@@ -4,7 +4,7 @@
  * Máy chủ ghép lại bằng VnAddress::compose() — form chỉ gửi street / ward / province.
  */
 $addr = ($addr ?? []) + ['street' => '', 'ward' => '', 'province' => ''];
-$req = ($addrRequired ?? true) ? ' required' : '';
+$req = !empty($addrNeed) ? ' data-need' : (($addrRequired ?? true) ? ' required' : '');   // data-need: bắt buộc tuỳ hình thức giao hàng (khách tự lấy thì không cần)
 ?>
 <fieldset class="addr" data-vn-addr>
   <legend class="sr-only">Địa chỉ</legend>

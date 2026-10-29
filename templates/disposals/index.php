@@ -67,7 +67,7 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canPropose): ?>
-<dialog id="dispose-dlg" class="dlg" aria-labelledby="dispose-dlg-t">
+<dialog id="dispose-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="dispose-dlg-t">
   <form method="post" action="/disposals" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="dispose-dlg-t">Huỷ hàng</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <?php if ($myWarehouse): ?><?= wh_fixed($myWarehouse, 'Hàng của kho', 'wh') ?><?php endif; ?>

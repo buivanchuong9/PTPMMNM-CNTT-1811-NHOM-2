@@ -33,4 +33,20 @@ same(VnAddress::parse('Số 1 Lê Duẩn, Phường Ba Đình, Thành phố Hà 
 same(VnAddress::parse('KCN Thăng Long, Huyện Gia Lâm, Hà Nội'), ['street' => 'KCN Thăng Long, Huyện Gia Lâm', 'ward' => '', 'province' => 'Thành phố Hà Nội'], 'địa chỉ cũ (có huyện): giữ phần đầu, nhận tỉnh');
 same(VnAddress::parse('Địa chỉ lạ không dấu phẩy'), ['street' => 'Địa chỉ lạ không dấu phẩy', 'ward' => '', 'province' => ''], 'không nhận ra: giữ nguyên trong ô số nhà, đường');
 same(VnAddress::parse(null), ['street' => '', 'ward' => '', 'province' => ''], 'chưa có địa chỉ');
+section('Địa chỉ khách hàng: phường / xã không bắt buộc; km giao hàng cố định theo địa chỉ');
+same(VnAddress::composeLoose('', '', ''), '', 'bỏ trống cả ba ô thì rỗng');
+same(VnAddress::composeLoose('12 Nguyễn Trãi', '', 'Hà Nội'), '12 Nguyễn Trãi, Thành phố Hà Nội', 'khách cũ chỉ có đến tỉnh: nhận, ghép đúng tên tỉnh');
+throws(fn() => VnAddress::composeLoose('', '', 'Hà Nội'), DomainError::class, 'thiếu số nhà, đường bị từ chối');
+throws(fn() => VnAddress::composeLoose('12 Nguyễn Trãi', '', 'Xứ lạ'), DomainError::class, 'tỉnh lạ bị từ chối');
+throws(fn() => VnAddress::composeLoose('12 Nguyễn Trãi', 'Phường không có', 'Hà Nội'), DomainError::class, 'có điền phường thì phải đúng tỉnh');
+$kho = 'KCN Thăng Long, Đông Anh, Hà Nội';
+$a1 = '12 Nguyễn Trãi, Phường Thanh Xuân, Thành phố Hà Nội';
+$km = VnAddress::deliveryKm($kho, $a1);
+truthy($km !== null && $km >= 3 && $km <= 20, 'giao trong cùng thành phố: 3–20 km (' . $km . ' km)');
+same(VnAddress::deliveryKm($kho, $a1), $km, 'cùng địa chỉ luôn ra cùng số km (cố định)');
+$others = array_unique(array_map(fn($n) => VnAddress::deliveryKm($kho, "$n Lê Lợi, Phường Ba Đình, Thành phố Hà Nội"), range(1, 12)));
+truthy(count($others) > 1, 'địa chỉ khác nhau cho số km khác nhau');
+same(VnAddress::deliveryKm($kho, '5 Lê Duẩn, Phường Hải Châu, Thành phố Hồ Chí Minh'), VnAddress::roadKm($kho, 'x, Thành phố Hồ Chí Minh'), 'giao khác tỉnh: quãng đường bộ giữa hai tỉnh');
+same([VnAddress::deliveryKm($kho, 'Địa chỉ lạ'), VnAddress::deliveryKm(null, $a1)], [null, null], 'không nhận ra tỉnh thì chưa tính được');
+
 finish();

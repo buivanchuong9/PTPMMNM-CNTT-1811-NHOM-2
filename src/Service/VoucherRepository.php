@@ -39,7 +39,7 @@ final class VoucherRepository
     public function lines(int $voucherId): array
     {
         return $this->db->all(
-            'SELECT l.*, i.ma_hang, i.ten, i.quan_ly_lo, u.ma AS unit, b.so_lo, b.han_dung
+            'SELECT l.*, i.ma_hang, i.ten, i.quan_ly_lo, i.quy_cach_lo, u.ma AS unit, b.so_lo, b.han_dung
              FROM chi_tiet_phieu_nhap_xuat l JOIN mat_hang i ON i.id = l.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.id = l.lo_hang_id
              WHERE l.phieu_nhap_xuat_id = ? ORDER BY l.id',
             [$voucherId]

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS xe (
     UNIQUE (tai_xe_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 -- @@
--- tai_xe.diem: điểm uy tín (mặc định 100, bị trừ khi tài xế chịu trách nhiệm mất hàng) · tai_xe.luong: lương tháng (đồng) · tai_xe.kho_id: kho quản lý tài xế (kho gốc của xe tài xế phụ trách).
+-- tai_xe.diem: điểm uy tín (mặc định 100, bị trừ khi tài xế chịu trách nhiệm mất hàng) · tai_xe.luong: KHÔNG CÒN DÙNG — đã bỏ lương cố định, thu nhập tài xế chỉ gồm tiền từng chuyến (cột giữ lại để không phải dựng lại CSDL) · tai_xe.kho_id: kho quản lý tài xế (kho gốc của xe tài xế phụ trách).
 -- Một chuyến = một phiếu điều chuyển đi + phiếu đến đối ứng. IN_TRANSIT: đang chạy · DELIVERED: kho đến đã nhận.
 -- tai_xe_xac_nhan_du_hang: lúc xuất kho, tài xế đã xác nhận nhận đủ hàng.
 -- nhan_du_hang / nhan_dung_tai_xe: kho đến kiểm tra lúc nhận (hàng đủ không, đúng tài xế và xe không).

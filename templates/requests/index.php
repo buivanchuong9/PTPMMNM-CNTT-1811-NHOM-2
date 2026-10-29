@@ -49,7 +49,7 @@ $mineId = (int)$user->warehouseId;
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($isManager): ?>
-<dialog id="reject-dlg" class="dlg" aria-labelledby="reject-dlg-t">
+<dialog id="reject-dlg" class="dlg dlg-form-wide dlg-xl" aria-labelledby="reject-dlg-t">
   <form method="post" action="/requests" class="form"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <div class="dlg-head"><h2 id="reject-dlg-t">Từ chối yêu cầu</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <p class="muted" data-dlg-label></p>

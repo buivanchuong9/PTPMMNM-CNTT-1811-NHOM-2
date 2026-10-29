@@ -20,7 +20,8 @@ final class StockQuery
     public function pickList(): array
     {
         return $this->db->all(
-            'SELECT i.id AS mat_hang_id, i.danh_muc_id, b.id AS lo_hang_id, i.ma_hang, i.ten, u.ma AS unit, i.quan_ly_lo, b.so_lo, b.han_dung, i.gia_von, i.gia_ban
+            'SELECT i.id AS mat_hang_id, i.danh_muc_id, b.id AS lo_hang_id, i.ma_hang, i.ten, u.ma AS unit, i.quan_ly_lo, b.so_lo, b.han_dung, i.gia_von, i.gia_ban,
+                    i.quy_cach_lo, i.khoi_luong_g, i.dai_mm, i.rong_mm, i.cao_mm, i.kien_g, i.kien_dai_mm, i.kien_rong_mm, i.kien_cao_mm
              FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.mat_hang_id = i.id WHERE i.hoat_dong ORDER BY i.ma_hang, (b.han_dung IS NULL), b.han_dung, b.so_lo'
         );
     }
