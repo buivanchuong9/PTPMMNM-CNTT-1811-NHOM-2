@@ -2,14 +2,6 @@
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Màn chào sau đăng nhập (logo + vòng đỏ, rồi kéo màn lên): không bỏ qua được, gỡ khỏi trang khi chạy xong
-  const welcome = document.getElementById('welcome');
-  if (welcome) {
-    const done = () => welcome.remove();
-    welcome.addEventListener('animationend', (e) => { if (e.target === welcome) done(); });
-    setTimeout(done, 4000);   // chốt an toàn nếu trình duyệt không phát animationend
-  }
-
   // Nhận hàng điều chuyển: gõ số thực nhận thì hiện ngay «thiếu N»; vượt số trên phiếu thì báo đỏ
   document.querySelectorAll('input[data-recv]').forEach((inp) => {
     const note = inp.parentNode.querySelector('.recv-short');
