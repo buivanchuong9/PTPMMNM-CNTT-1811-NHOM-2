@@ -29,6 +29,7 @@ final class ReturnController extends Controller
         [$rows, $pg] = Paginator::of($this->returns->list($scope, $status), $r);
         return $this->render('returns/index', $user, 'returns', [
             'rows' => $rows, 'pg' => $pg, 'status' => $status, 'counts' => $this->returns->counts($scope),
+            'receiveWh' => array_values(array_filter($scope, fn($id) => $this->auth->can($user, (int)$id, Permission::LapPhieuNhap))),   // kho được lập phiếu nhập ⇒ có nút «Cấp lại»
         ], 'Trả hàng nhà cung cấp');
     }
 

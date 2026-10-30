@@ -1,7 +1,7 @@
 <?php /** @var \StockFlow\Domain\VoucherType $type */
 $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
 ?>
-<header class="page-head"><div><p class="crumb"><?php if (!empty($replace)): ?><a href="/returns/<?= (int)$replace['id'] ?>">← Phiếu trả <?= e($replace['ma']) ?></a><?php else: ?><a href="/vouchers">← Quản lý phiếu</a><?php endif; ?></p><h1><?= e($type->label()) ?> mới</h1><?php if (!empty($replace)): ?><p class="muted">Hàng nhà cung cấp cấp lại cho phiếu trả <a href="/returns/<?= (int)$replace['id'] ?>"><b><?= e($replace['ma']) ?></b></a> — số lượng điền sẵn là phần còn thiếu.</p><?php endif; ?></div></header>
+<header class="page-head"><div><p class="crumb"><?php if (!empty($replace)): ?><a href="/returns/<?= (int)$replace['id'] ?>">← Phiếu trả <?= e($replace['ma']) ?></a><?php else: ?><a href="/vouchers">← Phiếu nhập xuất</a><?php endif; ?></p><h1><?= e($type->label()) ?> mới</h1><?php if (!empty($replace)): ?><p class="muted">Hàng nhà cung cấp cấp lại cho phiếu trả <a href="/returns/<?= (int)$replace['id'] ?>"><b><?= e($replace['ma']) ?></b></a> — số lượng điền sẵn là phần còn thiếu.</p><?php endif; ?></div></header>
 <?php if (!$warehouses): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu.</p></section>
 <?php else: ?>

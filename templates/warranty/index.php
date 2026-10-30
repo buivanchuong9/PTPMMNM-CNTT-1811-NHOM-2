@@ -3,7 +3,7 @@ use StockFlow\Service\WarrantyService as W;
 $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khách', 'info'], 'DA_TRA' => ['Đã trả khách', 'all']];
 ?>
 <header class="page-head">
-  <div><h1>Bảo hành</h1><p class="muted small">Hàng khách mang đến để sửa hoặc đổi. Chỉ mặt hàng có thời hạn bảo hành mới nhận.</p></div>
+  <div><h1>Bảo hành</h1></div>
   <?php if ($canHandle): ?><div class="actions"><button type="button" data-dialog-open="warranty-dlg"><?= icon('plus') ?>Nhận hàng bảo hành</button></div><?php endif; ?>
 </header>
 

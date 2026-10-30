@@ -1,9 +1,9 @@
-<?php /** @var array $rows @var array $counts @var string $status */
+<?php /** @var array $rows @var array $counts @var string $status @var array $receiveWh */
 use StockFlow\Service\SupplierReturnService as R;
 $tone = ['CHO_CAP_LAI' => 'warn', 'DA_CAP_LAI' => 'ok', 'HUY' => 'all'];
 ?>
 <header class="page-head">
-  <div><h1>Trả hàng nhà cung cấp</h1><p class="muted small">Hàng không đạt chất lượng khi nhận được trả lại nhà cung cấp, và theo dõi hàng cấp lại. Phiếu này tự tạo khi phiếu nhập có hàng không đạt được xác nhận.</p></div>
+  <div><h1>Trả hàng nhà cung cấp</h1></div>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach (R::STATUS as $k => [$label]): ?>
@@ -11,7 +11,7 @@ $tone = ['CHO_CAP_LAI' => 'warn', 'DA_CAP_LAI' => 'ok', 'HUY' => 'all'];
   <?php endforeach; ?>
 </nav>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
-  <thead><tr><th>Phiếu trả</th><th>Nhà cung cấp</th><th>Phiếu nhập gốc</th><th class="num">Trả lại</th><th class="num">Đã cấp lại</th><th>Ngày</th></tr></thead>
+  <thead><tr><th>Phiếu trả</th><th>Nhà cung cấp</th><th>Phiếu nhập gốc</th><th class="num">Trả lại</th><th class="num">Đã cấp lại</th><th>Ngày</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($rows as $t): ?>
     <tr data-tone="<?= $tone[$t['trang_thai']] ?>">
@@ -21,6 +21,7 @@ $tone = ['CHO_CAP_LAI' => 'warn', 'DA_CAP_LAI' => 'ok', 'HUY' => 'all'];
       <td class="num"><b><?= n($t['qty']) ?></b></td>
       <td class="num"><?= n($t['got']) ?></td>
       <td class="muted nw"><?= e(dt_short($t['ngay_tao'])) ?></td>
+      <td class="nw"><?php if ($t['trang_thai'] === 'CHO_CAP_LAI' && in_array((int)$t['kho_id'], $receiveWh, true)): ?><a class="btn" href="/vouchers/new?type=RECEIPT&amp;replace=<?= (int)$t['id'] ?>"><?= icon('in') ?>Cấp lại</a><?php endif; ?></td>
     </tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="empty">Chưa có phiếu trả hàng nào ở mục này.</td></tr><?php endif; ?>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="empty">Chưa có phiếu trả hàng nào ở mục này.</td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>
