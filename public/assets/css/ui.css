@@ -297,6 +297,24 @@ mark.hl { padding: 0 2px; border-radius: 3px; background: color-mix(in srgb, var
 .cat-bar .cat-tabs a { flex: 0 0 auto; white-space: nowrap; }
 @media (max-width: 700px) { .cat-bar { flex-direction: column; align-items: stretch; border-radius: 16px; } .cat-bar .cat-search { flex-basis: auto; } }
 .cat-bar .cat-tabs a[hidden] { display: none !important; }
+/* Nút «Khác» xổ danh mục còn lại, có ô tìm */
+.cat-bar .cat-more { position: relative; flex: 0 0 auto; }
+.cat-more-btn, .cat-more-btn:hover, .cat-more-btn:focus { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink-2); font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s; }
+.cat-more-btn:hover, .cat-more.open .cat-more-btn { border-color: var(--brand); color: var(--ink); }
+.cat-more-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cat-more-caret { width: 12px; height: 12px; transition: transform .15s; }
+.cat-more.open .cat-more-caret { transform: rotate(180deg); }
+.cat-more-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; width: min(300px, calc(100vw - 24px)); padding: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; box-shadow: 0 12px 32px rgba(16, 24, 40, .18); }
+.cat-more-pop[hidden] { display: none; }
+.cat-more-q { width: 100%; margin: 0 0 6px; }
+.cat-more-pop ul { list-style: none; margin: 0; padding: 0; max-height: min(50vh, 320px); overflow-y: auto; }
+.cat-more-pop li[hidden] { display: none; }
+.cat-more-pop li a { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 2px; color: var(--ink); text-decoration: none; }
+.cat-more-pop li a:hover, .cat-more-pop li a:focus-visible { background: var(--panel); outline: none; }
+.cat-more-pop .count { color: var(--muted); font-size: .8rem; }
+.cat-more-empty { margin: 0; padding: 10px; color: var(--muted); font-size: .85rem; text-align: center; }
+.cat-more-empty[hidden] { display: none; }
+
 .filters .date-f { display: inline-flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; font-weight: 600; color: var(--ink-2); }
 .filters .date-f input { width: auto; }
 .sup-pick { display: grid; gap: 4px; max-height: 170px; overflow-y: auto; margin: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }

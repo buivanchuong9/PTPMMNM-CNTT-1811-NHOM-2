@@ -11,14 +11,41 @@
   </div>
 </header>
 <?php $catQs = fn($v) => http_build_query(array_filter(['category' => $v, 'q' => $q, 'warehouse' => $wh, 'view' => $byBatch ? 'batch' : '', 'price' => $priceSel, 'supplier' => $supF, 'expiry' => $expiry], fn($x) => $x !== null && $x !== '' && $x !== 0)); ?>
-<div class="cat-bar">
-  <input type="search" id="cat-search" class="cat-search" placeholder="Tìm danh mục…" aria-label="Tìm danh mục" autocomplete="off">
-  <nav class="tabs cat-tabs" id="cat-tabs" aria-label="Danh mục hàng hoá" data-live="tabs">
+<?php
+// Thanh danh mục gọn: «Tất cả» + vài danh mục nhiều hàng nhất (hoặc đang chọn) hiện thành tab, phần còn lại xổ trong nút «Khác» có ô tìm.
+$tabMax = 5;
+$tabIds = array_map('intval', array_column($categories, 'id'));
+if (count($categories) > $tabMax + 1) {
+    $ranked = $categories;
+    usort($ranked, fn($x, $y) => (int)$y['items'] <=> (int)$x['items']);
+    $tabIds = array_map('intval', array_column(array_slice($ranked, 0, $tabMax), 'id'));
+    if ($cat > 0 && !in_array($cat, $tabIds, true)) { array_pop($tabIds); $tabIds[] = $cat; }
+}
+$moreCats = array_values(array_filter($categories, fn($c) => !in_array((int)$c['id'], $tabIds, true)));
+$uncatTab = $uncategorized > 0 && ($cat === -1 || !$moreCats);
+$moreCount = count($moreCats) + ($uncategorized > 0 && !$uncatTab ? 1 : 0);
+?>
+<div class="cat-bar" data-live="tabs">
+  <nav class="tabs cat-tabs" id="cat-tabs" aria-label="Danh mục hàng hoá">
   <a href="/inventory?<?= e($catQs('')) ?>"<?= $cat === 0 ? ' class="active" aria-current="page"' : '' ?>>Tất cả <span class="count"><?= n($totalItems) ?></span></a>
-  <?php foreach ($categories as $c): ?><a href="/inventory?<?= e($catQs((string)$c['id'])) ?>"<?= $cat === (int)$c['id'] ? ' class="active" aria-current="page"' : '' ?>><?= e($c['ten']) ?> <span class="count"><?= n($c['items']) ?></span></a>
+  <?php foreach ($categories as $c): if (!in_array((int)$c['id'], $tabIds, true)) continue; ?><a href="/inventory?<?= e($catQs((string)$c['id'])) ?>"<?= $cat === (int)$c['id'] ? ' class="active" aria-current="page"' : '' ?>><?= e($c['ten']) ?> <span class="count"><?= n($c['items']) ?></span></a>
   <?php endforeach; ?>
-  <?php if ($uncategorized > 0): ?><a href="/inventory?<?= e($catQs('none')) ?>"<?= $cat === -1 ? ' class="active" aria-current="page"' : '' ?>>Chưa phân loại <span class="count"><?= n($uncategorized) ?></span></a><?php endif; ?>
+  <?php if ($uncatTab): ?><a href="/inventory?<?= e($catQs('none')) ?>"<?= $cat === -1 ? ' class="active" aria-current="page"' : '' ?>>Chưa phân loại <span class="count"><?= n($uncategorized) ?></span></a><?php endif; ?>
   </nav>
+  <?php if ($moreCount > 0): ?>
+  <div class="cat-more">
+    <button type="button" class="cat-more-btn" aria-haspopup="true" aria-expanded="false" title="Phím tắt: /">Khác <span class="count"><?= $moreCount ?></span> <svg class="cat-more-caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="cat-more-pop" hidden>
+      <input type="search" class="cat-more-q" placeholder="Tìm danh mục…" aria-label="Tìm danh mục" autocomplete="off">
+      <ul>
+        <?php foreach ($moreCats as $c): ?><li><a href="/inventory?<?= e($catQs((string)$c['id'])) ?>"><span><?= e($c['ten']) ?></span><span class="count"><?= n($c['items']) ?></span></a></li>
+        <?php endforeach; ?>
+        <?php if ($uncategorized > 0 && !$uncatTab): ?><li><a href="/inventory?<?= e($catQs('none')) ?>"><span>Chưa phân loại</span><span class="count"><?= n($uncategorized) ?></span></a></li><?php endif; ?>
+      </ul>
+      <p class="cat-more-empty" hidden>Không có danh mục khớp.</p>
+    </div>
+  </div>
+  <?php endif; ?>
 </div>
 <?php if (!$categories): ?><p class="muted">Chưa có danh mục nào<?= $user->isAdmin ? ' — bấm «Thêm danh mục» để tạo.' : '.' ?></p><?php endif; ?>
 <form class="filters" method="get">
