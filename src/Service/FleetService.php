@@ -176,6 +176,29 @@ final class FleetService
                 'ghi_chu_gia' => mb_substr(trim((string)($pay['ghi_chu'] ?? '')), 0, 255)];
     }
 
+    /** Giá trị hàng trên phiếu (số lượng × đơn giá trên dòng, chưa có thì giá vốn): số tiền đơn vị vận tải thuê ngoài phải cọc trước khi nhận hàng. */
+    public function goodsValue(int $voucherId): int
+    {
+        $r = $this->db->one('SELECT COALESCE(SUM(c.so_luong * COALESCE(c.don_gia, m.gia_von, 0)), 0) AS v FROM chi_tiet_phieu_nhap_xuat c JOIN mat_hang m ON m.id = c.mat_hang_id WHERE c.phieu_nhap_xuat_id = ?', [$voucherId]);
+        return (int)($r['v'] ?? 0);
+    }
+
+    /**
+     * Thuê ngoài: hàng không nằm trong tầm kiểm soát của kho nên bên vận tải phải cọc đủ giá trị hàng trước khi nhận (mất hàng thì giữ cọc).
+     * @param array<string,string> $c coc_ok = '1' (kho đã thu cọc), coc_pt = TIEN_MAT | CHUYEN_KHOAN @return array{tien:int,pt:string}
+     */
+    public function externalDeposit(int $voucherId, array $c): array
+    {
+        $pt = (string)($c['coc_pt'] ?? '');
+        if (!isset(DeliveryService::METHODS[$pt])) {
+            throw new DomainError('Thuê ngoài: chọn hình thức đơn vị vận tải nộp tiền cọc hàng (tiền mặt hoặc chuyển khoản)');
+        }
+        if (($c['coc_ok'] ?? '') !== '1') {
+            throw new DomainError('Thuê ngoài: phải thu đủ tiền cọc bằng giá trị hàng trước khi bàn giao hàng');
+        }
+        return ['tien' => $this->goodsValue($voucherId), 'pt' => $pt];
+    }
+
     /**
      * Bàn giao hàng cho đơn vị vận tải bên thứ ba: PHẢI có đủ thông tin đơn vị, tài xế (họ tên, CCCD, điện thoại) và xe (biển số, loại xe).
      * Xe và tài xế thuê ngoài được lưu (đánh dấu thue_ngoai, dùng lại khi trùng biển số / CCCD) để chuyến vẫn có hồ sơ người chở; không hiện trong đội xe của kho.

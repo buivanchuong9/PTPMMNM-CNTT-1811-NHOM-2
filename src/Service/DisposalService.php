@@ -22,7 +22,10 @@ final class DisposalService
         'CHO_DUYET' => ['Chờ duyệt', 'warn'], 'TRONG_KHO_HUY' => ['Trong kho huỷ', 'info'], 'DA_TIEU_HUY' => ['Đã tiêu huỷ', 'muted'], 'TU_CHOI' => ['Đã từ chối', 'danger'],
     ];
 
-    public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit, private VoucherRepository $vouchers, private Ledger $ledger) {}
+    /** Nơi tiêu huỷ mặc định khi kho chưa đặt riêng. */
+    public const DEFAULT_SITE = ['name' => 'Khu xử lý chất thải Nam Sơn', 'address' => 'Xã Nam Sơn, Huyện Sóc Sơn, Hà Nội'];
+
+    public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit, private VoucherRepository $vouchers, private Ledger $ledger, private FleetService $fleet, private TransportService $transport) {}
 
     /**
      * Đề xuất huỷ một dòng hàng. Người có quyền duyệt thì hàng vào kho huỷ ngay.
@@ -72,10 +75,10 @@ final class DisposalService
     }
 
     private const SELECT = 'SELECT h.*, w.ma AS wh_code, w.ten AS wh_name, i.ma_hang, i.ten AS item_name, u.ma AS unit, b.so_lo, b.han_dung, i.quan_ly_lo,
-                                   lu.ho_ten AS creator_name, du.ho_ten AS approver_name, v.ma AS voucher_code, h.so_luong * h.gia_von AS value
+                                   lu.ho_ten AS creator_name, du.ho_ten AS approver_name, v.ma AS voucher_code, xe.bien_so, tx.ho_ten AS tai_xe_ten, h.so_luong * h.gia_von AS value
                             FROM huy_hang h JOIN kho w ON w.id = h.kho_id JOIN mat_hang i ON i.id = h.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
                             JOIN lo_hang b ON b.id = h.lo_hang_id JOIN nguoi_dung lu ON lu.id = h.nguoi_lap_id LEFT JOIN nguoi_dung du ON du.id = h.nguoi_duyet_id
-                            LEFT JOIN phieu_nhap_xuat v ON v.id = h.phieu_nhap_xuat_id';
+                            LEFT JOIN phieu_nhap_xuat v ON v.id = h.phieu_nhap_xuat_id LEFT JOIN xe ON xe.id = h.xe_id LEFT JOIN tai_xe tx ON tx.id = h.tai_xe_id';
 
     public function find(int $id): array
     {
@@ -239,15 +242,114 @@ final class DisposalService
         $this->audit->record($user->id, 'disposal.reject', 'disposal', $id, $peek['ma']);
     }
 
-    /** Xác nhận đã tiêu huỷ thật (hàng rời kho huỷ). */
+    /**
+     * Hoàn tác khi bấm nhầm, lùi từng bước: đã tiêu huỷ ⇒ xe vẫn đang chở · đang trên xe ⇒ hàng xuống xe, nằm lại kho huỷ · nằm trong kho huỷ ⇒ trả hàng về tồn bằng phiếu điều chỉnh cộng lại và đóng phiếu huỷ (không huỷ nữa).
+     * @return string trạng thái mới
+     */
+    public function undo(User $user, int $id): string
+    {
+        $peek = $this->find($id);
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanHuy);
+        return $this->db->transaction(function () use ($user, $id) {
+            $h = $this->db->one('SELECT * FROM huy_hang WHERE id = ? FOR UPDATE', [$id]);
+            if ($h['trang_thai'] === 'DA_TIEU_HUY') {
+                $this->db->exec("UPDATE huy_hang SET trang_thai = 'TRONG_KHO_HUY', ngay_tieu_huy = NULL WHERE id = ?", [$id]);
+                $this->audit->record($user->id, 'disposal.undo', 'disposal', $id, $h['ma'] . ' · bấm nhầm đã đến, xe vẫn đang chở hàng');
+                return 'TRONG_KHO_HUY';
+            }
+            if ($h['trang_thai'] === 'TRONG_KHO_HUY' && $h['xe_id'] !== null) {
+                $this->db->exec("UPDATE huy_hang SET xe_id = NULL, tai_xe_id = NULL, ngay_xuat = NULL, don_vi_tieu_huy = '', dia_chi_tieu_huy = '' WHERE id = ?", [$id]);
+                $this->audit->record($user->id, 'disposal.undo', 'disposal', $id, $h['ma'] . ' · hàng xuống xe, quay lại kho huỷ');
+                return 'KHO_HUY';
+            }
+            if ($h['trang_thai'] !== 'TRONG_KHO_HUY') {
+                throw new DomainError('Chỉ hàng đang ở kho huỷ hoặc đã tiêu huỷ mới hoàn tác được');
+            }
+            $voucherId = $this->vouchers->insert([
+                'loai' => VoucherType::Adjustment->value, 'trang_thai' => 'CONFIRMED', 'kho_id' => (int)$h['kho_id'],
+                'ly_do' => 'Hoàn tác huỷ hàng ' . $h['ma'] . ': trả hàng về tồn', 'nguoi_lap_id' => $user->id,
+            ], [['mat_hang_id' => (int)$h['mat_hang_id'], 'lo_hang_id' => (int)$h['lo_hang_id'], 'so_luong' => (int)$h['so_luong'], 'ghi_chu' => 'Hoàn tác huỷ', 'gia_von' => (int)$h['gia_von']]]);
+            $adj = $this->vouchers->lock($voucherId);
+            $ops = $this->vouchers->ops($adj, $this->vouchers->lines($voucherId));
+            $this->ledger->lock($this->vouchers->lockKeys($ops));
+            $this->ledger->post($ops);
+            $this->db->exec("UPDATE huy_hang SET trang_thai = 'TU_CHOI', ghi_chu = ? WHERE id = ?", [mb_substr('Hoàn tác: trả hàng về tồn (phiếu điều chỉnh)', 0, 255), $id]);
+            $this->audit->record($user->id, 'disposal.undo', 'disposal', $id, $h['ma'] . ' · trả hàng về tồn');
+            return 'TU_CHOI';
+        });
+    }
+
+    /** Nơi tiêu huỷ của kho: kho tự đặt, chưa đặt thì dùng nơi mặc định. @return array{name:string,address:string,custom:bool} */
+    public function site(int $warehouseId): array
+    {
+        $k = $this->db->one('SELECT noi_tieu_huy, dia_chi_tieu_huy FROM kho WHERE id = ?', [$warehouseId]) ?? throw new DomainError('Kho không tồn tại');
+        if (trim((string)$k['noi_tieu_huy']) !== '' && trim((string)$k['dia_chi_tieu_huy']) !== '') {
+            return ['name' => (string)$k['noi_tieu_huy'], 'address' => (string)$k['dia_chi_tieu_huy'], 'custom' => true];
+        }
+        return self::DEFAULT_SITE + ['custom' => false];
+    }
+
+    /** Đặt nơi tiêu huỷ của kho (hàng sẽ được giao đến đây). Để trống cả hai ô = quay về nơi mặc định. */
+    public function setSite(User $user, int $warehouseId, string $name, string $address): void
+    {
+        $this->auth->require($user, $warehouseId, Permission::XacNhanHuy);
+        $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
+        $address = trim(preg_replace('/\s+/u', ' ', $address) ?? '');
+        if (($name === '') !== ($address === '')) {
+            throw new DomainError('Nhập đủ tên đơn vị và địa chỉ tiêu huỷ (hoặc để trống cả hai để dùng nơi mặc định)');
+        }
+        if (mb_strlen($name) > 120 || mb_strlen($address) > 255) {
+            throw new DomainError('Tên đơn vị tối đa 120 ký tự, địa chỉ tối đa 255 ký tự');
+        }
+        $this->db->exec('UPDATE kho SET noi_tieu_huy = ?, dia_chi_tieu_huy = ? WHERE id = ?', [$name, $address, $warehouseId]);
+        $this->audit->record($user->id, 'disposal.site', 'warehouse', $warehouseId, $name === '' ? 'dùng nơi tiêu huỷ mặc định' : "$name · $address");
+    }
+
+    /**
+     * Nhận hàng từ kho huỷ lên xe và xuất đi tiêu huỷ: chọn xe của kho + tài xế, tài xế xác nhận đã nhận hàng; nơi đến là nơi tiêu huỷ của kho (chốt tại thời điểm đi).
+     * Xe phải đủ tải / giấy tờ / bằng lái như mọi chuyến chở hàng.
+     */
+    public function load(User $user, int $id, int $vehicleId, int $driverId, bool $driverOk): void
+    {
+        $peek = $this->find($id);
+        $wh = (int)$peek['kho_id'];
+        $this->auth->require($user, $wh, Permission::XacNhanHuy);
+        if (!$vehicleId || !$driverId) {
+            throw new DomainError('Chọn xe và tài xế chở hàng đi tiêu huỷ');
+        }
+        if (!$driverOk) {
+            throw new DomainError('Tài xế phải xác nhận đã nhận đủ hàng lên xe');
+        }
+        $this->db->transaction(function () use ($user, $id, $vehicleId, $driverId, $wh) {
+            $h = $this->db->one('SELECT * FROM huy_hang WHERE id = ? FOR UPDATE', [$id]);
+            if ($h['trang_thai'] !== 'TRONG_KHO_HUY' || $h['xe_id'] !== null) {
+                throw new DomainError('Chỉ hàng đang nằm trong kho huỷ mới xuất đi tiêu huỷ được');
+            }
+            $xe = $this->db->one('SELECT * FROM xe WHERE id = ? FOR UPDATE', [$vehicleId]);
+            if (!$xe || !$xe['hoat_dong'] || (int)$xe['thue_ngoai'] || (int)($xe['kho_hien_tai_id'] ?? 0) !== $wh) {
+                throw new DomainError('Chọn xe của kho đang đứng tại kho này');
+            }
+            $tx = $this->fleet->assignableDriver($driverId, $wh);
+            $this->transport->assertCanCarry($vehicleId, [['mat_hang_id' => (int)$h['mat_hang_id'], 'so_luong' => (int)$h['so_luong']]], (int)$tx['id']);
+            $site = $this->site($wh);
+            $this->db->exec('UPDATE huy_hang SET xe_id = ?, tai_xe_id = ?, ngay_xuat = CURRENT_TIMESTAMP, don_vi_tieu_huy = ?, dia_chi_tieu_huy = ? WHERE id = ?',
+                [$vehicleId, (int)$tx['id'], $site['name'], $site['address'], $id]);
+            $this->audit->record($user->id, 'disposal.load', 'disposal', $id, $h['ma'] . " · {$xe['bien_so']} · {$tx['ho_ten']} → {$site['name']}, {$site['address']}");
+        });
+    }
+
+    /** Xe đã đến nơi tiêu huỷ: xác nhận ⇒ hàng được tiêu huỷ (rời kho huỷ). */
     public function destroy(User $user, int $id): void
     {
         $peek = $this->find($id);
         $this->auth->require($user, (int)$peek['kho_id'], Permission::XacNhanHuy);
-        $n = $this->db->exec("UPDATE huy_hang SET trang_thai = 'DA_TIEU_HUY', ngay_tieu_huy = CURRENT_TIMESTAMP WHERE id = ? AND trang_thai = 'TRONG_KHO_HUY'", [$id]);
-        if ($n !== 1) {
-            throw new DomainError('Chỉ hàng đang ở kho huỷ mới xác nhận tiêu huỷ được');
+        if ($peek['trang_thai'] === 'TRONG_KHO_HUY' && $peek['xe_id'] === null) {
+            throw new DomainError('Hàng chưa lên xe đi tiêu huỷ — nhận hàng lên xe trước');
         }
-        $this->audit->record($user->id, 'disposal.destroy', 'disposal', $id, $peek['ma']);
+        $n = $this->db->exec("UPDATE huy_hang SET trang_thai = 'DA_TIEU_HUY', ngay_tieu_huy = CURRENT_TIMESTAMP WHERE id = ? AND trang_thai = 'TRONG_KHO_HUY' AND xe_id IS NOT NULL", [$id]);
+        if ($n !== 1) {
+            throw new DomainError('Chỉ hàng đang trên xe đi tiêu huỷ mới xác nhận đến nơi được');
+        }
+        $this->audit->record($user->id, 'disposal.destroy', 'disposal', $id, $peek['ma'] . ' · xe đã đến ' . $peek['don_vi_tieu_huy'] . ', ' . $peek['dia_chi_tieu_huy'] . ' · đã tiêu huỷ');
     }
 }

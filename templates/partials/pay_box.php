@@ -59,6 +59,11 @@ $driverOptions = function () use ($crewDrivers, $crewFit): string {
       <label>Hạng bằng<select name="ext_lic_class" data-req<?= $fa ?>><option value="">Chọn…</option><?php foreach (array_filter(\StockFlow\Domain\TransportRules::CLASSES, fn($k) => $k[4]) as $k => $cl): ?><option value="<?= e($k) ?>"><?= e($cl[0]) ?></option><?php endforeach; ?></select></label>
       <label>Hạn bằng lái<input type="date" name="ext_lic_exp"<?= $fa ?>></label>
     </div>
+    <div class="row-3" style="grid-template-columns:1fr 1fr">
+      <label>Tiền cọc hàng (bằng giá trị hàng)<input value="<?= e(n((int)($goodsValue ?? 0))) ?> đ" readonly></label>
+      <label>Hình thức nộp cọc<select name="ext_coc_pt" data-req<?= $fa ?>><option value="">Chọn…</option><?php foreach (\StockFlow\Service\DeliveryService::METHODS as $k => $label): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></label>
+    </div>
+    <label class="check"><input type="checkbox" name="ext_coc_ok" value="1" data-req<?= $fa ?>> Đã thu đủ tiền cọc — mất hàng thì kho giữ khoản cọc này</label>
   </fieldset>
   <div data-pay-fields<?= $dm ? ' hidden' : '' ?>>
     <?php if ($dm): ?>

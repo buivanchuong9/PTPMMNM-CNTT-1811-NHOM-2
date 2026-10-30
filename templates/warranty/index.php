@@ -60,14 +60,14 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
     <label>Mặt hàng<select name="item_id" required><option value="">Chọn mặt hàng…</option><?php foreach ($items as $i): ?><option value="<?= (int)$i['id'] ?>"><?= e($i['ma_hang'] . ' — ' . $i['ten'] . ' (BH ' . $i['bao_hanh_thang'] . ' tháng)') ?></option><?php endforeach; ?></select></label>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Số lượng<input type="number" name="qty" min="1" max="1000" value="1" required></label>
-      <label>Ngày mua<input type="date" name="bought" max="<?= e($today) ?>" required></label>
+      <label>Mã phiếu mua (phiếu xuất bán)<input name="phieu_mua" maxlength="30" required autocomplete="off" placeholder="vd: PX-261030-00001"></label>
     </div>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Tên khách<input name="customer" maxlength="120" required></label>
       <label>Điện thoại<input name="phone" maxlength="20" inputmode="tel"></label>
     </div>
     <label>Tình trạng lỗi<input name="defect" maxlength="255" required placeholder="Không lên nguồn, vỡ màn hình…"></label>
-    <p class="muted small">Quá hạn bảo hành vẫn nhận được, nhưng không đổi mới miễn phí. Hàng của khách không tính vào tồn kho.</p>
+    <p class="muted small">Ngày mua lấy theo phiếu mua; mặt hàng phải có nhà sản xuất / nhà cung cấp. Quá hạn bảo hành vẫn nhận được, nhưng không đổi mới miễn phí. Hàng của khách không tính vào tồn kho.</p>
     <div class="actions"><button type="submit"><?= icon('check') ?>Nhận hàng</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
     <?php endif; ?>
   </form>

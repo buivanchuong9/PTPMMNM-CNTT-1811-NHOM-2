@@ -131,6 +131,19 @@ final class Migrator
         ['chuyen_van_chuyen', 'tien_tra', 'bigint NOT NULL DEFAULT 0'],
         ['chuyen_van_chuyen', 'don_vi_van_tai', "varchar(120) NOT NULL DEFAULT ''"],
         ['chuyen_van_chuyen', 'ghi_chu_gia', "varchar(255) NOT NULL DEFAULT ''"],
+        ['kho', 'noi_tieu_huy', "varchar(120) NOT NULL DEFAULT ''"],   // nơi nhận hàng tiêu huỷ của kho (trống = dùng nơi mặc định)
+        ['kho', 'dia_chi_tieu_huy', "varchar(255) NOT NULL DEFAULT ''"],
+        ['huy_hang', 'xe_id', 'integer NULL'],   // xe chở hàng đi tiêu huỷ (NULL = còn nằm trong kho huỷ)
+        ['huy_hang', 'tai_xe_id', 'integer NULL'],
+        ['huy_hang', 'ngay_xuat', 'timestamp NULL'],
+        ['huy_hang', 'don_vi_tieu_huy', "varchar(120) NOT NULL DEFAULT ''"],   // nơi nhận hàng về tiêu huỷ
+        ['huy_hang', 'dia_chi_tieu_huy', "varchar(255) NOT NULL DEFAULT ''"],
+        ['bao_hanh', 'phieu_mua_id', 'bigint NULL'],   // phiếu xuất bán chứng minh khách đã mua hàng
+        ['bao_hanh', 'nha_san_xuat', "varchar(255) NOT NULL DEFAULT ''"],   // nhà sản xuất / nhà cung cấp của mặt hàng lúc nhận bảo hành
+        ['chuyen_van_chuyen', 'tien_coc', 'bigint NOT NULL DEFAULT 0'],   // tiền cọc giá trị hàng thu của đơn vị vận tải thuê ngoài
+        ['chuyen_van_chuyen', 'phuong_thuc_coc', "varchar(12) NOT NULL DEFAULT ''"],
+        ['giao_hang', 'tien_coc', 'bigint NOT NULL DEFAULT 0'],
+        ['giao_hang', 'phuong_thuc_coc', "varchar(12) NOT NULL DEFAULT ''"],
         ['chi_tiet_kiem_ke', 'so_luong_hong', 'integer NOT NULL DEFAULT 0'],
         ['chi_tiet_kiem_ke', 'ly_do_hong', "varchar(20) NOT NULL DEFAULT ''"],
         ['chi_tiet_kiem_ke', 'ghi_chu_hong', "varchar(255) NOT NULL DEFAULT ''"],

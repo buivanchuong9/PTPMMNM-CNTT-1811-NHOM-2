@@ -163,6 +163,7 @@ final class TransferService
         return $this->db->transaction(function () use ($user, $outId, $vehicleId, $driverConfirmed, $pay, $checkFefo, $driverId) {
             $out = $this->repo->lock($outId);
             $xe = $tx = null;
+            $deposit = ['tien' => 0, 'pt' => ''];
             $trip = ['hinh_thuc' => 'NOI_BO', 'km' => 0, 'don_gia_km' => 0, 'tien_goi_y' => 0, 'tien_tra' => 0, 'don_vi_van_tai' => '', 'ghi_chu_gia' => ''];
             if ($out['trang_thai'] === 'DRAFT') {
                 $external = ($pay['hinh_thuc'] ?? 'NOI_BO') === 'THUE_NGOAI';
@@ -170,6 +171,7 @@ final class TransferService
                     $trip = $this->tripPay((int)$out['kho_id'], (int)$out['kho_doi_ung_id'], $pay);
                 }
                 if ($external) {
+                    $deposit = $this->fleet->externalDeposit($outId, $pay['ngoai'] ?? []);   // cọc đủ giá trị hàng mới được bàn giao
                     $vehicleId = $this->fleet->registerExternal((int)$out['kho_id'], $pay['ngoai'] ?? []);   // đủ thông tin bên thứ ba mới được bàn giao hàng
                 }
                 if (!$vehicleId) {
@@ -206,9 +208,9 @@ final class TransferService
                 $in = $this->repo->pairOf($res['voucher']) ?? throw new DomainError('Không tìm thấy phiếu đến đối ứng');
                 $this->db->insert(
                     'INSERT INTO chuyen_van_chuyen (phieu_di_id, phieu_den_id, xe_id, tai_xe_id, kho_di_id, kho_den_id, tai_xe_xac_nhan_du_hang, nguoi_giao_id,
-                                                    hinh_thuc, km, don_gia_km, tien_goi_y, tien_tra, don_vi_van_tai, ghi_chu_gia) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                                                    hinh_thuc, km, don_gia_km, tien_goi_y, tien_tra, don_vi_van_tai, ghi_chu_gia, tien_coc, phuong_thuc_coc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     [$outId, (int)$in['id'], $vehicleId, (int)$tx['id'], (int)$out['kho_id'], (int)$out['kho_doi_ung_id'], 1, $user->id,
-                     $trip['hinh_thuc'], $trip['km'], $trip['don_gia_km'], $trip['tien_goi_y'], $trip['tien_tra'], $trip['don_vi_van_tai'], $trip['ghi_chu_gia']]
+                     $trip['hinh_thuc'], $trip['km'], $trip['don_gia_km'], $trip['tien_goi_y'], $trip['tien_tra'], $trip['don_vi_van_tai'], $trip['ghi_chu_gia'], $deposit['tien'], $deposit['pt']]
                 );
                 $this->db->exec('UPDATE xe SET kho_hien_tai_id = NULL, dang_den_kho_id = ? WHERE id = ?', [(int)$out['kho_doi_ung_id'], $vehicleId]);
                 $this->audit->record($user->id, 'transfer.vehicle', 'voucher', $outId, "{$xe['bien_so']} · {$tx['ho_ten']} · tài xế xác nhận đủ hàng"
