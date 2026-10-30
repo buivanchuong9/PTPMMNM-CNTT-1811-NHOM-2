@@ -1,4 +1,4 @@
-<header class="page-head"><div><p class="crumb"><a href="/vouchers">← Quản lý phiếu</a></p><h1>Điều chuyển kho</h1></div></header>
+<header class="page-head"><div><p class="crumb"><a href="/vouchers">← Phiếu nhập xuất</a></p><h1>Điều chuyển kho</h1></div></header>
 <?php if (!$from): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu điều chuyển.</p></section>
 <?php else: ?>

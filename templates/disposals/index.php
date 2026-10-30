@@ -5,7 +5,7 @@ $tabTone = ['CHO_DUYET' => 'warn', 'TRONG_KHO_HUY' => 'info', 'DA_TIEU_HUY' => '
 $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_dung'] ? ' (HSD ' . dt($r['han_dung'], false) . ')' : '') : '';
 ?>
 <header class="page-head">
-  <div><h1>Kho huỷ</h1><p class="muted small">Hàng hết hạn, vỡ, hỏng, không bán được. Duyệt xong hàng rời tồn và nằm chờ tiêu huỷ.</p></div>
+  <div><h1>Kho huỷ</h1></div>
   <div class="actions">
     <?php if ($canApprove): ?><button type="button" class="btn-ghost" data-dialog-open="site-dlg"><?= icon('pin') ?>Nơi tiêu huỷ</button><?php endif; ?>
     <?php if ($canPropose): ?><button type="button" data-dialog-open="dispose-dlg"><?= icon('plus') ?>Huỷ hàng</button><?php endif; ?></div>

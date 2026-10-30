@@ -5,7 +5,7 @@ $total = array_sum($counts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh, 'category' => $catSel, 'item' => $item, 'range' => $rangeSel === 'custom' ? '' : $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort === 'old' ? 'old' : null], $over), fn($v) => $v !== null && $v !== ''));
 ?>
 <header class="page-head">
-  <div><h1>Quản lý phiếu</h1></div>
+  <div><h1>Phiếu nhập xuất</h1></div>
 </header>
 <?php use StockFlow\Domain\Permission as Pm;
 $create = array_filter([

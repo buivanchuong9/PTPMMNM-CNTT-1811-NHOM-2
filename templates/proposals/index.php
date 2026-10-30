@@ -3,7 +3,7 @@ use StockFlow\Service\ItemProposalService as I;
 $tones = ['' => 'all', 'PENDING' => 'warn', 'APPROVED' => 'ok', 'REJECTED' => 'bad', 'CANCELLED' => 'bad'];
 ?>
 <header class="page-head">
-  <div><h1>Đề xuất hàng mới</h1><p class="muted"><?= $canReview ? 'Quản lý kho quét ra mã vạch chưa có trong hệ thống và đề xuất thêm mặt hàng. Chấp nhận thì mặt hàng được tạo kèm mã vạch.' : 'Quét mã vạch chưa có trong hệ thống để gửi đề xuất. Quản trị chấp nhận rồi bạn lập phiếu nhập.' ?></p></div>
+  <div><h1>Đề xuất hàng mới</h1></div>
   <?php if ($canPropose): ?><div class="page-actions"><button type="button" data-scan-open><?= icon('scan') ?>Quét mã vạch</button></div><?php endif; ?>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">

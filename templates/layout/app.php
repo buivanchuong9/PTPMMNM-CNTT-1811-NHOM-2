@@ -7,8 +7,8 @@ $groups = [
         'dashboard' => ['/', 'home', 'Tổng quan', [P::XemTongQuan]],
         // mục có con (phần tử thứ 5): bấm mở trang cha, bấm mũi tên ▾ để xổ / gập các mục con; mục con lọc theo quyền riêng
         // mục cha chỉ xổ / gập các mục con (href '#'), không phải một trang
-        'vouchers-group' => ['#', 'file', 'Quản lý phiếu', [P::XemPhieu], [
-            'vouchers' => ['/vouchers', 'file', 'Quản lý phiếu', [P::XemPhieu]],
+        'vouchers-group' => ['#', 'file', 'Nghiệp vụ kho', [P::XemPhieu], [
+            'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
             'returns' => ['/returns', 'truck', 'Trả hàng nhà cung cấp', [P::XemPhieu]],
             'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
             'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
