@@ -164,9 +164,9 @@
     if (!data.tracked) { box.innerHTML = '<p class="empty">Mặt hàng này không quản lý theo lô nên không có hạn dùng.</p>'; return; }
     if (!data.lots.length) { box.innerHTML = '<p class="empty">Chưa có lô nào còn tồn.</p>'; return; }
     const fmt = (d) => (d ? d.split('-').reverse().join('/') : '—');
-    box.innerHTML = '<table class="dense"><thead><tr><th>Lô</th><th>Hạn dùng</th><th>Tình trạng</th>'
+    box.innerHTML = '<table class="dense"><thead><tr><th>Lô</th><th>Hạn dùng</th><th>Bảo hành</th><th>Tình trạng</th>'
       + whs.map((w) => `<th class="num">${esc(w.ma)}</th>`).join('') + '<th class="num">Tổng</th></tr></thead><tbody>'
-      + data.lots.map((l, i) => `<tr><td><b>${esc(l.lot)}</b>${i === 0 && l.state.status !== 'expired' ? ' <span class="tag tag-info">Xuất trước</span>' : ''}</td><td>${fmt(l.exp)}</td><td>${(LOT_TAG[l.state.status] || LOT_TAG.none)(l.state.days)}</td>`
+      + data.lots.map((l, i) => `<tr><td><b>${esc(l.lot)}</b>${i === 0 && l.state.status !== 'expired' ? ' <span class="tag tag-info">Xuất trước</span>' : ''}</td><td>${fmt(l.exp)}</td><td>${l.bh ? '<b>' + l.bh + '</b> tháng' : '<span class="muted">—</span>'}</td><td>${(LOT_TAG[l.state.status] || LOT_TAG.none)(l.state.days)}</td>`
         + whs.map((w) => `<td class="num${l.by[w.id] ? '' : ' muted'}">${vn.format(l.by[w.id] || 0)}</td>`).join('')
         + `<td class="num"><b>${vn.format(l.total)}</b> <small class="muted">${esc(data.unit)}</small></td></tr>`).join('')
       + '</tbody></table>';
@@ -1532,6 +1532,42 @@ document.addEventListener('change', (ev) => {
       const more = document.querySelector('.cat-more');
       if (more) { e.preventDefault(); setOpen(more, true); }
     }
+  });
+})();
+
+// Form nhận bảo hành: nhập đủ «mã lô hàng» + «mã món hàng» (gõ tay hoặc máy quét USB) ⇒ tra ra mặt hàng, ngày mua, hạn bảo hành, hoá đơn.
+// Tra được thì mặt hàng / mã phiếu mua không còn bắt buộc (hệ thống lấy theo mã).
+(() => {
+  let timer = 0, seq = 0;
+  const fmt = (d) => (d || '').split('-').reverse().join('/');
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const run = async (form) => {
+    const lot = form.querySelector('[data-sale-lot]'), item = form.querySelector('[data-sale-item]'), info = form.querySelector('[data-sale-info]');
+    if (!lot || !item || !info) return;
+    const needs = form.querySelectorAll('[data-sale-need]');
+    const setNeed = (on) => needs.forEach((n) => { if (n.dataset.wasRequired === undefined) n.dataset.wasRequired = n.required ? '1' : ''; n.required = on && n.dataset.wasRequired === '1'; });
+    const l = lot.value.trim(), i = item.value.trim();
+    if (!l || !i) { info.className = 'sale-lookup muted small'; setNeed(true); return; }
+    const mine = ++seq;
+    info.className = 'sale-lookup muted small'; info.textContent = 'Đang tra mã…';
+    try {
+      const res = await fetch('/warranty/lookup?lot=' + encodeURIComponent(l) + '&item=' + encodeURIComponent(i), { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      const d = await res.json();
+      if (mine !== seq) return;
+      if (!d.found) { setNeed(true); info.className = 'sale-lookup neg small'; info.textContent = 'Không tìm thấy chiếc nào khớp hai mã này — kiểm tra lại mã trên phiếu bán.'; return; }
+      setNeed(false);
+      const state = d.void ? '<b class="neg">Phiếu bán đã bị đảo — mã không còn hiệu lực</b>' : d.open ? '<b class="neg">Đang có phiếu bảo hành ' + esc(d.open) + '</b>' : d.valid ? '<b class="pos">Còn bảo hành</b>' : '<b class="neg">Đã hết hạn bảo hành</b> (vẫn nhận được, không đổi mới miễn phí)';
+      info.className = 'sale-lookup small';
+      info.innerHTML = '<b>' + esc(d.item) + '</b>' + (d.lot ? ' · lô ' + esc(d.lot) : '') + ' · kho ' + esc(d.wh) + '<br>Hoá đơn ' + esc(d.voucher) + (d.customer ? ' · ' + esc(d.customer) : '') +
+        ' · mua ' + fmt(d.bought) + ' · bảo hành ' + d.months + ' tháng, đến ' + fmt(d.expiry) + '<br>' + state;
+    } catch (e) { if (mine === seq) { info.className = 'sale-lookup muted small'; info.textContent = 'Không tra được lúc này — thử lại.'; } }
+  };
+  document.addEventListener('input', (e) => {
+    if (!e.target.matches || !e.target.matches('[data-sale-lot], [data-sale-item]')) return;
+    e.target.value = e.target.value.toUpperCase().replace(/\s+/g, '');
+    clearTimeout(timer);
+    const form = e.target.closest('form');
+    timer = setTimeout(() => run(form), 250);
   });
 })();
 

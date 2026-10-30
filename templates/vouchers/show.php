@@ -172,6 +172,21 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
       <?php endif; ?>
     </section>
 
+    <?php if (!empty($saleCodes)): $lineOf = array_column($lines, null, 'id'); ?>
+    <section class="card flush sale-codes">
+      <div class="card-head pad"><h2>Mã bảo hành <span class="count"><?= n(array_sum(array_map(fn($g) => count($g['units']), $saleCodes))) ?></span></h2><span class="muted small">Tra bảo hành cần cả <b>mã lô hàng</b> và <b>mã món hàng</b></span></div>
+      <?php foreach ($saleCodes as $lineId => $g): $ln = $lineOf[$lineId] ?? null; $first = $g['units'][0]; ?>
+      <div class="sale-code-line">
+        <div class="sale-code-head"><b><?= e($ln['ma_hang'] ?? '') ?></b> <?= e($ln['ten'] ?? '') ?>
+          <span class="muted small">· lô <?= e($ln && $ln['so_lo'] !== 'NOLOT' ? $ln['so_lo'] : '—') ?> · bảo hành <?= (int)$first['months'] ?> tháng, đến <?= e(dt($first['expiry'], false)) ?></span></div>
+        <div class="sale-code-lot"><span class="muted small">Mã lô hàng</span> <code class="code-pill"><?= e($g['lot']) ?></code></div>
+        <div class="muted small sale-code-sub">Mã món hàng — mỗi chiếc một mã</div>
+        <ul class="sale-code-units"><?php foreach ($g['units'] as $u): ?><li><code class="code-pill<?= $u['void'] ? ' void' : '' ?>"><?= e($u['code']) ?></code><?= $u['void'] ? ' <small class="muted">đã huỷ</small>' : '' ?></li><?php endforeach; ?></ul>
+      </div>
+      <?php endforeach; ?>
+    </section>
+    <?php endif; ?>
+
     <?php if ($draft && $v['loai'] === 'ISSUE' && $canApprove): ?>
     <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/confirm" class="card" id="confirm-form" data-once data-guard="local" data-guard-save="Lưu tạm"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <h2>Giao hàng cho khách</h2>

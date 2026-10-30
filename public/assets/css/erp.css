@@ -173,3 +173,16 @@ th { letter-spacing: .03em; }
 .flow .flow-wh .wh-code { font-size: .74rem; padding: 1px 7px; }
 .flow .flow-wh small { font-size: .75rem; }
 @media (max-width: 720px) { .flow { padding: 10px 6px 8px; } .flow .dot { width: 22px; height: 22px; } .flow li:not(:first-child)::before, .flow li:not(:first-child)::after { top: 10px; left: calc(-50% + 18px); width: calc(100% - 36px); } }
+
+/* Mã bảo hành sinh lúc bán (chi tiết phiếu xuất) */
+.sale-code-line { padding: 10px 16px 12px; border-top: 1px solid var(--line-2); }
+.sale-code-head { margin-bottom: 6px; }
+.sale-code-lot { margin-bottom: 4px; }
+.sale-code-units { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.code-pill { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); color: var(--ink); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .86rem; letter-spacing: .04em; user-select: all; }
+.code-pill.void { text-decoration: line-through; color: var(--muted); }
+
+/* Form bảo hành: kết quả tra mã lô hàng + mã món hàng */
+.sale-lookup { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--bg); border-radius: 2px; line-height: 1.5; }
+.sale-lookup:not(.muted):not(.neg) { border-left-color: var(--brand); }
+.sale-code-sub { margin: 6px 0 4px; }

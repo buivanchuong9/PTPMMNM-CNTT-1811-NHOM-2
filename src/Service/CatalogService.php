@@ -210,7 +210,7 @@ final class CatalogService
             $id = $this->db->insert('INSERT INTO mat_hang (ma_hang, ten, don_vi_tinh_id, quan_ly_lo, dinh_muc_toi_thieu, quy_cach_lo, danh_muc_id, ma_vach, bao_hanh_thang) VALUES (?,?,?,?,?,?,?,?,?)',
                 [$sku, $name, $unitId, (int)$trackBatch, $reorder, $packSize, $categoryId, $barcode, $warrantyMonths]);
             if (!$trackBatch) {
-                $this->db->exec('INSERT INTO lo_hang (mat_hang_id, so_lo) VALUES (?,?)', [$id, self::NO_LOT]);
+                $this->db->exec('INSERT INTO lo_hang (mat_hang_id, so_lo, bao_hanh_thang) VALUES (?,?,?)', [$id, self::NO_LOT, $warrantyMonths]);
             }
             $this->audit->record($actor->id, 'item.create', 'item', $id, $sku . ($barcode !== null ? " · mã vạch $barcode" : ''));
             return $id;
@@ -312,6 +312,7 @@ final class CatalogService
         $this->requireCategory($categoryId);
         $item = $this->db->one('SELECT ma_hang FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
         $this->db->exec('UPDATE mat_hang SET quy_cach_lo = ?, dinh_muc_toi_thieu = ?, danh_muc_id = ?, bao_hanh_thang = ? WHERE id = ?', [$packSize, $reorder, $categoryId, $warrantyMonths, $itemId]);
+        $this->db->exec('UPDATE lo_hang SET bao_hanh_thang = ? WHERE mat_hang_id = ?', [$warrantyMonths, $itemId]);   // bảo hành tính theo lô: đổi ở mặt hàng thì các lô theo (hàng đã bán giữ hạn đã ghi lúc bán)
         $this->audit->record($actor->id, 'item.update', 'item', $itemId, "{$item['ma_hang']} · quy cách $packSize · định mức $reorder · bảo hành $warrantyMonths tháng · danh mục #" . ($categoryId ?? '—'));
     }
 
@@ -336,7 +337,7 @@ final class CatalogService
         if ($this->db->value('SELECT 1 FROM lo_hang WHERE mat_hang_id = ? AND so_lo = ?', [$itemId, $batchNo])) {
             throw new DomainError("Lô $batchNo đã tồn tại cho mặt hàng này");
         }
-        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung) VALUES (?,?,?)', [$itemId, $batchNo, $expiry]);
+        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung, bao_hanh_thang) VALUES (?,?,?,(SELECT bao_hanh_thang FROM mat_hang WHERE id = ?))', [$itemId, $batchNo, $expiry, $itemId]);
         $this->audit->record($actor->id, 'batch.create', 'batch', $id, "{$item['ma_hang']}/$batchNo");
         return $id;
     }
@@ -373,7 +374,7 @@ final class CatalogService
             }
             return (int)$lot['id'];
         }
-        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung) VALUES (?,?,?)', [$itemId, $batchNo, $expiry]);
+        $id = $this->db->insert('INSERT INTO lo_hang (mat_hang_id, so_lo, han_dung, bao_hanh_thang) VALUES (?,?,?,(SELECT bao_hanh_thang FROM mat_hang WHERE id = ?))', [$itemId, $batchNo, $expiry, $itemId]);
         $this->audit->record($actor->id, 'batch.create', 'batch', $id, "{$item['ma_hang']}/$batchNo · HSD $expiry");
         return $id;
     }

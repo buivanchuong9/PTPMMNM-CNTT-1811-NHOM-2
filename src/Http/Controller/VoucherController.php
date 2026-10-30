@@ -26,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries, private \StockFlow\Service\TransportService $transport)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries, private \StockFlow\Service\TransportService $transport, private \StockFlow\Service\SaleCodeService $saleCodes)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -268,6 +268,7 @@ final class VoucherController extends Controller
         };
         return $this->render('vouchers/show', $user, 'vouchers', [
             'v' => $v, 'lines' => $lines, 'check' => $check, 'movements' => $movements,
+            'saleCodes' => $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'CONFIRMED' ? $this->saleCodes->forVoucher((int)$v['id']) : [],
             'quality' => $v['loai'] === 'RECEIPT' ? $this->repo->quality((int)$v['id']) : [],
             'returnNote' => $v['loai'] === 'RECEIPT' ? $this->db->one('SELECT id, ma, trang_thai FROM tra_hang_ncc WHERE phieu_nhap_xuat_id = ?', [(int)$v['id']]) : null,
             'replaces' => !empty($v['cap_lai_cho_id']) ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE id = ?', [(int)$v['cap_lai_cho_id']]) : null,
@@ -493,6 +494,7 @@ final class VoucherController extends Controller
             'v' => $v, 'lines' => $this->withCost($this->repo->lines((int)$v['id'])), 'wh' => $wh, 'partner' => $partner, 'fresh' => $r->str('fresh') === '1',
             'trip' => $trip = $this->fleet->tripOf($v), 'receipt' => $this->receiptOf($trip), 'user' => $user,
             'delivery' => $v['loai'] === 'ISSUE' ? $this->deliveries->of((int)$v['id']) : null,
+            'saleCodes' => $v['loai'] === 'ISSUE' ? $this->saleCodes->forVoucher((int)$v['id']) : [],
             'quality' => $v['loai'] === 'RECEIPT' ? $this->repo->quality((int)$v['id']) : [],
             'returnNote' => $v['loai'] === 'RECEIPT' ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE phieu_nhap_xuat_id = ?', [(int)$v['id']]) : null,
             'replaces' => !empty($v['cap_lai_cho_id']) ? $this->db->one('SELECT id, ma FROM tra_hang_ncc WHERE id = ?', [(int)$v['cap_lai_cho_id']]) : null,
