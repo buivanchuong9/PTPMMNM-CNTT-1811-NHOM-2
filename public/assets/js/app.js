@@ -785,7 +785,7 @@
       const refresh = (fromMode) => {
         const m = mode(), ex = m === 'THUE_NGOAI', tl = m === 'TU_LAY';   // TU_LAY: khách tự đến lấy (phiếu xuất) — không cần xe, km, tiền
         if (own) { own.hidden = ex || tl; own.querySelectorAll('select').forEach((e) => { e.required = !ex && !tl; }); }
-        if (ext) { ext.hidden = !ex; ext.querySelectorAll('input[data-req]').forEach((e) => { e.required = ex; }); }
+        if (ext) { ext.hidden = !ex; ext.querySelectorAll('input[data-req],select[data-req]').forEach((e) => { e.required = ex; }); }
         if (fields) { fields.hidden = tl; fields.querySelectorAll('[data-need]').forEach((e) => { e.required = !tl; }); }
         else { km.required = money.required = true; }
         const rate = rates[m] || 0, k = +km.value || 0, sug = k * rate;

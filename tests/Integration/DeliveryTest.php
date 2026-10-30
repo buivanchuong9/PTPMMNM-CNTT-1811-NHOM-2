@@ -53,13 +53,15 @@ $mine = array_values(array_filter($fleet->drivers($f->wa), fn($x) => (int)$x['id
 same([(int)$mine['so_chuyen'], (int)$mine['tong_km'], (int)$mine['tien_chuyen']], [1, 18, 150000], 'chuyến giao hàng tính vào lương tài xế theo km');
 
 section('Thuê đơn vị vận tải ngoài để giao');
-$ext = ['company' => 'Nhà xe Hoàng Long', 'driver' => 'Lê Văn Thuê', 'cccd' => $cccd(), 'phone' => '0987654321', 'plate' => $plate(), 'type' => 'Xe tải 5 tấn'];
+$ext = ['company' => 'Nhà xe Hoàng Long', 'driver' => 'Lê Văn Thuê', 'cccd' => $cccd(), 'phone' => '0987654321', 'plate' => $plate(), 'type' => 'Xe tải 5 tấn', 'coc_ok' => '1', 'coc_pt' => 'CHUYEN_KHOAN'];
 $payExt = ['thanh_toan' => 'DA_TT', 'phuong_thuc_tt' => 'CHUYEN_KHOAN', 'hinh_thuc' => 'THUE_NGOAI', 'dia_chi' => 'KCN Quế Võ, Bắc Ninh', 'nguoi_nhan' => 'Trần Văn Kho', 'sdt_nhan' => '0987000222', 'driver_ok' => true, 'km' => 60, 'tien' => 1200000, 'ghi_chu' => '', 'ngoai' => $ext];
 $v3 = $draft(20);
 foreach (['company', 'driver', 'cccd', 'phone', 'plate', 'type'] as $k) {
     throws(fn() => $svc->confirm($f->approverA, $v3, ['ngoai' => [$k => ''] + $ext] + $payExt), DomainError::class, "thiếu thông tin bên thứ ba: $k");
 }
 throws(fn() => $svc->confirm($f->approverA, $v3, ['tien' => 0] + $payExt), DomainError::class, 'thuê ngoài phải có số tiền');
+throws(fn() => $svc->confirm($f->approverA, $v3, ['ngoai' => ['coc_ok' => ''] + $ext] + $payExt), DomainError::class, 'chưa thu cọc thì không được bàn giao hàng');
+throws(fn() => $svc->confirm($f->approverA, $v3, ['ngoai' => ['coc_pt' => ''] + $ext] + $payExt), DomainError::class, 'chưa chọn hình thức nộp cọc');
 $svc->confirm($f->approverA, $v3, $payExt);
 $g = $del->of($v3);
 same([$g['hinh_thuc'], $g['don_vi_van_tai'], (int)$g['tien_goi_y'], (int)$g['tien_tra'], $g['bien_so'], $g['tai_xe_ten']], ['THUE_NGOAI', 'Nhà xe Hoàng Long', 900000, 1200000, $ext['plate'], 'Lê Văn Thuê'], 'đơn vị, gợi ý 60 × 15.000, thực trả, xe, tài xế');

@@ -298,6 +298,7 @@ final class VoucherController extends Controller
             'recommended' => $fit ? $this->transport->recommend($vehicles, $fit, $v['loai'] === 'TRANSFER_OUT') : null,   // xe nhỏ nhất vẫn đủ chở: khuyến khích chọn
             'drivers' => $vehicles ? $drv = $this->fleet->availableDrivers((int)$v['kho_id']) : [],   // tài xế rảnh của kho: chọn riêng với xe
             'driverFit' => !empty($drv) ? $this->transport->driverFit($drv) : [],
+            'goodsValue' => in_array($v['loai'], ['TRANSFER_OUT', 'ISSUE'], true) && $v['trang_thai'] === 'DRAFT' ? $this->fleet->goodsValue((int)$v['id']) : 0,
             'payInfo' => $v['loai'] === 'TRANSFER_OUT' && $v['trang_thai'] === 'DRAFT'
                 ? $this->fleet->distanceHint((int)$v['kho_id'], (int)$v['kho_doi_ung_id']) + ['rates' => $this->fleet->rates((int)$v['kho_id'])]
                 : ($v['loai'] === 'ISSUE' && $v['trang_thai'] === 'DRAFT' ? ['km' => null, 'rates' => $this->fleet->rates((int)$v['kho_id'])] : null),
@@ -608,7 +609,8 @@ final class VoucherController extends Controller
         };
         return ['company' => $r->str('ext_company'), 'driver' => $r->str('ext_driver'), 'cccd' => $r->str('ext_cccd'), 'phone' => $r->str('ext_phone'), 'plate' => $r->str('ext_plate'), 'type' => $r->str('ext_type'),
                 'tai_trong_kg' => $kg('ext_cap', 'Tải trọng xe'), 'gvw_kg' => $kg('ext_gvw', 'Khối lượng toàn bộ'),
-                'license_no' => $r->str('ext_lic_no'), 'license_class' => $r->str('ext_lic_class'), 'license_expiry' => $r->str('ext_lic_exp')];
+                'license_no' => $r->str('ext_lic_no'), 'license_class' => $r->str('ext_lic_class'), 'license_expiry' => $r->str('ext_lic_exp'),
+                'coc_ok' => $r->str('ext_coc_ok'), 'coc_pt' => $r->str('ext_coc_pt')];
     }
 
     /** Kho đi báo xe hỏng giữa đường: hàng tới muộn, kho đến chưa nhận được cho tới khi xe chạy tiếp. */

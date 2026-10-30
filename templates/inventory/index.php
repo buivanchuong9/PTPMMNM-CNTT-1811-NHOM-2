@@ -38,13 +38,17 @@
 </form>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense<?= $byBatch ? '' : ' sticky-2' ?>">
 <?php if ($byBatch): ?>
-  <thead><tr><th>Kho</th><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Lô</th><th>Hạn dùng</th><th class="num">Tồn</th><th>Quy đổi</th><th>Cập nhật cuối</th></tr></thead>
+  <thead><tr><th>Kho</th><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Lô</th><th>Hạn dùng</th><th class="num">Tồn</th><th>Quy đổi</th><th>Cập nhật cuối</th><?php if (!empty($canDispose)): ?><th></th><?php endif; ?></tr></thead>
   <tbody>
   <?php foreach ($rows as $r): ?>
     <tr><td><span class="wh-code"><?= e($r['wh_code']) ?></span></td><td><b><?= e($r['ma_hang']) ?></b></td><td><?= e($r['ten']) ?></td><td><?= $r['category'] ? '<span class="tag tag-info">' . e($r['category']) . '</span>' : '<span class="muted">—</span>' ?></td><td><?= $r['so_lo'] === 'NOLOT' ? '<span class="muted">—</span>' : e($r['so_lo']) ?></td>
       <td><?= e(dt($r['han_dung'], false)) ?> <?= expiry_tag($r['expiry']) ?></td><td class="num"><b><?= n($r['so_luong']) ?></b> <small class="muted"><?= e($r['unit']) ?></small></td>
-      <td class="muted"><?= e(pack_label((int)$r['so_luong'], (int)$r['quy_cach_lo'])) ?: '—' ?></td><td class="muted"><?= e(dt($r['last_move'])) ?></td></tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="9" class="empty">Không có tồn phù hợp.</td></tr><?php endif; ?>
+      <td class="muted"><?= e(pack_label((int)$r['so_luong'], (int)$r['quy_cach_lo'])) ?: '—' ?></td><td class="muted"><?= e(dt($r['last_move'])) ?></td>
+      <?php if (!empty($canDispose)): ?><td class="nw"><?php if (in_array($r['expiry']['status'], ['expired', 'soon'], true) && (int)$r['so_luong'] > 0): ?>
+        <form method="post" action="/disposals"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="warehouse_id" value="<?= (int)$r['kho_id'] ?>"><input type="hidden" name="pick" value="<?= (int)$r['mat_hang_id'] ?>:<?= (int)$r['lo_hang_id'] ?>"><input type="hidden" name="qty" value="<?= (int)$r['so_luong'] ?>"><input type="hidden" name="reason" value="HET_HAN">
+          <button class="btn-danger btn-sm" data-confirm="Huỷ cả lô <?= e($r['so_lo']) ?> của <?= e($r['ma_hang']) ?> (<?= n($r['so_luong']) ?> <?= e($r['unit']) ?>) vì hết hạn? Hàng được chuyển vào kho huỷ."><?= icon('alert') ?>Huỷ</button></form>
+      <?php endif; ?></td><?php endif; ?></tr>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="<?= !empty($canDispose) ? 10 : 9 ?>" class="empty">Không có tồn phù hợp.</td></tr><?php endif; ?>
   </tbody>
 <?php else: $anyPack = (bool)array_filter($rows, fn($x) => (int)$x['quy_cach_lo'] > 1);
   // cân nặng, kích thước của 1 đơn vị và của 1 kiện (thùng đóng sẵn)

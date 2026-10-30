@@ -194,4 +194,13 @@ truthy(str_contains($inv, $bc) && !str_contains($inv, 'data-scan-assign'), 'admi
 $login($f->approverA->username);
 same($get('/users')[0], 403, 'trang tài khoản chỉ dành cho admin ⇒ 403');
 same($get('/roles')[0], 403, 'trang phân quyền chỉ dành cho admin ⇒ 403');
+section('Kho huỷ: hàng chờ xuất đi tiêu huỷ hiện tải cần chở và xe đủ điều kiện');
+$fleetD = $f->c->get(StockFlow\Service\FleetService::class);
+$dispD = $f->c->get(StockFlow\Service\DisposalService::class);
+$fleetD->addVehicleWithDriver($f->approverA, '29C-' . random_int(10000, 99999), 'Xe tải 2 tấn', $f->wa, 'Tài xế Huỷ', (string)random_int(100000000000, 999999999999), '0912345671');
+$f->receive($f->wa, 'y', 5);
+$dispD->propose($f->approverA, $f->wa, $f->it['y']['item'], $f->it['y']['batch'], 2, 'VO_HONG', '');
+[$st, $dBody] = $get('/disposals?status=TRONG_KHO_HUY');
+truthy($st === 200 && $noPhpError($dBody) && str_contains($dBody, 'name="vehicle_id"') && str_contains($dBody, 'Hàng cần chở') && str_contains($dBody, 'đủ điều kiện') || str_contains($dBody, 'chưa khai đủ'), 'Kho huỷ: chọn xe có ghi chú đủ điều kiện và tóm tắt hàng cần chở');
+
 finish();

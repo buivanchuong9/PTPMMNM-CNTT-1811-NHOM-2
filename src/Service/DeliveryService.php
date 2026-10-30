@@ -59,7 +59,9 @@ final class DeliveryService
         if (empty($d['driver_ok'])) {
             throw new DomainError($mode === 'THUE_NGOAI' ? 'Tài xế của đơn vị vận tải phải xác nhận đã nhận đủ hàng' : 'Tài xế phải xác nhận đã nhận đủ hàng trước khi giao');
         }
+        $deposit = [];
         if ($mode === 'THUE_NGOAI') {
+            $deposit = $this->fleet->externalDeposit((int)$voucher['id'], $d['ngoai'] ?? []);   // cọc đủ giá trị hàng mới được bàn giao
             $vehicleId = $this->fleet->registerExternal($wh, $d['ngoai'] ?? []);   // đủ thông tin bên thứ ba mới được bàn giao hàng
         } else {
             $vehicleId = (int)($d['vehicle_id'] ?? 0);
@@ -85,12 +87,12 @@ final class DeliveryService
         }
         $this->transport->assertCanCarry($vehicleId, $this->db->all('SELECT mat_hang_id, so_luong FROM chi_tiet_phieu_nhap_xuat WHERE phieu_nhap_xuat_id = ?', [(int)$voucher['id']]), (int)$tx['id']);
         $this->db->exec(
-            'INSERT INTO giao_hang (phieu_nhap_xuat_id, kho_id, hinh_thuc, xe_id, tai_xe_id, km, don_gia_km, tien_goi_y, tien_tra, don_vi_van_tai, dia_chi, nguoi_nhan, sdt_nhan, ghi_chu_gia, nguoi_giao_id, thanh_toan, phuong_thuc_tt, so_tien)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            [$voucher['id'], $wh, $mode, $vehicleId, (int)$tx['id'], $p['km'], $p['don_gia_km'], $p['tien_goi_y'], $p['tien_tra'], $p['don_vi_van_tai'], $address, $receiver, $phone, $p['ghi_chu_gia'], $user->id, $paid, $method, $amount]
+            'INSERT INTO giao_hang (phieu_nhap_xuat_id, kho_id, hinh_thuc, xe_id, tai_xe_id, km, don_gia_km, tien_goi_y, tien_tra, don_vi_van_tai, dia_chi, nguoi_nhan, sdt_nhan, ghi_chu_gia, nguoi_giao_id, thanh_toan, phuong_thuc_tt, so_tien, tien_coc, phuong_thuc_coc)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            [$voucher['id'], $wh, $mode, $vehicleId, (int)$tx['id'], $p['km'], $p['don_gia_km'], $p['tien_goi_y'], $p['tien_tra'], $p['don_vi_van_tai'], $address, $receiver, $phone, $p['ghi_chu_gia'], $user->id, $paid, $method, $amount, $deposit['tien'] ?? 0, $deposit['pt'] ?? '']
         );
         $this->audit->record($user->id, 'voucher.delivery', 'voucher', (int)$voucher['id'],
-            ($mode === 'THUE_NGOAI' ? 'thuê ngoài ' . $p['don_vi_van_tai'] : 'xe kho') . " · {$xe['bien_so']} · {$tx['ho_ten']} · {$p['km']} km · " . number_format($p['tien_tra'], 0, ',', '.') . ' đ');
+            ($mode === 'THUE_NGOAI' ? 'thuê ngoài ' . $p['don_vi_van_tai'] . ' · cọc ' . number_format($deposit['tien'], 0, ',', '.') . ' đ' : 'xe kho') . " · {$xe['bien_so']} · {$tx['ho_ten']} · {$p['km']} km · " . number_format($p['tien_tra'], 0, ',', '.') . ' đ');
     }
 
     /** Tổng tiền khách phải trả của phiếu xuất (tiền hàng + thuế GTGT, làm tròn từng dòng như trên phiếu in). */

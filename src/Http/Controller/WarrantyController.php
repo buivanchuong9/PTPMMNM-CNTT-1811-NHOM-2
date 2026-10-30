@@ -40,7 +40,7 @@ final class WarrantyController extends Controller
     {
         return $this->act(function () use ($r, $user) {
             $this->warranty->receive($user, (int)$user->warehouseId, (int)$r->int('item_id'), StockRules::parseQty($r->str('qty')) ?? 0,
-                $r->str('customer'), $r->str('phone'), $r->str('bought'), $r->str('defect'));
+                $r->str('customer'), $r->str('phone'), $r->str('phieu_mua'), $r->str('defect'));
         }, 'Đã nhận hàng vào kho bảo hành.', '/warranty');
     }
 

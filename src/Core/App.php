@@ -108,6 +108,9 @@ final class App
         $r->post('/disposals/{id}/approve', [C\DisposalController::class, 'approve']);
         $r->post('/disposals/{id}/reject', [C\DisposalController::class, 'reject']);
         $r->post('/disposals/{id}/destroy', [C\DisposalController::class, 'destroy']);
+        $r->post('/disposals/site', [C\DisposalController::class, 'site']);
+        $r->post('/disposals/{id}/load', [C\DisposalController::class, 'load']);
+        $r->post('/disposals/{id}/undo', [C\DisposalController::class, 'undo']);
 
         $r->get('/history', [C\HistoryController::class, 'index']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);

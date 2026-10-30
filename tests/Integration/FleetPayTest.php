@@ -65,7 +65,7 @@ $mine = array_values(array_filter($fleet->drivers($f->wa), fn($d) => (int)$d['id
 same((int)$mine['tien_chuyen'], 1200000, 'chuyến chưa giao chưa tính');
 
 section('Thuê đơn vị vận tải ngoài: phải có đủ thông tin');
-$ext = ['company' => 'Công ty Vận tải Nhanh', 'driver' => 'Lê Văn Thuê', 'cccd' => $cccd(), 'phone' => '0987654321', 'plate' => $plate(), 'type' => 'Xe tải 5 tấn'];
+$ext = ['company' => 'Công ty Vận tải Nhanh', 'driver' => 'Lê Văn Thuê', 'cccd' => $cccd(), 'phone' => '0987654321', 'plate' => $plate(), 'type' => 'Xe tải 5 tấn', 'coc_ok' => '1', 'coc_pt' => 'TIEN_MAT'];
 $payExt = ['hinh_thuc' => 'THUE_NGOAI', 'km' => 125, 'tien' => 2500000, 'ghi_chu' => '', 'ngoai' => $ext];
 $t3 = $send(3);
 foreach (['company' => 'đơn vị', 'driver' => 'họ tên tài xế', 'cccd' => 'CCCD', 'phone' => 'điện thoại', 'plate' => 'biển số', 'type' => 'loại xe'] as $k => $label) {
@@ -73,6 +73,7 @@ foreach (['company' => 'đơn vị', 'driver' => 'họ tên tài xế', 'cccd' =
 }
 throws(fn() => $ts->dispatch($f->approverA, $t3, 0, true, ['ngoai' => ['cccd' => '123'] + $ext] + $payExt), DomainError::class, 'CCCD sai định dạng');
 throws(fn() => $ts->dispatch($f->approverA, $t3, 0, true, ['tien' => 0] + $payExt), DomainError::class, 'thuê ngoài phải có số tiền thuê');
+throws(fn() => $ts->dispatch($f->approverA, $t3, 0, true, ['ngoai' => ['coc_ok' => ''] + $ext] + $payExt), DomainError::class, 'chưa thu cọc hàng thì không được bàn giao');
 throws(fn() => $ts->dispatch($f->approverA, $t3, 0, false, $payExt), DomainError::class, 'tài xế thuê ngoài cũng phải xác nhận đủ hàng');
 same((int)$f->db->value("SELECT COUNT(*) FROM tai_xe WHERE cccd = ?", [$ext['cccd']]), 0, 'lỗi thì không lưu tài xế thuê ngoài');
 $int = $f->db->one('SELECT cccd FROM tai_xe WHERE id = ?', [$d1['driver_id']]);
