@@ -26,9 +26,21 @@ final class ReturnController extends Controller
         $this->need($user, Permission::XemPhieu);
         $scope = $this->auth->visibleWarehouseIds($user);
         $status = isset(SupplierReturnService::STATUS[$r->str('status')]) ? $r->str('status') : 'CHO_CAP_LAI';
-        [$rows, $pg] = Paginator::of($this->returns->list($scope, $status), $r);
+        // bộ lọc: tìm · nhà cung cấp · kho · thời gian · sắp xếp
+        $q = trim($r->str('q'));
+        [$from, $to, $rangeSel] = range_params($r);
+        $sup = $r->str('supplier');
+        $wh = (int)$r->int('warehouse');
+        $sort = $r->str('sort') === 'old' ? 'old' : 'new';
+        $all = $this->returns->list($scope, $status);
+        $list = array_filter($all, fn($x) => ($sup === '' || $x['doi_tac'] === $sup) && (!$wh || (int)$x['kho_id'] === $wh) && in_vn_range($x['ngay_tao'], $from, $to));
+        $list = filter_rows(array_values($list), $q, fn($x) => implode(' ', [$x['ma'], $x['doi_tac'], $x['receipt_code'], $x['wh_code']]));
+        [$rows, $pg] = Paginator::of($sort === 'old' ? array_reverse($list) : $list, $r);
+        $f = ['supplier' => $sup, 'warehouse' => $wh, 'sort' => $sort, 'supOpts' => options_of($all, 'doi_tac', 'doi_tac'), 'whOpts' => options_of($all, 'kho_id', 'wh_code')];
+        $keep = keep_params(['q' => $q, 'supplier' => $sup, 'warehouse' => $wh, 'range' => $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort === 'old' ? 'old' : null]);
         return $this->render('returns/index', $user, 'returns', [
-            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'counts' => $this->returns->counts($scope),
+            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'f' => $f, 'keep' => $keep, 'from' => $from, 'to' => $to, 'rangeSel' => $rangeSel,
+            'counts' => $this->returns->counts($scope),
             'receiveWh' => array_values(array_filter($scope, fn($id) => $this->auth->can($user, (int)$id, Permission::LapPhieuNhap))),   // kho được lập phiếu nhập ⇒ có nút «Cấp lại»
         ], 'Trả hàng nhà cung cấp');
     }

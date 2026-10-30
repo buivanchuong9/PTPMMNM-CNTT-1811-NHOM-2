@@ -28,10 +28,28 @@ final class ProposalController extends Controller
         $this->need($user, Permission::GanMaVach, Permission::DuyetDeXuatHang);
         $status = array_key_exists($r->str('status'), ItemProposalService::LABELS) ? $r->str('status') : '';
         $counts = $this->proposals->counts($user);
-        [$rows, $pg] = Paginator::of($this->proposals->list($user, $status ?: null), $r);
+        // bộ lọc: tìm · loại hàng · nhà cung cấp · kho · thời gian · sắp xếp
+        $q = trim($r->str('q'));
+        [$from, $to, $rangeSel] = range_params($r);
+        $cat = (int)$r->int('category');
+        $sup = (int)$r->int('supplier');
+        $wh = (int)$r->int('warehouse');
+        $sort = $r->str('sort') === 'old' ? 'old' : 'new';
+        $all = $this->proposals->list($user, $status ?: null);
+        $list = array_filter($all, fn($x) => (!$cat || (int)$x['danh_muc_id'] === $cat) && (!$sup || (int)$x['nha_cung_cap_id'] === $sup)
+            && (!$wh || (int)$x['kho_id'] === $wh) && in_vn_range($x['ngay_tao'], $from, $to));
+        $list = filter_rows(array_values($list), $q, fn($x) => implode(' ', [$x['ma_vach'], $x['ma_hang'], $x['ten'], $x['category'], $x['supplier'], $x['kho_ma'], $x['de_xuat_ten']]));
+        if ($sort === 'old') {
+            usort($list, fn($a, $b) => (int)$a['id'] <=> (int)$b['id']);
+        }
+        [$rows, $pg] = Paginator::of($list, $r);
+        $f = ['category' => $cat, 'supplier' => $sup, 'warehouse' => $wh, 'sort' => $sort,
+            'catOpts' => options_of($all, 'danh_muc_id', 'category'), 'supOpts' => options_of($all, 'nha_cung_cap_id', 'supplier'), 'whOpts' => options_of($all, 'kho_id', 'kho_ma')];
+        $keep = keep_params(['q' => $q, 'category' => $cat, 'supplier' => $sup, 'warehouse' => $wh, 'range' => $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort === 'old' ? 'old' : null]);
         $this->proposals->markSeen($user);
         return $this->render('proposals/index', $user, 'proposals', [
-            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'counts' => $counts, 'total' => array_sum($counts),
+            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'f' => $f, 'keep' => $keep, 'from' => $from, 'to' => $to, 'rangeSel' => $rangeSel,
+            'counts' => $counts, 'total' => array_sum($counts),
             'canReview' => $this->auth->allows($user, Permission::DuyetDeXuatHang), 'canPropose' => $this->auth->allows($user, Permission::GanMaVach),
             'canReceive' => $this->auth->allows($user, Permission::LapPhieuNhap), 'vatRates' => PricingService::VAT_RATES,
         ], 'Đề xuất hàng mới');

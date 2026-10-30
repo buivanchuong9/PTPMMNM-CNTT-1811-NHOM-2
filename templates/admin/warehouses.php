@@ -14,6 +14,7 @@ $anyEdit = (bool)array_filter($rows, $canEditStaff);
   <div><h1>Kho &amp; nhân sự</h1></div>
   <?php if ($user->isAdmin): ?><div class="actions"><button type="button" data-dialog-open="wh-dlg"><?= icon('plus') ?>Thêm kho</button><a class="btn btn-ghost" href="/users"><?= icon('users') ?>Quản lý tài khoản</a></div><?php endif; ?>
 </header>
+<div class="filters" data-filter-box=".wh-card"><input type="search" maxlength="50" placeholder="Tìm kho, địa chỉ, quản lý, nhân viên…" aria-label="Tìm kho hoặc nhân viên" data-filter-q></div>
   <?php foreach ($rows as $w): $s = $stats[$w['id']] ?? null; $m = $w['quan_ly']; ?>
     <section class="card wh-card<?= is_new($changes, $w['id']) ? ' is-new' : '' ?>">
       <div class="wh-card-head">

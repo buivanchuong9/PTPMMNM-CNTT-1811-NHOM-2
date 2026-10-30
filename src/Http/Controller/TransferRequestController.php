@@ -33,10 +33,29 @@ final class TransferRequestController extends Controller
         $scope = $this->auth->visibleWarehouseIds($user);
         $status = array_key_exists($r->str('status'), TransferRequestService::LABELS) ? $r->str('status') : '';
         $counts = $this->requests->counts($scope);
-        [$rows, $pg] = Paginator::of($this->requests->list($scope, $status ?: null), $r);
+        // bộ lọc: tìm · kho cấp · kho nhận · mặt hàng · thời gian · sắp xếp (lựa chọn lấy từ chính các yêu cầu đang có)
+        $q = trim($r->str('q'));
+        [$from, $to, $rangeSel] = range_params($r);
+        $fromWh = (int)$r->int('from_wh');
+        $toWh = (int)$r->int('to_wh');
+        $item = (int)$r->int('item');
+        $sort = $r->str('sort') === 'old' ? 'old' : 'new';
+        $all = $this->requests->list($scope, $status ?: null);
+        $lines = array_merge([], ...array_column($all, 'lines'));
+        $list = array_filter($all, fn($x) => (!$fromWh || (int)$x['kho_cap_id'] === $fromWh) && (!$toWh || (int)$x['kho_nhan_id'] === $toWh)
+            && (!$item || in_array($item, array_map('intval', array_column($x['lines'], 'mat_hang_id')), true)) && in_vn_range($x['ngay_tao'], $from, $to));
+        $list = filter_rows(array_values($list), $q, fn($x) => implode(' ', [$x['ma'], $x['cap_ma'], $x['cap_ten'], $x['nhan_ma'], $x['nhan_ten'], $x['ghi_chu'], $x['lap_ten'] ?? '',
+            ...array_map(fn($l) => $l['ma_hang'] . ' ' . $l['ten'] . ' ' . $l['so_lo'], $x['lines'])]));
+        [$rows, $pg] = Paginator::of($sort === 'old' ? array_reverse($list) : $list, $r);
+        $f = ['from_wh' => $fromWh, 'to_wh' => $toWh, 'item' => $item, 'sort' => $sort,
+            'fromOpts' => options_of($all, 'kho_cap_id', fn($x) => $x['cap_ma'] . ' — ' . $x['cap_ten']),
+            'toOpts' => options_of($all, 'kho_nhan_id', fn($x) => $x['nhan_ma'] . ' — ' . $x['nhan_ten']),
+            'itemOpts' => options_of($lines, 'mat_hang_id', fn($l) => $l['ma_hang'] . ' — ' . $l['ten'])];
+        $keep = keep_params(['q' => $q, 'from_wh' => $fromWh, 'to_wh' => $toWh, 'item' => $item, 'range' => $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort === 'old' ? 'old' : null]);
         $this->requests->markSeen($user);   // lý do bị từ chối đã hiện trên trang này ⇒ bỏ số nhỏ trên menu
         return $this->render('requests/index', $user, 'requests', [
-            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'counts' => $counts, 'total' => array_sum($counts),
+            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'f' => $f, 'keep' => $keep, 'from' => $from, 'to' => $to, 'rangeSel' => $rangeSel,
+            'counts' => $counts, 'total' => array_sum($counts),
             'canCreate' => $user->warehouseId !== null && $this->auth->allows($user, Permission::LapPhieuDieuChuyen),
             'isManager' => $this->auth->allows($user, Permission::XacNhanPhieu),
         ], 'Yêu cầu chuyển hàng');

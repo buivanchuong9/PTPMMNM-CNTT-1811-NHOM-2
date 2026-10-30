@@ -45,11 +45,18 @@ final class CountController extends Controller
             $rangeSel = ($r->str('range') === 'custom' || $from || $to) ? 'custom' : '';
         }
         // «Tất cả» không gồm các đợt đã huỷ (chỉ xem ở tab «Đã huỷ»)
-        [$rows, $pg] = Paginator::of($this->counts->list($scope, $status, $from, $to, false), $r);
+        $q = trim($r->str('q'));
+        $variance = in_array($r->str('variance'), ['yes', 'no'], true) ? $r->str('variance') : '';
+        $sort = $r->str('sort') === 'old' ? 'old' : 'new';
+        $list = array_filter($this->counts->list($scope, $status, $from, $to, false),
+            fn($x) => $variance === '' || ($variance === 'yes') === ((int)$x['variances'] > 0));
+        $list = filter_rows(array_values($list), $q,
+            fn($x) => implode(' ', [$x['ma'], $x['wh_code'] ?? '', $x['creator_name'] ?? '', $x['approver_name'] ?? '', $x['ghi_chu'] ?? '']));
+        [$rows, $pg] = Paginator::of($sort === 'old' ? array_reverse($list) : $list, $r);
         $statusCounts = $this->counts->statusCounts($scope);
         $all = $visible ? $this->db->all('SELECT id, ma, ten FROM kho WHERE id IN (' . implode(',', array_map('intval', $visible)) . ') ORDER BY ma') : [];
         return $this->render('counts/index', $user, 'counts', [
-            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'wh' => $scope === [$wh] ? $wh : null,
+            'rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'variance' => $variance, 'sort' => $sort, 'wh' => $scope === [$wh] ? $wh : null,
             'statusCounts' => $statusCounts, 'totalActive' => array_sum($statusCounts) - ($statusCounts['CANCELLED'] ?? 0),
             'from' => $from, 'to' => $to, 'rangeSel' => $rangeSel,
             'reasons' => $user->isAdmin ? $this->counts->varianceReasons($scope, $from, $to) : [],

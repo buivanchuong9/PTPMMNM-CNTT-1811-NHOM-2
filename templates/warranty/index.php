@@ -1,4 +1,4 @@
-<?php /** @var array $rows @var array $counts @var array $items @var string $tab @var string $q @var string $today @var bool $canHandle */
+<?php /** @var array $rows @var array $counts @var array $items @var string $tab @var string $q @var array $f @var array $keep @var string $today @var bool $canHandle */
 use StockFlow\Service\WarrantyService as W;
 $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khách', 'info'], 'DA_TRA' => ['Đã trả khách', 'all']];
 ?>
@@ -9,12 +9,21 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
 
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => [$label, $tone]): ?>
-  <a href="/warranty?<?= e(http_build_query(array_filter(['tab' => $k, 'q' => $q]))) ?>" data-tone="<?= $tone ?>"<?= $tab === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k]) ?></span></a>
+  <a href="/warranty?<?= e(http_build_query(['tab' => $k] + $keep)) ?>" data-tone="<?= $tone ?>"<?= $tab === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k]) ?></span></a>
   <?php endforeach; ?>
 </nav>
 <form class="filters" method="get">
   <input type="hidden" name="tab" value="<?= e($tab) ?>">
-  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu, khách, số điện thoại, mặt hàng…" aria-label="Tìm kiếm">
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu, khách, SĐT, mã món…" aria-label="Tìm kiếm">
+<?php if (count($f['whOpts']) > 1): ?>  <select name="warehouse"<?= $f['warehouse'] ? ' class="on"' : '' ?> aria-label="Kho"><?= filter_options($f['whOpts'], $f['warehouse'], 'Mọi kho') ?></select>
+<?php endif; ?>
+  <select name="item"<?= $f['item'] ? ' class="on"' : '' ?> aria-label="Mặt hàng" data-combo><?= filter_options($f['itemOpts'], $f['item'], 'Mọi mặt hàng') ?></select>
+  <select name="valid"<?= $f['valid'] ? ' class="on"' : '' ?> aria-label="Hạn bảo hành"><?= filter_options(['yes' => 'Còn hạn', 'no' => 'Hết hạn'], $f['valid'], 'Mọi hạn bảo hành') ?></select>
+<?php if ($tab === 'WAITING'): ?>  <select name="result"<?= $f['result'] ? ' class="on"' : '' ?> aria-label="Kết quả"><?= filter_options(array_map(fn($k) => W::STATUS[$k][0], array_combine(W::WAITING, W::WAITING)), $f['result'], 'Mọi kết quả') ?></select>
+<?php endif; ?>
+  <?php include __DIR__ . '/../partials/range_filter.php'; ?>
+  <select name="sort"<?= $f['sort'] ? ' class="on"' : '' ?> aria-label="Sắp xếp"><?= filter_options(['old' => 'Cũ nhất trước', 'expiry' => 'Sắp hết hạn trước'], $f['sort'], 'Mới nhất trước') ?></select>
+  <?php if (array_diff_key($keep, ['q' => 1]) || $f['result']): ?><a class="btn btn-ghost" href="/warranty?<?= e(http_build_query(['tab' => $tab])) ?>">Xoá lọc</a><?php endif; ?>
 </form>
 
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
@@ -48,7 +57,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
         <?php endif; ?>
       </td>
     </tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="empty"><?= $q !== '' ? 'Không có phiếu bảo hành phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="empty"><?= $keep || $f['result'] ? 'Không có phiếu bảo hành phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canHandle): ?>

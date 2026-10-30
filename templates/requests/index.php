@@ -7,11 +7,21 @@ $mineId = (int)$user->warehouseId;
   <div><h1>Yêu cầu chuyển hàng</h1></div>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
-  <a href="/requests"<?= $status === '' ? ' class="active" aria-current="page"' : '' ?> data-tone="all">Tất cả <span class="count"><?= n($total) ?></span></a>
+  <a href="/requests<?= $keep ? '?' . e(http_build_query($keep)) : '' ?>"<?= $status === '' ? ' class="active" aria-current="page"' : '' ?> data-tone="all">Tất cả <span class="count"><?= n($total) ?></span></a>
   <?php foreach (T::LABELS as $k => [$label]): ?>
-  <a href="/requests?status=<?= e($k) ?>" data-tone="<?= $tones[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a>
+  <a href="/requests?status=<?= e($k) ?><?= $keep ? '&amp;' . e(http_build_query($keep)) : '' ?>" data-tone="<?= $tones[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a>
   <?php endforeach; ?>
 </nav>
+<form class="filters" method="get">
+  <input type="hidden" name="status" value="<?= e($status) ?>">
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã yêu cầu, kho, mặt hàng, ghi chú…" aria-label="Tìm kiếm">
+  <select name="from_wh"<?= $f['from_wh'] ? ' class="on"' : '' ?> aria-label="Kho cấp hàng"><?= filter_options($f['fromOpts'], $f['from_wh'], 'Mọi kho cấp') ?></select>
+  <select name="to_wh"<?= $f['to_wh'] ? ' class="on"' : '' ?> aria-label="Kho nhận hàng"><?= filter_options($f['toOpts'], $f['to_wh'], 'Mọi kho nhận') ?></select>
+  <select name="item"<?= $f['item'] ? ' class="on"' : '' ?> aria-label="Mặt hàng" data-combo><?= filter_options($f['itemOpts'], $f['item'], 'Mọi mặt hàng') ?></select>
+  <?php include __DIR__ . '/../partials/range_filter.php'; ?>
+  <select name="sort"<?= $f['sort'] === 'old' ? ' class="on"' : '' ?> aria-label="Sắp xếp theo thời gian"><option value="">Mới nhất trước</option><option value="old"<?= $f['sort'] === 'old' ? ' selected' : '' ?>>Cũ nhất trước</option></select>
+  <?php if (array_diff_key($keep, ['q' => 1])): ?><a class="btn btn-ghost" href="/requests?<?= e(http_build_query(array_filter(['status' => $status]))) ?>">Xoá lọc</a><?php endif; ?>
+</form>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>Mã</th><th>Kho cấp → Kho nhận</th><th>Hàng</th><th>Trạng thái</th><th>Người lập</th><th>Lúc tạo</th><th></th></tr></thead>
   <tbody>

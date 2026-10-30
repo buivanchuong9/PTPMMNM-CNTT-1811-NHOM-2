@@ -66,11 +66,23 @@ final class ValuationController extends Controller
         }
         uasort($byItem, fn($a, $b) => $b['cost'] <=> $a['cost']);
         $totals = ['items' => count($byItem), 'qty' => array_sum(array_column($byItem, 'qty')), 'cost' => array_sum(array_column($byItem, 'cost')), 'sell' => array_sum(array_column($byItem, 'sell'))];
-        [$itemRows, $pg] = Paginator::of(array_values($byItem), $r);
+        // ô tìm, tình trạng giá, sắp xếp chỉ áp vào bảng mặt hàng; số tổng hợp phía trên vẫn theo kho / danh mục
+        $q = trim($r->str('q'));
+        $price = in_array($r->str('price'), ['none', 'ok'], true) ? $r->str('price') : '';
+        $sort = in_array($r->str('sort'), ['qty', 'sell', 'margin', 'sku'], true) ? $r->str('sort') : '';
+        $items = array_filter(array_values($byItem), fn($x) => $price === '' || ($price === 'none') === ($x['sell_price'] <= 0 || $x['cost_price'] <= 0));
+        $items = filter_rows(array_values($items), $q, fn($x) => $x['sku'] . ' ' . $x['name'] . ' ' . $x['category']);
+        if ($sort !== '') {
+            usort($items, fn($a, $b) => match ($sort) {
+                'qty' => $b['qty'] <=> $a['qty'], 'sell' => $b['sell'] <=> $a['sell'], 'margin' => ($b['sell'] - $b['cost']) <=> ($a['sell'] - $a['cost']),
+                default => strnatcasecmp($a['sku'], $b['sku']),
+            });
+        }
+        [$itemRows, $pg] = Paginator::of($items, $r);
 
         return $this->render('valuation/index', $user, 'valuation', [
             'totals' => $totals, 'byWh' => array_values($byWh), 'rows' => $itemRows, 'pg' => $pg, 'unpriced' => $unpriced,
-            'wh' => $wh, 'category' => $catRaw, 'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
+            'wh' => $wh, 'q' => $q, 'price' => $price, 'sort' => $sort, 'category' => $catRaw, 'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
             'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
         ], 'Vốn kho');
     }

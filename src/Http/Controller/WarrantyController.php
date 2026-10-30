@@ -28,10 +28,33 @@ final class WarrantyController extends Controller
         $this->need($user, Permission::XemBaoHanh);
         $scope = $this->auth->visibleWarehouseIds($user);
         $tab = in_array($r->str('tab'), ['TIEP_NHAN', 'WAITING', 'DA_TRA'], true) ? $r->str('tab') : 'TIEP_NHAN';
+        // bộ lọc: tìm · kho · mặt hàng · hạn bảo hành · kết quả (tab chờ trả) · thời gian nhận · sắp xếp
         $q = trim($r->str('q'));
-        [$rows, $pg] = Paginator::of($this->warranty->list($scope, $tab, $q), $r);
+        [$from, $to, $rangeSel] = range_params($r);
+        $wh = (int)$r->int('warehouse');
+        $item = (int)$r->int('item');
+        $valid = in_array($r->str('valid'), ['yes', 'no'], true) ? $r->str('valid') : '';
+        $result = $tab === 'WAITING' && in_array($r->str('result'), WarrantyService::WAITING, true) ? $r->str('result') : '';
+        $sort = in_array($r->str('sort'), ['old', 'expiry'], true) ? $r->str('sort') : '';
+        $all = $this->warranty->list($scope, $tab);
+        $list = array_filter($all, fn($b) => (!$wh || (int)$b['kho_id'] === $wh) && (!$item || (int)$b['mat_hang_id'] === $item)
+            && ($valid === '' || (bool)(int)$b['con_han'] === ($valid === 'yes')) && ($result === '' || $b['trang_thai'] === $result)
+            && in_vn_range($b['ngay_tao'], $from, $to));
+        $list = filter_rows(array_values($list), $q, fn($b) => implode(' ', [$b['ma'], $b['khach_ten'], $b['khach_sdt'], $b['item_name'], $b['ma_hang'],
+            $b['loi'], $b['ket_qua'], $b['sale_lot'], $b['sale_item'], $b['voucher_code'], $b['wh_code']]));
+        if ($sort === 'old') {
+            $list = array_reverse($list);
+        } elseif ($sort === 'expiry') {
+            usort($list, fn($a, $b) => strcmp((string)$a['het_han'], (string)$b['het_han']));
+        }
+        [$rows, $pg] = Paginator::of($list, $r);
+        $f = ['warehouse' => $wh, 'item' => $item, 'valid' => $valid, 'result' => $result, 'sort' => $sort,
+            'whOpts' => options_of($all, 'kho_id', 'wh_code'), 'itemOpts' => options_of($all, 'mat_hang_id', fn($b) => $b['ma_hang'] . ' — ' . $b['item_name'])];
+        $keep = keep_params(['q' => $q, 'warehouse' => $wh, 'item' => $item, 'valid' => $valid, 'range' => $rangeSel,
+            'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort]);
         return $this->render('warranty/index', $user, 'warranty', [
-            'rows' => $rows, 'pg' => $pg, 'tab' => $tab, 'q' => $q, 'counts' => $this->warranty->counts($scope),
+            'rows' => $rows, 'pg' => $pg, 'tab' => $tab, 'q' => $q, 'f' => $f, 'keep' => $keep, 'from' => $from, 'to' => $to, 'rangeSel' => $rangeSel,
+            'counts' => $this->warranty->counts($scope),
             'items' => $this->warranty->warrantyItems(), 'today' => StockQuery::today(),
             'canHandle' => $user->warehouseId !== null && $this->auth->allows($user, Permission::XuLyBaoHanh),
         ], 'Bảo hành');
