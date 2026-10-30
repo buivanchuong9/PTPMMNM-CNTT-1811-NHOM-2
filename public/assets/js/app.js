@@ -1190,6 +1190,9 @@
       wrap.dataset.hs = '1';
       wrap.addEventListener('wheel', (e) => {
         if (e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // phóng to, hoặc touchpad đã cuộn ngang sẵn
+        // bảng có cột ghim (.sticky-2: SKU, Tên hàng): trỏ trên 2 cột ghim thì lăn dọc như bình thường, trỏ sang các cột còn lại mới trượt ngang
+        const cell = e.target.closest ? e.target.closest('td, th') : null;
+        if (cell && cell.closest('table.sticky-2') && cell.cellIndex < 2) return;
         const max = wrap.scrollWidth - wrap.clientWidth;
         if (max <= 4 || (e.deltaY < 0 && wrap.scrollLeft <= 0) || (e.deltaY > 0 && wrap.scrollLeft >= max - 1)) return;
         e.preventDefault();
@@ -1489,6 +1492,46 @@ document.addEventListener('change', (ev) => {
     const q = fold(box.value.trim());
     bar.querySelectorAll('a').forEach((a) => { a.hidden = !!q && !a.classList.contains('active') && !fold(a.textContent).includes(q); });
     bar.scrollLeft = 0;
+  });
+})();
+
+// Thanh danh mục: nút «Khác» xổ danh sách có ô tìm. Bắt sự kiện ở document vì vùng thanh được thay mới khi lọc.
+// Phím: «/» mở + gõ tìm · ↑↓ chọn · Enter mở danh mục đầu tiên khớp · Esc đóng.
+(() => {
+  const fold = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
+  const links = (m) => [...m.querySelectorAll('.cat-more-pop li:not([hidden]) a')];
+  const filter = (m, q) => {
+    const f = fold(q.trim());
+    m.querySelectorAll('.cat-more-pop li').forEach((li) => { li.hidden = !!f && !fold(li.textContent).includes(f); });
+    m.querySelector('.cat-more-empty').hidden = links(m).length > 0;
+  };
+  const setOpen = (m, on) => {
+    m.classList.toggle('open', on);
+    m.querySelector('.cat-more-pop').hidden = !on;
+    m.querySelector('.cat-more-btn').setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) { const q = m.querySelector('.cat-more-q'); q.value = ''; filter(m, ''); q.focus(); }
+  };
+  const closeAll = (except) => document.querySelectorAll('.cat-more.open').forEach((m) => { if (m !== except) setOpen(m, false); });
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.cat-more-btn');
+    if (btn) { const m = btn.closest('.cat-more'); setOpen(m, !m.classList.contains('open')); return; }
+    if (!e.target.closest('.cat-more')) closeAll();
+  });
+  document.addEventListener('input', (e) => { if (e.target.matches('.cat-more-q')) filter(e.target.closest('.cat-more'), e.target.value); });
+  document.addEventListener('keydown', (e) => {
+    const m = e.target.closest && e.target.closest('.cat-more');
+    if (m) {
+      const list = links(m), i = list.indexOf(document.activeElement);
+      if (e.key === 'Escape') { setOpen(m, false); m.querySelector('.cat-more-btn').focus(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); (list[i + 1] || list[0] || m.querySelector('.cat-more-q')).focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); (i > 0 ? list[i - 1] : m.querySelector('.cat-more-q')).focus(); }
+      else if (e.key === 'Enter' && e.target.matches('.cat-more-q') && list[0]) { e.preventDefault(); list[0].click(); }
+      return;
+    }
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) {
+      const more = document.querySelector('.cat-more');
+      if (more) { e.preventDefault(); setOpen(more, true); }
+    }
   });
 })();
 

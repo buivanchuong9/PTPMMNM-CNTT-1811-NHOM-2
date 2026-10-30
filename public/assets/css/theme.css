@@ -403,3 +403,50 @@ body { font-size: 15px; }
   .login .demo-pick .demo-chip, .login .demo-pick .demo-chip:hover, .login .demo-pick .demo-chip:focus { padding: 8px 10px; }
   .login .demo-more { display: none; }
 }
+
+/* Đăng nhập — bản tối giản: một thẻ nhỏ căn giữa, không ảnh nền, ít chữ */
+.login { grid-template-columns: minmax(0, 1fr); background: var(--bg); }
+.login-main { padding: 24px 16px; }
+.login .login-card { max-width: 400px; padding: 32px 28px; background: var(--surface); border: 1px solid var(--l-line); border-radius: 16px; box-shadow: 0 20px 50px -34px rgba(17, 24, 39, .35); }
+.login-head { margin-bottom: 24px; }
+.login-mark { justify-content: center; margin-bottom: 0; }
+.login .demo-accounts { margin-top: 22px; padding-top: 16px; }
+@media (max-width: 480px) { .login .login-card { padding: 24px 18px; } }
+.login .demo-bar { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; font-size: .85rem; font-weight: 650; color: var(--l-muted); }
+.login .demo-pick { grid-template-columns: 1.15fr 1fr 1fr; }
+.login .demo-pick select { width: 100%; min-height: 0; padding: 8px 24px 8px 10px; border: 1px solid var(--l-line); border-radius: 10px; background-color: var(--surface); color: var(--l-ink); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.login .demo-pick .demo-chip, .login .demo-pick .demo-chip:hover, .login .demo-pick .demo-chip:focus, .login .demo-bar .demo-chip, .login .demo-bar .demo-chip:hover, .login .demo-bar .demo-chip:focus { justify-content: center; padding: 8px 10px; font-size: .84rem; font-weight: 600; color: var(--l-ink); text-align: center; }
+.login .demo-bar .demo-chip { padding: 5px 12px; font-size: .8rem; }
+.login .demo-bar .demo-chip:hover, .login .demo-bar .demo-chip.on { border-color: var(--brand); }
+.login .demo-bar .demo-chip.on { background: var(--brand-50); }
+.login .demo-bar .demo-chip, .login .demo-bar .demo-chip:hover, .login .demo-bar .demo-chip:focus { all: unset; box-sizing: border-box; display: grid; border: 1px solid var(--l-line); border-radius: 10px; background: var(--surface); cursor: pointer; padding: 5px 12px; font-size: .8rem; font-weight: 600; color: var(--l-ink); transition: border-color .15s, background .15s; }
+.login .demo-bar .demo-chip:hover { border-color: var(--brand); }
+.login .demo-bar .demo-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* Đăng nhập: góc vuông */
+.login .login-card, .login-mark img, .login .login-form input:not([type=hidden]), .login .login-form .in-ic input:not([type=hidden]), .login .login-form button, .login .login-form button[type=submit], .login .flash, .login .demo-accounts code, .login .demo-pick select, .login .demo-pick .demo-chip, .login .demo-bar .demo-chip, .login .theme-fab { border-radius: 0; }
+
+/* Tài khoản dùng thử: thu gọn thành một liên kết, bấm mới mở */
+.login .demo-accounts { margin-top: 20px; padding-top: 0; }
+.login .demo-accounts summary { padding: 14px 0 0; font-size: .85rem; font-weight: 600; justify-content: center; gap: 6px; }
+.login .demo-accounts summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.login .demo-accounts[open] summary { margin-bottom: 12px; }
+.login .demo-bar { font-weight: 500; font-size: .8rem; }
+
+/* Ô nhập thấp hơn */
+.login .login-form { gap: 12px; }
+.login .login-form label { gap: 5px; }
+.login .login-form .in-ic input:not([type=hidden]) { min-height: 38px; padding-top: 6px; padding-bottom: 6px; padding-left: 40px; font-size: .9rem; }
+.login .in-ic > .icon { left: 12px; width: 16px; height: 16px; }
+.login .login-form .pw-toggle, .login .login-form .pw-toggle:hover, .login .login-form .pw-toggle:active { width: 30px; height: 30px; min-height: 30px; }
+.login .login-form .pw-toggle .icon { width: 18px; height: 18px; }
+.login .login-form button[type=submit] { min-height: 42px; }
+
+/* Khối dùng thử luôn mở: chừa khoảng cách dưới đường kẻ */
+.login .demo-accounts { padding-top: 14px; }
+.login .demo-bar { margin-bottom: 10px; }
+
+/* Logo + tên nhỏ lại một chút */
+.login-mark { gap: 10px; }
+.login-mark img { width: 36px; height: 36px; }
+.login-mark > span > b { font-size: .92rem; }

@@ -22,6 +22,17 @@
     });
   });
 
+  // chọn kho ⇒ đổi tiền tố tên đăng nhập của hai ô Quản lý / Nhân viên (hn. / dn. / hcm.)
+  var kho = document.querySelector('[data-kho]');
+  if (kho) kho.addEventListener('change', function () {
+    document.querySelectorAll('[data-role]').forEach(function (c) {
+      var u = kho.value + '.' + c.getAttribute('data-role');
+      c.setAttribute('data-demo', u);
+      c.title = u;
+      c.classList.remove('on');
+    });
+  });
+
   form.addEventListener('submit', function () {
     if (!submit || submit.disabled) return;
     submit.classList.add('busy');
