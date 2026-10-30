@@ -7,11 +7,21 @@ $tones = ['' => 'all', 'PENDING' => 'warn', 'APPROVED' => 'ok', 'REJECTED' => 'b
   <?php if ($canPropose): ?><div class="page-actions"><button type="button" data-scan-open><?= icon('scan') ?>Quét mã vạch</button></div><?php endif; ?>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
-  <a href="/proposals"<?= $status === '' ? ' class="active" aria-current="page"' : '' ?> data-tone="all">Tất cả <span class="count"><?= n($total) ?></span></a>
+  <a href="/proposals<?= $keep ? '?' . e(http_build_query($keep)) : '' ?>"<?= $status === '' ? ' class="active" aria-current="page"' : '' ?> data-tone="all">Tất cả <span class="count"><?= n($total) ?></span></a>
   <?php foreach (I::LABELS as $k => [$label]): ?>
-  <a href="/proposals?status=<?= e($k) ?>" data-tone="<?= $tones[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a>
+  <a href="/proposals?status=<?= e($k) ?><?= $keep ? '&amp;' . e(http_build_query($keep)) : '' ?>" data-tone="<?= $tones[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a>
   <?php endforeach; ?>
 </nav>
+<form class="filters" method="get">
+  <input type="hidden" name="status" value="<?= e($status) ?>">
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã vạch, SKU, tên hàng, người đề xuất…" aria-label="Tìm kiếm">
+  <select name="category"<?= $f['category'] ? ' class="on"' : '' ?> aria-label="Loại hàng"><?= filter_options($f['catOpts'], $f['category'], 'Mọi loại hàng') ?></select>
+  <select name="supplier"<?= $f['supplier'] ? ' class="on"' : '' ?> aria-label="Nhà cung cấp"><?= filter_options($f['supOpts'], $f['supplier'], 'Mọi nhà cung cấp') ?></select>
+<?php if (count($f['whOpts']) > 1): ?><select name="warehouse"<?= $f['warehouse'] ? ' class="on"' : '' ?> aria-label="Kho"><?= filter_options($f['whOpts'], $f['warehouse'], 'Mọi kho') ?></select><?php endif; ?>
+  <?php include __DIR__ . '/../partials/range_filter.php'; ?>
+  <select name="sort"<?= $f['sort'] === 'old' ? ' class="on"' : '' ?> aria-label="Sắp xếp theo thời gian"><option value="">Mới nhất trước</option><option value="old"<?= $f['sort'] === 'old' ? ' selected' : '' ?>>Cũ nhất trước</option></select>
+  <?php if (array_diff_key($keep, ['q' => 1])): ?><a class="btn btn-ghost" href="/proposals?<?= e(http_build_query(array_filter(['status' => $status]))) ?>">Xoá lọc</a><?php endif; ?>
+</form>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>Mã vạch</th><th>SKU</th><th>Tên hàng</th><th>Loại hàng</th><th>Nhà cung cấp</th><th>Kho</th><th>Trạng thái</th><th>Người đề xuất</th><th></th></tr></thead>
   <tbody>

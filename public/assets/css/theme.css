@@ -450,3 +450,9 @@ body { font-size: 15px; }
 .login-mark { gap: 10px; }
 .login-mark img { width: 36px; height: 36px; }
 .login-mark > span > b { font-size: .92rem; }
+
+/* Đăng nhập — nút dùng thử: bấm vào thì viền đỏ, góc vuông ở mọi trạng thái */
+.login .demo-pick .demo-chip, .login .demo-pick .demo-chip:hover, .login .demo-pick .demo-chip:focus, .login .demo-pick .demo-chip:focus-visible,
+.login .demo-bar .demo-chip, .login .demo-bar .demo-chip:hover, .login .demo-bar .demo-chip:focus, .login .demo-bar .demo-chip:focus-visible { border-radius: 0; }
+.login .demo-pick .demo-chip.on, .login .demo-pick .demo-chip:focus, .login .demo-bar .demo-chip.on, .login .demo-bar .demo-chip:focus { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); background: var(--surface); }
+.login .demo-pick .demo-chip:focus-visible, .login .demo-bar .demo-chip:focus-visible { outline: none; }

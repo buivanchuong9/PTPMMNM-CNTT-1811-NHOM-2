@@ -1,7 +1,7 @@
 <?php /** @var array $rows @var array $statusCounts @var array $summary @var array $allWarehouses @var array $reasons @var int $totalActive @var int $dueDays */
 $tones = ['' => 'all', 'OPEN' => 'info', 'REVIEW' => 'warn', 'CLOSED' => 'ok', 'CANCELLED' => 'bad'];
 $tabs = ['' => 'Tất cả', 'OPEN' => 'Đang kiểm đếm', 'REVIEW' => 'Chờ duyệt', 'CLOSED' => 'Đã đóng', 'CANCELLED' => 'Đã huỷ'];
-$qs = fn(array $over) => http_build_query(array_filter(array_merge(['status' => $status, 'warehouse' => $wh, 'range' => $rangeSel === 'custom' ? '' : $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null], $over), fn($v) => $v !== null && $v !== ''));
+$qs = fn(array $over) => http_build_query(array_filter(array_merge(['status' => $status, 'q' => $q, 'variance' => $variance, 'sort' => $sort === 'old' ? 'old' : null, 'warehouse' => $wh, 'range' => $rangeSel === 'custom' ? '' : $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null], $over), fn($v) => $v !== null && $v !== ''));
 $ageDays = fn(?string $t) => $t ? (int)floor((time() - strtotime($t . ' UTC')) / 86400) : 0;
 ?>
 <header class="page-head">
@@ -46,14 +46,15 @@ $ageDays = fn(?string $t) => $t ? (int)floor((time() - strtotime($t . ' UTC')) /
   <a href="/counts?<?= e($qs(['status' => $k])) ?>" data-tone="<?= $tones[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($c) ?></span></a>
   <?php endforeach; ?>
 </nav>
-<?php if ($user->isAdmin): ?>
 <form class="filters" method="get">
   <input type="hidden" name="status" value="<?= e($status) ?>">
-  <select name="warehouse"<?= $wh ? ' class="on"' : '' ?> aria-label="Kho"><?= wh_options($allWarehouses, $wh, 'Mọi kho') ?></select>
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã đợt, kho, người lập / duyệt…" aria-label="Tìm kiếm">
+  <?php if ($user->isAdmin): ?><select name="warehouse"<?= $wh ? ' class="on"' : '' ?> aria-label="Kho"><?= wh_options($allWarehouses, $wh, 'Mọi kho') ?></select><?php endif; ?>
+  <select name="variance"<?= $variance ? ' class="on"' : '' ?> aria-label="Chênh lệch"><option value="">Mọi kết quả đếm</option><option value="yes"<?= $variance === 'yes' ? ' selected' : '' ?>>Có chênh lệch</option><option value="no"<?= $variance === 'no' ? ' selected' : '' ?>>Không chênh lệch</option></select>
   <?php include __DIR__ . '/../partials/range_filter.php'; ?>
-  <?php if ($rangeSel): ?><a class="btn btn-ghost" href="/counts?<?= e($qs(['range' => null, 'from' => null, 'to' => null])) ?>">Xoá lọc thời gian</a><?php endif; ?>
+  <select name="sort"<?= $sort === 'old' ? ' class="on"' : '' ?> aria-label="Sắp xếp theo thời gian"><option value="">Mới nhất trước</option><option value="old"<?= $sort === 'old' ? ' selected' : '' ?>>Cũ nhất trước</option></select>
+  <?php if ($rangeSel || $variance || $sort === 'old' || ($user->isAdmin && $wh)): ?><a class="btn btn-ghost" href="/counts?<?= e(http_build_query(array_filter(['status' => $status]))) ?>">Xoá lọc</a><?php endif; ?>
 </form>
-<?php endif; ?>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
   <thead><tr><th>Mã đợt</th><th>Kho</th><th>Trạng thái</th><th>Tiến độ đếm</th><th class="num">Dòng lệch</th><th class="num">Lệch ròng</th><th>Người lập / duyệt</th><th>Phiếu điều chỉnh</th><th>Mở lúc</th></tr></thead>
   <tbody>

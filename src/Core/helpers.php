@@ -47,6 +47,91 @@ function fold_vn(string $s): string
     return strtr(mb_strtolower($s), $map);
 }
 
+/**
+ * Lọc danh sách đã tải (mảng) theo ô tìm kiếm: không phân biệt hoa thường và dấu, MỌI từ khoá đều phải khớp.
+ * $hay(row) trả về chuỗi gộp các trường được tìm. Từ khoá rỗng ⇒ giữ nguyên danh sách.
+ * @param list<array<string,mixed>> $rows @param callable(array):string $hay @return list<array<string,mixed>>
+ */
+function filter_rows(array $rows, string $q, callable $hay): array
+{
+    $words = array_filter(preg_split('/\s+/u', fold_vn(trim($q))) ?: [], fn($w) => $w !== '');
+    if (!$words) {
+        return $rows;
+    }
+    return array_values(array_filter($rows, function ($row) use ($words, $hay) {
+        $text = fold_vn((string)$hay($row));
+        foreach ($words as $w) {
+            if (!str_contains($text, $w)) {
+                return false;
+            }
+        }
+        return true;
+    }));
+}
+
+/**
+ * Ô «Thời gian» dùng chung (partials/range_filter.php): mốc nhanh thắng; «Tuỳ chọn» hoặc có từ/đến thì dùng ngày tự chọn.
+ * @return array{0:?string,1:?string,2:string} [từ ngày, đến ngày, mốc đang chọn ('' | khoá DATE_RANGES | 'custom')]
+ */
+function range_params(\StockFlow\Core\Request $r): array
+{
+    if ($preset = date_range($r->str('range'))) {
+        return [$preset[0], $preset[1], $r->str('range')];
+    }
+    $valid = function (string $k) use ($r): ?string {
+        $v = $r->str($k);
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && checkdate((int)substr($v, 5, 2), (int)substr($v, 8, 2), (int)substr($v, 0, 4)) ? $v : null;
+    };
+    [$from, $to] = [$valid('from'), $valid('to')];
+    if ($from && $to && $from > $to) {
+        [$from, $to] = [$to, $from];
+    }
+    return [$from, $to, ($r->str('range') === 'custom' || $from || $to) ? 'custom' : ''];
+}
+
+/** Thời điểm lưu trong CSDL (UTC) có rơi vào khoảng ngày theo giờ Việt Nam không. Không chọn khoảng ⇒ luôn đúng. */
+function in_vn_range(?string $ts, ?string $from, ?string $to): bool
+{
+    if (!$from && !$to) {
+        return true;
+    }
+    if (!$ts) {
+        return false;
+    }
+    $d = gmdate('Y-m-d', strtotime($ts . ' UTC') + 7 * 3600);
+    return (!$from || $d >= $from) && (!$to || $d <= $to);
+}
+
+/** Lựa chọn [giá trị => nhãn] lấy từ chính các dòng đang có (không có mục rỗng), sắp theo nhãn. */
+function options_of(array $rows, string $valueKey, string|callable $label): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        $v = $row[$valueKey] ?? null;
+        if ($v !== null && $v !== '') {
+            $out[(string)$v] = is_callable($label) ? $label($row) : (string)$row[$label];
+        }
+    }
+    asort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
+}
+
+/** <option> cho ô lọc: mục đầu là «tất cả» (giá trị rỗng). */
+function filter_options(array $options, string|int|null $selected, string $placeholder): string
+{
+    $html = '<option value="">' . e($placeholder) . '</option>';
+    foreach ($options as $v => $label) {
+        $html .= '<option value="' . e($v) . '"' . ((string)$selected === (string)$v ? ' selected' : '') . '>' . e($label) . '</option>';
+    }
+    return $html;
+}
+
+/** Tham số lọc đang dùng (giữ lại khi chuyển tab, bỏ giá trị rỗng / mặc định). */
+function keep_params(array $params): array
+{
+    return array_filter($params, fn($v) => $v !== null && $v !== '' && $v !== 0);
+}
+
 /** Escape rồi tô đậm phần khớp với từ khoá (không phân biệt hoa thường và dấu, giống cách tìm ở CSDL): «<mark class="hl">…</mark>». */
 function hl(?string $text, string $needle): string
 {

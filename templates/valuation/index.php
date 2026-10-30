@@ -6,9 +6,13 @@ $vnd = fn($v) => n((int)$v) . ' đ';
 </header>
 
 <form class="filters" method="get">
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Tìm SKU, tên hàng, danh mục…" aria-label="Tìm kiếm">
   <?php if (count($visible) > 1): ?><select name="warehouse" aria-label="Kho" data-live-reload><?= wh_options(array_values(array_filter($warehouses, fn($w) => in_array((int)$w['id'], $visible, true))), $wh, 'Tất cả kho') ?></select>
   <?php elseif ($myWarehouse): ?><span class="tag tag-info"><?= e($myWarehouse['ma'] . ' — ' . $myWarehouse['ten']) ?></span><?php endif; ?>
-  <select name="category" aria-label="Danh mục" data-live-reload><option value="">Mọi danh mục</option><?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>"<?= $category === (string)$c['id'] ? ' selected' : '' ?>><?= e($c['ten']) ?></option><?php endforeach; ?><option value="none"<?= $category === 'none' ? ' selected' : '' ?>>Chưa phân loại</option></select>
+  <select name="category"<?= $category !== '' ? ' class="on"' : '' ?> aria-label="Danh mục" data-live-reload><option value="">Mọi danh mục</option><?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>"<?= $category === (string)$c['id'] ? ' selected' : '' ?>><?= e($c['ten']) ?></option><?php endforeach; ?><option value="none"<?= $category === 'none' ? ' selected' : '' ?>>Chưa phân loại</option></select>
+  <select name="price"<?= $price ? ' class="on"' : '' ?> aria-label="Tình trạng giá"><option value="">Mọi tình trạng giá</option><option value="none"<?= $price === 'none' ? ' selected' : '' ?>>Chưa đủ giá gốc / giá bán</option><option value="ok"<?= $price === 'ok' ? ' selected' : '' ?>>Đã có đủ giá</option></select>
+  <select name="sort"<?= $sort ? ' class="on"' : '' ?> aria-label="Sắp xếp"><?php foreach (['' => 'Vốn tồn: cao → thấp', 'qty' => 'Số lượng tồn: nhiều → ít', 'sell' => 'Giá trị bán: cao → thấp', 'margin' => 'Lãi dự kiến: cao → thấp', 'sku' => 'SKU: A → Z'] as $k => $label): ?><option value="<?= e($k) ?>"<?= $sort === $k ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select>
+  <?php if ($wh || $category !== '' || $price || $sort): ?><a class="btn btn-ghost" href="/valuation">Xoá lọc</a><?php endif; ?>
 </form>
 
 <section class="cards-3" style="margin-bottom:16px" aria-label="Tổng hợp tồn kho">

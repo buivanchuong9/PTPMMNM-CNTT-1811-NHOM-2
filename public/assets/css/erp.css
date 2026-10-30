@@ -186,3 +186,7 @@ th { letter-spacing: .03em; }
 .sale-lookup { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--bg); border-radius: 2px; line-height: 1.5; }
 .sale-lookup:not(.muted):not(.neg) { border-left-color: var(--brand); }
 .sale-code-sub { margin: 6px 0 4px; }
+
+/* Ô tìm ngay trên trình duyệt (kho, phân quyền) */
+.wh-card[hidden], .matrix tr[hidden] { display: none !important; }
+.filter-empty { margin: 0; align-self: center; }

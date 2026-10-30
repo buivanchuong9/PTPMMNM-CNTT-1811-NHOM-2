@@ -3,6 +3,7 @@ use StockFlow\Domain\AccountRole;
 $cols = AccountRole::configurable();
 ?>
 <header class="page-head"><div><h1>Phân quyền chức năng</h1></div></header>
+<div class="filters" data-filter-box=".matrix tbody tr:not(.grp)" data-filter-groups=".matrix tbody tr.grp"><input type="search" maxlength="50" placeholder="Tìm chức năng…" aria-label="Tìm chức năng" data-filter-q><select aria-label="Nhóm chức năng" data-filter-group><option value="">Mọi nhóm chức năng</option><?php foreach (array_keys($groups) as $g): ?><option><?= e($g) ?></option><?php endforeach; ?></select></div>
 <form method="post" action="/roles" class="card flush">
   <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
   <div class="table-wrap"><table class="matrix">

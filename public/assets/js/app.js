@@ -1571,6 +1571,26 @@ document.addEventListener('change', (ev) => {
   });
 })();
 
+// Lọc ngay trên trình duyệt cho trang ít dữ liệu, không phân trang (kho & nhân sự, phân quyền).
+// [data-filter-box] = khung lọc, giá trị là bộ chọn các phần tử được lọc; bên trong: ô [data-filter-q] (từ khoá) và tuỳ chọn [data-filter-group] (nhóm).
+// [data-filter-groups] = dòng tiêu đề nhóm: ẩn khi cả nhóm không còn dòng nào; chọn nhóm thì chỉ giữ các dòng thuộc nhóm đó.
+const runListFilter = (box) => {
+  const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
+  const qEl = box.querySelector('[data-filter-q]'), gEl = box.querySelector('[data-filter-group]');
+  const words = fold(qEl ? qEl.value : '').split(/\s+/).filter(Boolean), group = gEl ? gEl.value : '';
+  const items = [...document.querySelectorAll(box.dataset.filterBox)];
+  const heads = box.dataset.filterGroups ? [...document.querySelectorAll(box.dataset.filterGroups)] : [];
+  const groupOf = (el) => { let n = el.previousElementSibling; while (n && !heads.includes(n)) n = n.previousElementSibling; return n ? n.textContent.trim() : ''; };
+  items.forEach((el) => { const t = fold(el.textContent); el.hidden = !words.every((w) => t.includes(w)) || (group !== '' && groupOf(el) !== group); });
+  heads.forEach((g) => { let n = g.nextElementSibling, any = false; while (n && !heads.includes(n)) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; });
+  qEl && qEl.classList.toggle('on', words.length > 0);
+  gEl && gEl.classList.toggle('on', group !== '');
+  let empty = box.querySelector('.filter-empty');
+  if (!empty) { empty = document.createElement('p'); empty.className = 'filter-empty muted small'; empty.textContent = 'Không có kết quả phù hợp.'; box.append(empty); }
+  empty.hidden = !(words.length || group) || items.some((el) => !el.hidden);
+};
+['input', 'change'].forEach((t) => document.addEventListener(t, (e) => { const box = e.target.closest && e.target.closest('[data-filter-box]'); if (box) runListFilter(box); }));
+
 // Form đối tác: thêm / bỏ dòng «hàng mới do nhà cung cấp cung cấp»
 document.addEventListener('click', (ev) => {
   const add = ev.target.closest('[data-add-newitem]'), del = ev.target.closest('[data-remove-newitem]');

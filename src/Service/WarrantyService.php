@@ -136,9 +136,10 @@ final class WarrantyService
     }
 
     private const SELECT = 'SELECT b.*, w.ma AS wh_code, w.ten AS wh_name, i.ma_hang, i.ten AS item_name, i.bao_hanh_thang, u.ma AS unit,
-                                   lu.ho_ten AS creator_name, xu.ho_ten AS handler_name, v.ma AS voucher_code
+                                   lu.ho_ten AS creator_name, xu.ho_ten AS handler_name, v.ma AS voucher_code, sp.ma_lo AS sale_lot, sp.ma_mon AS sale_item
                             FROM bao_hanh b JOIN kho w ON w.id = b.kho_id JOIN mat_hang i ON i.id = b.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
-                            JOIN nguoi_dung lu ON lu.id = b.nguoi_lap_id LEFT JOIN nguoi_dung xu ON xu.id = b.nguoi_xu_ly_id LEFT JOIN phieu_nhap_xuat v ON v.id = b.phieu_nhap_xuat_id';
+                            JOIN nguoi_dung lu ON lu.id = b.nguoi_lap_id LEFT JOIN nguoi_dung xu ON xu.id = b.nguoi_xu_ly_id LEFT JOIN phieu_nhap_xuat v ON v.id = b.phieu_nhap_xuat_id
+                            LEFT JOIN san_pham_ban sp ON sp.id = b.san_pham_ban_id';
 
     /** @param string $tab TIEP_NHAN (đang giữ) · WAITING (chờ trả khách) · DA_TRA · '' (tất cả) */
     public function list(array $warehouseIds, string $tab = '', string $q = ''): array
