@@ -85,22 +85,10 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <link rel="stylesheet" href="<?= asset_url('/assets/css/dark.css') ?>">
 <link rel="stylesheet" href="<?= asset_url('/assets/css/dialog.css') ?>">
 <link rel="stylesheet" href="<?= asset_url('/assets/css/scan.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/erp.css') ?>">
 </head>
 <body class="app-shell<?= !empty($compact) ? ' compact' : '' ?>">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
-<?php if (!empty($welcome)): ?>
-<?php $hour = (int)gmdate('G', time() + 7 * 3600); $greet = $hour < 11 ? 'Chào buổi sáng' : ($hour < 13 ? 'Chào buổi trưa' : ($hour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối')); ?>
-<div class="welcome" id="welcome" aria-hidden="true">
-  <div class="welcome-stage">
-    <div class="welcome-logo">
-      <svg class="welcome-ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="56"/></svg>
-      <img src="/assets/img/logo.png" alt="" width="88" height="88">
-    </div>
-    <p class="welcome-text"><?= $greet ?>, <b><?= e($user->fullName) ?></b></p>
-    <p class="welcome-sub"><?= e($myWarehouse ? $myWarehouse['ma'] . ' — ' . $myWarehouse['ten'] : 'Tất cả các kho') ?></p>
-  </div>
-</div>
-<?php endif; ?>
 <header class="topbar">
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
   <a class="brand" href="/" aria-label="<?= e(strip_tags(app_brand())) ?> — Tổng quan" title="Tổng quan"><img src="/assets/img/logo-mark.png" alt="" width="40" height="40"></a>

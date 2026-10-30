@@ -265,28 +265,6 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 @keyframes dep-flash { 0% { background: var(--warn-bg); } 100% { background: transparent; } }
 .matrix tr.dep-flash { animation: dep-flash 1.2s ease-out; }
 
-/* ── Màn chào sau đăng nhập (~2 giây, không bấm bỏ qua được, kiểu Stripe / app ngân hàng): logo phóng ra giữa, vòng đỏ chạy quanh logo,
-      lời chào theo giờ hiện lên, rồi cả lớp phủ trượt lên như kéo rèm để lộ trang. Chỉ CSS (CSP không cho script nội tuyến). ── */
-.welcome { --w-bg: #ffffff; --w-txt: #111827; --w-sub: #6b7280; --w-track: #f1f2f5; }
-:root[data-theme="dark"] .welcome { --w-bg: #0b1226; --w-txt: #eef1f8; --w-sub: #98a2b8; --w-track: #1d2540; }
-.welcome { position: fixed; inset: 0; z-index: 9999; overflow: hidden; cursor: default; background: var(--w-bg);
-  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .35); animation: welcome-up .65s cubic-bezier(.7, 0, .2, 1) 1.4s both; }
-.welcome-stage { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  animation: welcome-lift .65s cubic-bezier(.7, 0, .2, 1) 1.4s both; }
-.welcome-logo { position: relative; width: 180px; height: 180px; margin-bottom: 26px; display: grid; place-items: center; animation: welcome-pop .55s cubic-bezier(.2, .9, .3, 1.25) both; }
-.welcome-logo img { width: 132px; height: 132px; border-radius: 34px; object-fit: cover; box-shadow: 0 14px 30px -12px rgba(150, 14, 28, .55); }
-.welcome-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.welcome-ring circle { fill: none; stroke: var(--brand); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 352; stroke-dashoffset: 352; animation: welcome-ring .85s cubic-bezier(.6, 0, .3, 1) .18s forwards; }
-.welcome-text { margin: 0; padding: 0 16px; text-align: center; font-size: 2.1rem; font-weight: 650; letter-spacing: -.01em; color: var(--w-txt); animation: welcome-fade .45s ease-out .4s both; }
-.welcome-text b { color: var(--brand); font-weight: 750; }
-.welcome-sub { margin: 4px 0 0; font-size: 1.15rem; color: var(--w-sub); animation: welcome-fade .45s ease-out .58s both; }
-@keyframes welcome-pop { from { opacity: 0; transform: scale(.82); } }
-@keyframes welcome-ring { to { stroke-dashoffset: 0; } }
-@keyframes welcome-fade { from { opacity: 0; transform: translateY(8px); } }
-@keyframes welcome-lift { to { opacity: 0; transform: translateY(-40px); } }
-@keyframes welcome-up { to { transform: translateY(-100%); visibility: hidden; } }
-@media (max-width: 460px) { .welcome-logo { width: 140px; height: 140px; } .welcome-logo img { width: 102px; height: 102px; border-radius: 27px; } .welcome-text { font-size: 1.5rem; } .welcome-sub { font-size: 1rem; } }
-@media (prefers-reduced-motion: reduce) { .welcome { display: none; } }
 
 /* Kết quả lọc: phần khớp từ khoá được tô đậm; ô lọc đang có giá trị viền đỏ để biết bộ lọc nào đang bật */
 mark.hl { padding: 0 2px; border-radius: 3px; background: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--brand-600); font-weight: 700; }
