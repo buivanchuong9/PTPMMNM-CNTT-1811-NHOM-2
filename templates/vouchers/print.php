@@ -60,6 +60,12 @@ $qcLabels = \StockFlow\Service\SupplierReturnService::REASONS;
   .sum div { display: flex; justify-content: space-between; gap: 20px; }
   .sum .grand { border-top: 1px solid #222; margin-top: 3px; padding-top: 3px; font-weight: 700; font-size: 15px; }
   .words { margin: 10px 0 0; }
+  .warranty { margin-top: 16px; break-inside: avoid; }
+  .warranty h3 { margin: 0 0 4px; font-size: 14px; }
+  .warranty .wl { margin-top: 8px; }
+  .warranty .lot { font-family: Consolas, 'Courier New', monospace; font-weight: 700; letter-spacing: .04em; }
+  .warranty .units { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 10px; margin-top: 3px; font-family: Consolas, 'Courier New', monospace; font-size: 12.5px; letter-spacing: .03em; }
+  .warranty .note { color: #555; font-size: 12px; margin-top: 4px; }
   .sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 26px; text-align: center; break-inside: avoid; }
   .sign b { display: block; } .sign i { color: #555; font-size: 12px; }
   .sign .space { height: 92px; }
@@ -161,6 +167,18 @@ $qcLabels = \StockFlow\Service\SupplierReturnService::REASONS;
     <div class="grand"><span><?= $taxed ? 'Tổng thanh toán' : 'Tổng giá trị hàng chuyển' ?></span><span><?= n($sumNet + $sumTax) ?> đ</span></div>
   </div>
   <p class="words"><i>Bằng chữ: <?= e(vnd_words($sumNet + $sumTax)) ?>.</i></p>
+  <?php endif; ?>
+
+  <?php if (!empty($saleCodes)): $lineOf = array_column($lines, null, 'id'); ?>
+  <div class="warranty">
+    <h3>Mã bảo hành — giữ phiếu này để tra bảo hành</h3>
+    <?php foreach ($saleCodes as $lineId => $g): $ln = $lineOf[$lineId] ?? null; $first = $g['units'][0]; ?>
+    <div class="wl"><b><?= e($ln['ma_hang'] ?? '') ?></b> <?= e($ln['ten'] ?? '') ?> — bảo hành <?= (int)$first['months'] ?> tháng, đến <?= e(dt($first['expiry'], false)) ?><br>
+      Mã lô hàng: <span class="lot"><?= e($g['lot']) ?></span> · <?= n(count($g['units'])) ?> mã món hàng (mỗi chiếc một mã):
+      <div class="units"><?php foreach ($g['units'] as $u): ?><span><?= e($u['code']) ?></span><?php endforeach; ?></div></div>
+    <?php endforeach; ?>
+    <div class="note">Tra bảo hành cần cả mã lô hàng và mã món hàng của chiếc hàng.</div>
+  </div>
   <?php endif; ?>
 
   <div class="sign"<?= $qcRows ? ' style="grid-template-columns:repeat(4,1fr)"' : '' ?>>

@@ -136,7 +136,7 @@ final class InventoryController extends Controller
             // Bấm tên hàng ⇒ xem các lô còn tồn: hạn dùng, còn hạn hay sắp / đã hết hạn, tồn theo từng kho.
             $lotsOf = [];
             foreach ($this->query->onHand($scope, '', true) as $x) {
-                $lotsOf[(int)$x['mat_hang_id']][(int)$x['lo_hang_id']] ??= ['lot' => $x['so_lo'], 'exp' => $x['han_dung'], 'by' => [], 'total' => 0] + ['state' => StockQuery::expiryState($x['han_dung'] ?? null)];
+                $lotsOf[(int)$x['mat_hang_id']][(int)$x['lo_hang_id']] ??= ['lot' => $x['so_lo'], 'exp' => $x['han_dung'], 'bh' => (int)$x['lo_bao_hanh'], 'by' => [], 'total' => 0] + ['state' => StockQuery::expiryState($x['han_dung'] ?? null)];
                 $lotsOf[(int)$x['mat_hang_id']][(int)$x['lo_hang_id']]['by'][(int)$x['kho_id']] = $x['so_luong'];
                 $lotsOf[(int)$x['mat_hang_id']][(int)$x['lo_hang_id']]['total'] += $x['so_luong'];
             }

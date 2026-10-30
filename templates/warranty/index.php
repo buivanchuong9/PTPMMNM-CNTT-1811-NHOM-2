@@ -57,10 +57,15 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
     <div class="dlg-head"><h2 id="warranty-dlg-t">Nhận hàng bảo hành</h2><button type="button" class="icon-btn" data-dialog-close aria-label="Đóng">✕</button></div>
     <?php if ($myWarehouse): ?><?= wh_fixed($myWarehouse, 'Nhận tại kho', 'wh') ?><?php endif; ?>
     <?php if (!$items): ?><p class="muted">Chưa có mặt hàng nào được đặt thời hạn bảo hành. Quản trị viên đặt ở <a href="/inventory">Hàng hoá → Sửa</a>.</p><?php else: ?>
-    <label>Mặt hàng<select name="item_id" required><option value="">Chọn mặt hàng…</option><?php foreach ($items as $i): ?><option value="<?= (int)$i['id'] ?>"><?= e($i['ma_hang'] . ' — ' . $i['ten'] . ' (BH ' . $i['bao_hanh_thang'] . ' tháng)') ?></option><?php endforeach; ?></select></label>
+    <div class="row-3" style="grid-template-columns:1fr 1fr">
+      <label>Mã lô hàng<input name="lot_code" maxlength="20" autocomplete="off" spellcheck="false" placeholder="LB-XXXXXXXX" data-sale-lot></label>
+      <label>Mã món hàng<input name="item_code" maxlength="20" autocomplete="off" spellcheck="false" placeholder="SP-XXXXXXXX" data-sale-item></label>
+    </div>
+    <p class="sale-lookup muted small" data-sale-info>Nhập cả hai mã in trên phiếu bán để tự điền thông tin và hạn bảo hành. Hàng bán trước khi có mã: chọn mặt hàng và nhập mã phiếu mua bên dưới.</p>
+    <label>Mặt hàng<select name="item_id" required data-sale-need><option value="">Chọn mặt hàng…</option><?php foreach ($items as $i): ?><option value="<?= (int)$i['id'] ?>"><?= e($i['ma_hang'] . ' — ' . $i['ten'] . ' (BH ' . $i['bao_hanh_thang'] . ' tháng)') ?></option><?php endforeach; ?></select></label>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Số lượng<input type="number" name="qty" min="1" max="1000" value="1" required></label>
-      <label>Mã phiếu mua (phiếu xuất bán)<input name="phieu_mua" maxlength="30" required autocomplete="off" placeholder="vd: PX-261030-00001"></label>
+      <label>Mã phiếu mua (chỉ khi không có mã)<input name="phieu_mua" maxlength="30" autocomplete="off" placeholder="vd: PX-261030-000010" data-sale-need></label>
     </div>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Tên khách<input name="customer" maxlength="120" required></label>

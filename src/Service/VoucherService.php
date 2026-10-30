@@ -16,7 +16,7 @@ final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
                                 private Authorizer $auth, private AuditLog $audit, private TransferService $transfers, private StockQuery $query, private PricingService $pricing,
-                                private SupplierReturnService $returns, private DeliveryService $deliveries) {}
+                                private SupplierReturnService $returns, private DeliveryService $deliveries, private SaleCodeService $saleCodes) {}
 
     /**
      * Lập phiếu nhập/xuất ở trạng thái nháp (chưa ảnh hưởng tồn).
@@ -133,6 +133,9 @@ final class VoucherService
             if ($v['loai'] === VoucherType::Issue->value && $delivery !== null) {
                 $this->deliveries->record($user, $v, $delivery);
             }
+            if ($v['loai'] === VoucherType::Issue->value) {   // hàng có bảo hành: sinh mã lô hàng + mã món hàng để tra bảo hành / hoá đơn
+                $this->saleCodes->issueFor($v, $lines);
+            }
             if ($v['loai'] === VoucherType::Receipt->value) {   // hàng không đạt ⇒ phiếu trả nhà cung cấp; hàng cấp lại ⇒ trừ vào số còn thiếu
                 $this->returns->createFromReceipt($user, $v);
                 $this->returns->fulfil($v, $lines);
@@ -204,6 +207,7 @@ final class VoucherService
             $ops = $this->repo->ops($adj, $this->repo->lines($newId));
             $this->ledger->lock($this->repo->lockKeys($ops));
             $this->ledger->post($ops);
+            $this->saleCodes->voidFor($id);   // phiếu bị đảo ⇒ mã bán hàng của phiếu không còn hiệu lực
             $this->audit->record($user->id, 'voucher.correct', 'voucher', $id, "{$v['ma']} → $newId: $reason");
             return $newId;
         });

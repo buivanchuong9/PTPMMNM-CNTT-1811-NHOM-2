@@ -90,6 +90,9 @@ final class Migrator
         foreach (self::ADDED_COLUMNS as [$table, $column, $definition]) {
             if ($this->addColumnIfMissing($table, $column, $definition)) {
                 $log[] = "✔ Đã thêm cột $table.$column";
+                if ($table === 'lo_hang' && $column === 'bao_hanh_thang') {   // lô có từ trước: lấy thời hạn bảo hành của mặt hàng làm mặc định
+                    $this->db->raw('UPDATE lo_hang SET bao_hanh_thang = (SELECT i.bao_hanh_thang FROM mat_hang i WHERE i.id = lo_hang.mat_hang_id)');
+                }
             }
         }
         $this->ensureBarcodeIndex();
@@ -112,6 +115,8 @@ final class Migrator
         ['mat_hang', 'gia_von', 'integer NOT NULL DEFAULT 0'],
         ['mat_hang', 'ma_vach', 'varchar(64) NULL'],
         ['mat_hang', 'bao_hanh_thang', 'integer NOT NULL DEFAULT 0'],
+        ['lo_hang', 'bao_hanh_thang', 'integer NOT NULL DEFAULT 0'],   // thời hạn bảo hành (tháng) của từng lô hàng; lô mới lấy mặc định từ mặt hàng
+        ['bao_hanh', 'san_pham_ban_id', 'bigint NULL'],   // phiếu bảo hành nhận theo mã bán hàng (san_pham_ban)
         ['phieu_nhap_xuat', 'cap_lai_cho_id', 'integer NULL'],
         ['giao_hang', 'thanh_toan', "varchar(6) NOT NULL DEFAULT 'DA_TT'"],
         ['giao_hang', 'phuong_thuc_tt', "varchar(12) NOT NULL DEFAULT ''"],

@@ -12,12 +12,13 @@ use StockFlow\Domain\Permission;
 use StockFlow\Domain\StockRules;
 use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
+use StockFlow\Service\SaleCodeService;
 use StockFlow\Service\StockQuery;
 use StockFlow\Service\WarrantyService;
 
 final class WarrantyController extends Controller
 {
-    public function __construct(View $view, Session $session, Authorizer $auth, private WarrantyService $warranty)
+    public function __construct(View $view, Session $session, Authorizer $auth, private WarrantyService $warranty, private SaleCodeService $saleCodes)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -36,11 +37,25 @@ final class WarrantyController extends Controller
         ], 'Bảo hành');
     }
 
+    /** Tra nhanh bằng mã lô hàng + mã món hàng (form nhận bảo hành điền sẵn thông tin). */
+    public function lookup(Request $r, array $p, ?User $user): Response
+    {
+        $this->need($user, Permission::XemBaoHanh);
+        $u = $this->saleCodes->find($r->str('lot'), $r->str('item'));
+        $body = ['found' => false];
+        if ($u && in_array((int)$u['kho_id'], $this->auth->visibleWarehouseIds($user), true)) {
+            $body = ['found' => true, 'item' => $u['ma_hang'] . ' — ' . $u['item_name'], 'lot' => $u['so_lo'] === 'NOLOT' ? '' : $u['so_lo'], 'wh' => $u['wh_code'],
+                'voucher' => $u['voucher_code'], 'customer' => (string)$u['customer'], 'bought' => $u['ngay_mua'], 'months' => (int)$u['bao_hanh_thang'], 'expiry' => $u['het_han'],
+                'valid' => (bool)$u['con_han'] && !(int)$u['da_huy'], 'void' => (bool)(int)$u['da_huy'], 'open' => $u['dang_bao_hanh']];
+        }
+        return new Response(json_encode($body, JSON_UNESCAPED_UNICODE), 200, ['Content-Type' => 'application/json; charset=utf-8']);
+    }
+
     public function store(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
             $this->warranty->receive($user, (int)$user->warehouseId, (int)$r->int('item_id'), StockRules::parseQty($r->str('qty')) ?? 0,
-                $r->str('customer'), $r->str('phone'), $r->str('phieu_mua'), $r->str('defect'));
+                $r->str('customer'), $r->str('phone'), $r->str('phieu_mua'), $r->str('defect'), $r->str('lot_code'), $r->str('item_code'));
         }, 'Đã nhận hàng vào kho bảo hành.', '/warranty');
     }
 

@@ -230,8 +230,8 @@ final class StockQuery
         if ($warehouseIds === []) {
             return [];
         }
-        $batchCols = $byBatch ? ', b.id AS lo_hang_id, b.so_lo, b.han_dung' : '';
-        $group = $byBatch ? ', b.id, b.so_lo, b.han_dung' : '';
+        $batchCols = $byBatch ? ', b.id AS lo_hang_id, b.so_lo, b.han_dung, b.bao_hanh_thang AS lo_bao_hanh' : '';
+        $group = $byBatch ? ', b.id, b.so_lo, b.han_dung, b.bao_hanh_thang' : '';
         $rows = $this->db->all(
             "SELECT w.id AS kho_id, w.ma AS wh_code, i.id AS mat_hang_id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, i.quy_cach_lo, i.danh_muc_id, c.ten AS category, u.ma AS unit $batchCols,
                     SUM(m.bien_dong) AS so_luong, MAX(m.ngay_ghi_so) AS last_move

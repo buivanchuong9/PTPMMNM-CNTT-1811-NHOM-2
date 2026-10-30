@@ -26,7 +26,7 @@ final class WarrantyService
     /** Kết quả đã có, đang chờ trả khách. */
     public const WAITING = ['DA_SUA', 'DOI_MOI', 'TU_CHOI'];
 
-    public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit, private VoucherRepository $vouchers, private Ledger $ledger) {}
+    public function __construct(private Db $db, private Authorizer $auth, private AuditLog $audit, private VoucherRepository $vouchers, private Ledger $ledger, private SaleCodeService $saleCodes) {}
 
     /** Mặt hàng nhận bảo hành. */
     public function warrantyItems(): array
@@ -43,7 +43,11 @@ final class WarrantyService
         return $first->setDate((int)$first->format('Y'), (int)$first->format('n'), min((int)$d->format('j'), (int)$first->format('t')))->format('Y-m-d');
     }
 
-    public function receive(User $user, int $warehouseId, int $itemId, int $qty, string $customer, string $phone, string $purchaseCode, string $defect): int
+    /**
+     * Nhận hàng bảo hành. Có đủ «mã lô hàng» + «mã món hàng» (in trên phiếu bán) thì mặt hàng, ngày mua, hạn bảo hành lấy theo mã (mỗi mã một chiếc);
+     * không có thì nhận theo mặt hàng + mã phiếu mua như trước (hàng bán từ trước khi có mã).
+     */
+    public function receive(User $user, int $warehouseId, int $itemId, int $qty, string $customer, string $phone, string $purchaseCode, string $defect, string $lotCode = '', string $itemCode = ''): int
     {
         $this->auth->require($user, $warehouseId, Permission::XuLyBaoHanh);
         $customer = trim($customer);
@@ -58,45 +62,68 @@ final class WarrantyService
         if ($defect === '' || mb_strlen($defect) > 255) {
             throw new DomainError('Ghi tình trạng lỗi của hàng (tối đa 255 ký tự)');
         }
+        $unit = null;
+        if (trim($lotCode) !== '' || trim($itemCode) !== '') {   // nhận theo mã bán hàng: mỗi mã là một chiếc đã bán
+            $unit = $this->saleCodes->find($lotCode, $itemCode) ?? throw new DomainError('Mã lô hàng và mã món hàng không khớp với chiếc nào đã bán — kiểm tra lại hai mã trên phiếu bán');
+            if ((int)$unit['da_huy']) {
+                throw new DomainError('Mã này thuộc phiếu bán đã bị điều chỉnh đảo — không còn hiệu lực');
+            }
+            if ((int)$unit['kho_id'] !== $warehouseId) {
+                throw new DomainError('Chiếc này được bán từ kho ' . $unit['wh_code'] . ' — nhận bảo hành ở kho đã bán hàng');
+            }
+            if ($unit['dang_bao_hanh']) {
+                throw new DomainError('Chiếc này đang có phiếu bảo hành ' . $unit['dang_bao_hanh'] . ' chưa trả khách');
+            }
+            $itemId = (int)$unit['mat_hang_id'];
+            $qty = 1;
+        }
         if ($qty < 1 || $qty > 1000) {
             throw new DomainError('Số lượng nhận bảo hành từ 1 đến 1.000');
         }
         $today = StockQuery::today();
         $item = $this->db->one('SELECT ma_hang, ten, bao_hanh_thang, hoat_dong FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
-        if (!(int)$item['bao_hanh_thang']) {
+        if (!$unit && !(int)$item['bao_hanh_thang']) {
             throw new DomainError("{$item['ten']} không có chính sách bảo hành");
         }
         $makers = array_column($this->db->all('SELECT p.ten FROM mat_hang_nha_cung_cap m JOIN doi_tac p ON p.id = m.doi_tac_id WHERE m.mat_hang_id = ? ORDER BY p.ten', [$itemId]), 'ten');
         if (!$makers) {
             throw new DomainError("{$item['ten']} chưa có thông tin nhà sản xuất / nhà cung cấp — bổ sung ở Hàng hoá trước khi tạo phiếu bảo hành");
         }
-        $purchaseCode = trim($purchaseCode);
-        $sale = $purchaseCode === '' ? null : $this->db->one("SELECT id, kho_id, ngay_xac_nhan FROM phieu_nhap_xuat WHERE ma = ? AND loai = 'ISSUE' AND trang_thai = 'CONFIRMED'", [$purchaseCode]);
-        if (!$sale) {
-            throw new DomainError('Nhập mã phiếu mua (phiếu xuất bán đã xác nhận) của khách — không có phiếu mua thì không nhận bảo hành');
+        if ($unit) {
+            $purchaseDate = (string)$unit['ngay_mua'];   // ngày mua và hạn bảo hành đã chốt lúc bán
+            $expiry = (string)$unit['het_han'];
+            $saleId = (int)$unit['phieu_nhap_xuat_id'];
+            $unitId = (int)$unit['id'];
+        } else {
+            $purchaseCode = trim($purchaseCode);
+            $sale = $purchaseCode === '' ? null : $this->db->one("SELECT id, kho_id, ngay_xac_nhan FROM phieu_nhap_xuat WHERE ma = ? AND loai = 'ISSUE' AND trang_thai = 'CONFIRMED'", [$purchaseCode]);
+            if (!$sale) {
+                throw new DomainError('Nhập mã lô hàng + mã món hàng (hoặc mã phiếu mua) của khách — không có thì không nhận bảo hành');
+            }
+            if ((int)$sale['kho_id'] !== $warehouseId) {
+                throw new DomainError('Phiếu mua này được bán từ kho khác — nhận bảo hành ở kho đã bán hàng');
+            }
+            $bought = (int)$this->db->value('SELECT COALESCE(SUM(so_luong),0) FROM chi_tiet_phieu_nhap_xuat WHERE phieu_nhap_xuat_id = ? AND mat_hang_id = ?', [(int)$sale['id'], $itemId]);
+            if ($bought < 1) {
+                throw new DomainError("Phiếu mua $purchaseCode không có mặt hàng {$item['ma_hang']}");
+            }
+            if ($qty > $bought) {
+                throw new DomainError("Phiếu mua $purchaseCode chỉ bán $bought — không nhận bảo hành $qty");
+            }
+            $purchaseDate = substr((string)$sale['ngay_xac_nhan'], 0, 10);   // ngày mua = ngày xuất bán trên phiếu
+            $expiry = self::expiryOf($purchaseDate, (int)$item['bao_hanh_thang']);
+            $saleId = (int)$sale['id'];
+            $unitId = null;
         }
-        if ((int)$sale['kho_id'] !== $warehouseId) {
-            throw new DomainError('Phiếu mua này được bán từ kho khác — nhận bảo hành ở kho đã bán hàng');
-        }
-        $bought = (int)$this->db->value('SELECT COALESCE(SUM(so_luong),0) FROM chi_tiet_phieu_nhap_xuat WHERE phieu_nhap_xuat_id = ? AND mat_hang_id = ?', [(int)$sale['id'], $itemId]);
-        if ($bought < 1) {
-            throw new DomainError("Phiếu mua $purchaseCode không có mặt hàng {$item['ma_hang']}");
-        }
-        if ($qty > $bought) {
-            throw new DomainError("Phiếu mua $purchaseCode chỉ bán $bought — không nhận bảo hành $qty");
-        }
-        $purchaseDate = substr((string)$sale['ngay_xac_nhan'], 0, 10);   // ngày mua = ngày xuất bán trên phiếu
-        $expiry = self::expiryOf($purchaseDate, (int)$item['bao_hanh_thang']);
         $maker = mb_substr(implode(', ', $makers), 0, 255);
-        $saleId = (int)$sale['id'];
-        return $this->db->transaction(function () use ($user, $warehouseId, $itemId, $qty, $customer, $phone, $purchaseDate, $defect, $expiry, $today, $item, $maker, $saleId) {
+        return $this->db->transaction(function () use ($user, $warehouseId, $itemId, $qty, $customer, $phone, $purchaseDate, $defect, $expiry, $today, $item, $maker, $saleId, $unitId) {
             if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND hoat_dong', [$warehouseId])) {
                 throw new DomainError('Kho không tồn tại hoặc đã ngừng hoạt động');
             }
             $seq = $this->db->nextSequence('warranty');
             $id = $this->db->insert(
-                'INSERT INTO bao_hanh (ma, kho_id, mat_hang_id, so_luong, khach_ten, khach_sdt, ngay_mua, het_han, con_han, loi, nguoi_lap_id, phieu_mua_id, nha_san_xuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [sprintf('BH-%s-%05d', gmdate('ymd'), $seq), $warehouseId, $itemId, $qty, $customer, $phone, $purchaseDate, $expiry, (int)($expiry >= $today), $defect, $user->id, $saleId, $maker]
+                'INSERT INTO bao_hanh (ma, kho_id, mat_hang_id, so_luong, khach_ten, khach_sdt, ngay_mua, het_han, con_han, loi, nguoi_lap_id, phieu_mua_id, nha_san_xuat, san_pham_ban_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [sprintf('BH-%s-%05d', gmdate('ymd'), $seq), $warehouseId, $itemId, $qty, $customer, $phone, $purchaseDate, $expiry, (int)($expiry >= $today), $defect, $user->id, $saleId, $maker, $unitId]
             );
             $this->audit->record($user->id, 'warranty.receive', 'warranty', $id, $item['ma_hang'] . ' × ' . $qty . ' · ' . $customer);
             return $id;

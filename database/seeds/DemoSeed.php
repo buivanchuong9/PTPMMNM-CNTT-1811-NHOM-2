@@ -57,6 +57,26 @@ final class DemoSeed
         return $n;
     }
 
+    /**
+     * Phiếu xuất đã ghi sổ từ trước khi có mã bán hàng: sinh «mã lô hàng» + «mã món hàng» cho hàng có bảo hành (ngày mua = ngày xác nhận phiếu).
+     * Bỏ qua phiếu đã có mã và phiếu đã bị điều chỉnh đảo. Chạy lại an toàn. @return int số chiếc đã sinh mã
+     */
+    public static function backfillSaleCodes(Db $db): int
+    {
+        $c = new Container();
+        $c->set(Db::class, $db);
+        $codes = $c->get(\StockFlow\Service\SaleCodeService::class);
+        $n = 0;
+        foreach ($db->all("SELECT v.id, v.kho_id, v.ngay_xac_nhan FROM phieu_nhap_xuat v
+                           WHERE v.loai = 'ISSUE' AND v.trang_thai = 'CONFIRMED'
+                             AND NOT EXISTS (SELECT 1 FROM phieu_nhap_xuat a WHERE a.dieu_chinh_cho_id = v.id)
+                             AND NOT EXISTS (SELECT 1 FROM san_pham_ban s WHERE s.phieu_nhap_xuat_id = v.id) ORDER BY v.id") as $v) {
+            $lines = $db->all('SELECT id, mat_hang_id, lo_hang_id, so_luong FROM chi_tiet_phieu_nhap_xuat WHERE phieu_nhap_xuat_id = ? ORDER BY id', [(int)$v['id']]);
+            $n += $db->transaction(fn() => $codes->issueFor($v, $lines, substr((string)$v['ngay_xac_nhan'], 0, 10)));
+        }
+        return $n;
+    }
+
     public static function backfillBarcodes(Db $db): int
     {
         $n = 0;
