@@ -101,6 +101,7 @@ final class App
         $r->get('/warranty', [C\WarrantyController::class, 'index']);
         $r->get('/warranty/lookup', [C\WarrantyController::class, 'lookup']);
         $r->get('/warranty/suggest', [C\WarrantyController::class, 'suggest']);
+        $r->get('/warranty/{id}/print', [C\WarrantyController::class, 'print']);
         $r->post('/warranty', [C\WarrantyController::class, 'store']);
         $r->post('/warranty/{id}/resolve', [C\WarrantyController::class, 'resolve']);
         $r->post('/warranty/{id}/return', [C\WarrantyController::class, 'handBack']);
@@ -115,6 +116,7 @@ final class App
         $r->post('/disposals/{id}/undo', [C\DisposalController::class, 'undo']);
 
         $r->get('/history', [C\HistoryController::class, 'index']);
+        $r->get('/audit', [C\AuditController::class, 'index']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);
         $r->get('/valuation', [C\ValuationController::class, 'index']);

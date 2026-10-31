@@ -44,6 +44,15 @@ final class FleetController extends Controller
         $drivers = array_values(array_filter($this->fleet->drivers($scope, $month), fn($d) => $hit($d, ['ho_ten', 'cccd', 'so_dien_thoai', 'xe_dang_chay', 'kho_ma', 'hang_gplx', 'so_gplx'])));
         $losses = array_values(array_filter($this->fleet->lossRecords(500, $scope, $month), fn($h) => $hit($h, ['phieu_den_ma', 'tai_xe_ten', 'bien_so', 'ly_do', 'di_kho', 'den_kho']) && ($bearer === '' || $h['nguoi_chiu'] === $bearer)));
         $trips = array_values(array_filter($this->fleet->recentTrips(200, $scope), fn($t) => $hit($t, ['phieu_di_ma', 'phieu_den_ma', 'bien_so', 'tai_xe_ten', 'di_kho', 'den_kho', 'sai_lech'])));
+        if ($r->str('format') === 'csv') {   // xe hoặc tài xế theo tab đang xem, cùng bộ lọc
+            if ($tab === 'taixe') {
+                return Response::csv('tai-xe-' . gmdate('Ymd') . '.csv', ['Họ tên', 'CCCD', 'Điện thoại', 'Kho', 'Hạng bằng', 'Số GPLX', 'Hạn bằng', 'Trạng thái'],
+                    array_map(fn($d) => [$d['ho_ten'], $d['cccd'], $d['so_dien_thoai'], $d['kho_ma'], $d['hang_gplx'], $d['so_gplx'], $d['han_gplx'], !$d['hoat_dong'] ? 'Nghỉ' : ($d['chuyen_id'] !== null ? 'Đang chạy' : 'Rảnh')], $drivers));
+            }
+            return Response::csv('xe-' . gmdate('Ymd') . '.csv', ['Biển số', 'Loại xe', 'Tải trọng (kg)', 'Kho gốc', 'Đang ở / đang tới', 'Trạng thái'],
+                array_map(fn($x) => [$x['bien_so'], $x['loai_xe'], $x['tai_trong_kg'], $x['goc_ma'], $x['dang_den_kho_id'] !== null ? '→ ' . $x['den_ma'] : $x['ht_ma'],
+                    !$x['hoat_dong'] ? 'Ngừng dùng' : ($x['dang_den_kho_id'] !== null || $x['giao_phieu_id'] !== null ? 'Trên đường' : 'Sẵn sàng')], $vehicles));
+        }
         [$pageVehicles, $pgV] = Paginator::of($vehicles, $r, 'xe');
         [$pageDrivers, $pgD] = Paginator::of($drivers, $r, 'tx');
         [$pageLosses, $pgL] = Paginator::of($losses, $r, 'tt');

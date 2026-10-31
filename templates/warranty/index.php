@@ -4,7 +4,10 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
 ?>
 <header class="page-head">
   <div><h1>Bảo hành</h1></div>
-  <?php if ($canHandle): ?><div class="actions"><button type="button" data-dialog-open="warranty-dlg"><?= icon('plus') ?>Nhận hàng bảo hành</button></div><?php endif; ?>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/warranty?<?= e(http_build_query(['tab' => $tab, 'format' => 'csv'] + $keep)) ?>"><?= icon('download') ?>Xuất CSV</a>
+    <?php if ($canHandle): ?><button type="button" data-dialog-open="warranty-dlg"><?= icon('plus') ?>Nhận hàng bảo hành</button><?php endif; ?>
+  </div>
 </header>
 
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
@@ -31,7 +34,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
   <tbody>
   <?php foreach ($rows as $b): $st = W::STATUS[$b['trang_thai']]; ?>
     <tr data-tone="<?= $b['trang_thai'] === 'TIEP_NHAN' ? 'warn' : ($b['trang_thai'] === 'TU_CHOI' ? 'bad' : 'ok') ?>">
-      <td class="nw"><b><?= e($b['ma']) ?></b><br><small class="muted"><?= e(dt_short($b['ngay_tao'])) ?> · <?= e($b['wh_code']) ?></small></td>
+      <td class="nw"><b><?= e($b['ma']) ?></b><br><small class="muted"><?= e(dt_short($b['ngay_tao'])) ?> · <?= e($b['wh_code']) ?></small><br><a class="small" href="/warranty/<?= (int)$b['id'] ?>/print" target="_blank" rel="noopener"><?= icon('printer') ?> In phiếu</a></td>
       <td><?= e($b['item_name']) ?> <small class="muted">× <?= n($b['so_luong']) ?> <?= e($b['unit']) ?></small><br><small class="muted"><?= e($b['ma_hang']) ?><?= $b['sale_item'] ? ' · ' . e($b['sale_item']) : ($b['ma_lo'] ? ' · cả lô ' . e($b['ma_lo']) : '') ?></small></td>
       <td><?= e($b['khach_ten']) ?><?= $b['khach_sdt'] !== '' ? '<br><small class="muted">' . e($b['khach_sdt']) . '</small>' : '' ?>
       </td>

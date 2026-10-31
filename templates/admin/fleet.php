@@ -115,7 +115,7 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
 </section>
 <?php elseif ($tab === 'xe'): ?>
 <section class="card flush">
-  <div class="card-head pad"><h2>Xe <span class="count"><?= n($pgV->total) ?></span></h2><span class="muted small">xe quản lý riêng, không gắn tài xế cố định — mỗi chuyến chọn tài xế lúc xuất kho · không giới hạn số xe</span></div>
+  <div class="card-head pad"><h2>Xe <span class="count"><?= n($pgV->total) ?></span></h2><a class="btn btn-ghost btn-sm" href="?<?= e(http_build_query(['format' => 'csv'] + $_GET)) ?>"><?= icon('download') ?>Xuất CSV</a></div>
   <div class="table-wrap"><table class="dense">
     <thead><tr><th>Biển số</th><th>Loại xe</th><th>Tải trọng · kích thước · giấy tờ</th><th>Kho gốc</th><th>Đang ở / đang tới</th><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
     <tbody>
@@ -167,7 +167,7 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
 
 <?php elseif ($tab === 'taixe'): ?>
 <section class="card flush">
-  <div class="card-head pad"><h2>Tài xế <span class="count"><?= n($pgD->total) ?></span></h2><span class="muted small">quản lý riêng, không gắn với xe nào — ai có bằng lái đúng hạng cho xe, đang rảnh và thuộc kho đi thì lái được; tài xế nghỉ thì chọn người khác lái thay</span></div>
+  <div class="card-head pad"><h2>Tài xế <span class="count"><?= n($pgD->total) ?></span></h2><a class="btn btn-ghost btn-sm" href="?<?= e(http_build_query(['format' => 'csv'] + $_GET)) ?>"><?= icon('download') ?>Xuất CSV</a></div>
   <div class="table-wrap"><table class="dense">
     <thead><tr><th>Tài xế</th><th>Tuổi</th><th>Giấy phép lái xe</th><th>Khám sức khoẻ</th><th>Điểm GPLX</th><?php if (!$canManage): ?><th>Kho</th><?php endif; ?><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
     <tbody>

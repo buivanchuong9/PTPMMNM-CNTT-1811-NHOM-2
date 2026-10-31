@@ -23,6 +23,7 @@ $groups = [
             'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
         ]],
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
+        'audit' => ['/audit', 'clipboard', 'Nhật ký thao tác', [P::XemLichSu]],
         'valuation-group' => ['#', 'scale', 'Vốn kho', [P::XemBaoCao], [
             'valuation' => ['/valuation', 'scale', 'Tổng quan vốn kho', [P::XemBaoCao]],
             'money-in' => ['/money/in', 'in', 'Tiền nhập', [P::XemBaoCao]],

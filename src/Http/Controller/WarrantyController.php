@@ -46,6 +46,11 @@ final class WarrantyController extends Controller
         } elseif ($sort === 'expiry') {
             usort($list, fn($a, $b) => strcmp((string)$a['het_han'], (string)$b['het_han']));
         }
+        if ($r->str('format') === 'csv') {   // cùng bộ lọc và mục đang xem
+            $rows = array_map(fn($b) => [$b['ma'], $b['ngay_nhan'] ?? substr((string)$b['ngay_tao'], 0, 10), $b['ngay_hen_tra'] ?? '', $b['wh_code'], $b['ma_hang'], $b['item_name'], $b['so_luong'],
+                $b['ma_lo'] ?? '', $b['sale_item'] ?? '', $b['khach_ten'], $b['khach_sdt'], $b['loi'], $b['ngay_mua'], $b['het_han'], WarrantyService::STATUS[$b['trang_thai']][0] ?? $b['trang_thai'], $b['ket_qua']], $list);
+            return Response::csv('bao-hanh-' . gmdate('Ymd') . '.csv', ['Mã phiếu', 'Ngày nhận', 'Hẹn trả', 'Kho', 'SKU', 'Mặt hàng', 'Số lượng', 'Mã lô', 'Mã món hàng', 'Khách', 'Điện thoại', 'Lỗi', 'Ngày mua', 'Hết hạn bảo hành', 'Trạng thái', 'Kết quả'], $rows);
+        }
         [$rows, $pg] = Paginator::of($list, $r);
         $f = ['warehouse' => $wh, 'item' => $item, 'valid' => $valid, 'result' => $result, 'sort' => $sort,
             'whOpts' => options_of($all, 'kho_id', 'wh_code'), 'itemOpts' => options_of($all, 'mat_hang_id', fn($b) => $b['ma_hang'] . ' — ' . $b['item_name'])];
@@ -90,6 +95,15 @@ final class WarrantyController extends Controller
         $wh = $user->warehouseId !== null ? [(int)$user->warehouseId] : $this->auth->visibleWarehouseIds($user);   // nhận bảo hành ở đúng kho đã bán hàng
         $body = $this->saleCodes->suggest($r->str('lot'), $r->str('item'), $wh, $r->str('field') === 'item');
         return new Response(json_encode($body, JSON_UNESCAPED_UNICODE), 200, ['Content-Type' => 'application/json; charset=utf-8']);
+    }
+
+    /** Phiếu in (A4): biên nhận hàng bảo hành giao cho khách; đã trả khách thì kèm phần ký nhận lại hàng. */
+    public function print(Request $r, array $p, ?User $user): Response
+    {
+        $this->need($user, Permission::XemBaoHanh);
+        $b = $this->warranty->find((int)$p['id']);
+        $this->auth->requireVisible($user, (int)$b['kho_id']);
+        return $this->view->render('warranty/print', ['b' => $b, 'user' => $user, 'today' => StockQuery::today()], '');
     }
 
     public function store(Request $r, array $p, ?User $user): Response

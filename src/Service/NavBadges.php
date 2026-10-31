@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NavBadges
 {
-    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals) {}
+    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals, private StockQuery $stock) {}
 
     /** @return array<string,int> chỉ gồm các mục có số > 0 */
     public function for(User $user): array
@@ -46,7 +46,15 @@ final class NavBadges
     {
         $b = $this->for($user);
         $delivering = $this->auth->allows($user, Permission::XemPhieu) ? $this->vouchers->deliveringCount($this->auth->visibleWarehouseIds($user)) : 0;
+        $expired = $soon = 0;
+        if ($this->auth->allows($user, Permission::XemTonKho)) {   // lô còn tồn đã hết hạn / sắp hết hạn trong EXPIRY_WARN_DAYS ngày
+            foreach ($this->stock->expiring($this->auth->visibleWarehouseIds($user)) as $e) {
+                $e['status'] === 'expired' ? $expired++ : $soon++;
+            }
+        }
         $items = [
+            ['lô đã hết hạn còn tồn', $expired, '/inventory?view=batch&expiry=expired'],
+            ['lô sắp hết hạn (' . StockQuery::EXPIRY_WARN_DAYS . ' ngày)', $soon, '/inventory?view=batch&expiry=soon'],
             ['phiếu chờ xác nhận', (int)($b['vouchers'] ?? 0), '/vouchers?status=DRAFT'],
             ['đơn đang giao', $delivering, '/vouchers?type=ISSUE&status=CONFIRMED'],
             ['phiếu bảo hành đang xử lý', (int)($b['warranty'] ?? 0), '/warranty'],
