@@ -14,7 +14,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
 </nav>
 <form class="filters" method="get">
   <input type="hidden" name="tab" value="<?= e($tab) ?>">
-  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu, khách, SĐT, mã món…" aria-label="Tìm kiếm">
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu, khách, SĐT, mã lô…" style="min-width:230px" aria-label="Tìm kiếm">
 <?php if (count($f['whOpts']) > 1): ?>  <select name="warehouse"<?= $f['warehouse'] ? ' class="on"' : '' ?> aria-label="Kho"><?= filter_options($f['whOpts'], $f['warehouse'], 'Mọi kho') ?></select>
 <?php endif; ?>
   <select name="item"<?= $f['item'] ? ' class="on"' : '' ?> aria-label="Mặt hàng" data-combo><?= filter_options($f['itemOpts'], $f['item'], 'Mọi mặt hàng') ?></select>
@@ -27,20 +27,21 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
 </form>
 
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
-  <thead><tr><th>Mã</th><th>Mặt hàng</th><th>Khách</th><th>Bảo hành đến</th><th>Lỗi</th><th><?= $tab === 'TIEP_NHAN' ? 'Xử lý' : 'Kết quả' ?></th></tr></thead>
+  <thead><tr><th>Mã</th><th>Mặt hàng</th><th>Khách</th><th title="Ngày nhận → ngày hẹn trả">Nhận → hẹn trả</th><th>Bảo hành đến</th><th>Lỗi</th><th><?= $tab === 'TIEP_NHAN' ? 'Xử lý' : 'Kết quả' ?></th></tr></thead>
   <tbody>
   <?php foreach ($rows as $b): $st = W::STATUS[$b['trang_thai']]; ?>
     <tr data-tone="<?= $b['trang_thai'] === 'TIEP_NHAN' ? 'warn' : ($b['trang_thai'] === 'TU_CHOI' ? 'bad' : 'ok') ?>">
       <td class="nw"><b><?= e($b['ma']) ?></b><br><small class="muted"><?= e(dt_short($b['ngay_tao'])) ?> · <?= e($b['wh_code']) ?></small></td>
       <td><?= e($b['item_name']) ?> <small class="muted">× <?= n($b['so_luong']) ?> <?= e($b['unit']) ?></small><br><small class="muted"><?= e($b['ma_hang']) ?><?= $b['sale_item'] ? ' · ' . e($b['sale_item']) : ($b['ma_lo'] ? ' · cả lô ' . e($b['ma_lo']) : '') ?></small></td>
       <td><?= e($b['khach_ten']) ?><?= $b['khach_sdt'] !== '' ? '<br><small class="muted">' . e($b['khach_sdt']) . '</small>' : '' ?>
-        <?php if ($b['ngay_nhan']): ?><br><small class="muted">Nhận <?= e(dt($b['ngay_nhan'], false)) ?><?php if ($b['ngay_hen_tra']): $late = $b['trang_thai'] === 'TIEP_NHAN' && $b['ngay_hen_tra'] < $today; ?> · hẹn trả <span<?= $late ? ' class="neg"' : '' ?>><?= e(dt($b['ngay_hen_tra'], false)) ?></span><?= $late ? ' (quá hẹn)' : '' ?><?php endif; ?></small><?php endif; ?></td>
+      </td>
+      <td class="nw"><?php if ($b['ngay_nhan']): ?><?= e(date('d/m', strtotime($b['ngay_nhan']))) ?><?php if ($b['ngay_hen_tra']): $late = $b['trang_thai'] === 'TIEP_NHAN' && $b['ngay_hen_tra'] < $today; ?> → <b<?= $late ? ' class="neg"' : '' ?>><?= e(date('d/m', strtotime($b['ngay_hen_tra']))) ?></b><?= $late ? '<br><small class="neg">Quá hẹn</small>' : '' ?><?php endif; ?><?php else: ?>—<?php endif; ?></td>
       <td class="nw"><?= e(dt($b['het_han'], false)) ?><br><?= (int)$b['con_han'] ? '<span class="tag tag-ok">Còn hạn</span>' : '<span class="tag tag-danger">Hết hạn</span>' ?></td>
       <td class="wrap"><?= e($b['loi']) ?></td>
       <td class="wrap">
         <?php if ($b['trang_thai'] === 'TIEP_NHAN'): ?>
           <?php if ($canHandle): ?>
-          <form method="post" action="/warranty/<?= (int)$b['id'] ?>/resolve" class="inline-form" style="flex-wrap:wrap;align-items:center" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+          <form method="post" action="/warranty/<?= (int)$b['id'] ?>/resolve" class="inline-form warranty-act" style="flex-wrap:wrap;align-items:center" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
             <input name="note" maxlength="255" placeholder="Ghi chú (bắt buộc nếu từ chối)" aria-label="Ghi chú xử lý">
             <button type="submit" name="result" value="DA_SUA">Sửa xong</button>
             <?php if ((int)$b['con_han']): ?><button type="submit" name="result" value="DOI_MOI" class="btn-ghost" title="Lấy 1 đơn vị từ tồn kho đổi cho khách">Đổi mới</button><?php endif; ?>
@@ -58,7 +59,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
         <?php endif; ?>
       </td>
     </tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="empty"><?= $keep || $f['result'] ? 'Không có phiếu bảo hành phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="empty"><?= $keep || $f['result'] ? 'Không có phiếu bảo hành phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canHandle): ?>

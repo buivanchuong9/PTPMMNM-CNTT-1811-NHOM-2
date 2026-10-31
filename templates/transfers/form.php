@@ -15,6 +15,6 @@
   </div>
   <label>Ghi chú<input name="note" maxlength="255" placeholder="Lý do điều chuyển, đơn vị vận chuyển…"></label>
   <?php $checkStock = true; $autoLots = true; require __DIR__ . '/../partials/lines.php'; ?>
-  <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="/vouchers">Quay lại</a></div>
+  <div class="actions"><button type="submit">Bước tiếp theo</button><a class="btn btn-ghost" href="/vouchers">Quay lại</a></div>
 </form>
 <?php endif; ?>

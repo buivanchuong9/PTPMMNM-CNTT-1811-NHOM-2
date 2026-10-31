@@ -10,15 +10,15 @@ $fa = !empty($formId) ? ' form="' . e($formId) . '"' : '';
 <?php if ($dm): ?>
 <fieldset class="notrecv pay-money"><legend>Thanh toán — số tiền <?= e(n((int)($saleTotal ?? 0))) ?> đ</legend>
   <label class="check"><input type="radio" name="thanh_toan" value="DA_TT" data-need-pay required<?= $fa ?>> Khách đã thanh toán</label>
-  <label class="check"><input type="radio" name="thanh_toan" value="COD" data-need-pay required<?= $fa ?>> Thu tiền khi nhận hàng (giao hàng hoặc khách đến lấy)</label>
+  <label class="check"><input type="radio" name="thanh_toan" value="COD" data-need-pay required<?= $fa ?>> Thu tiền khi nhận hàng</label>
   <label data-paid-method hidden>Hình thức thanh toán<select name="pt_tt"<?= $fa ?>><option value="">Chọn…</option><?php foreach (\StockFlow\Service\DeliveryService::METHODS as $k => $label): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></label>
 </fieldset>
 <?php endif; ?>
 <div class="form pay-box" data-pay<?= !empty($dm) && isset($v['id']) ? ' data-km-url="/vouchers/' . (int)$v['id'] . '/delivery-km"' : '' ?> data-rate-own="<?= (int)$payInfo['rates']['noi_bo'] ?>" data-rate-hired="<?= (int)$payInfo['rates']['thue_ngoai'] ?>">
   <div class="pay-mode">
-    <?php if ($dm): ?><label class="check"><input type="radio" name="hinh_thuc" value="TU_LAY" checked<?= $fa ?>> Khách tự đến lấy (đơn nhỏ)</label><?php endif; ?>
-    <label class="check"><input type="radio" name="hinh_thuc" value="NOI_BO"<?= !$dm && $ready ? ' checked' : '' ?><?= $ready ? '' : ' disabled' ?><?= $fa ?>> <?= $dm ? 'Giao bằng xe của kho' : 'Xe của kho' ?> (trả công tài xế theo km)</label>
-    <label class="check"><input type="radio" name="hinh_thuc" value="THUE_NGOAI"<?= !$dm && !$ready ? ' checked' : '' ?><?= $fa ?>> Thuê đơn vị vận tải ngoài</label>
+    <?php if ($dm): ?><label class="check"><input type="radio" name="hinh_thuc" value="TU_LAY" checked<?= $fa ?>> Khách tự đến lấy</label><?php endif; ?>
+    <label class="check"><input type="radio" name="hinh_thuc" value="NOI_BO"<?= !$dm && $ready ? ' checked' : '' ?><?= $ready ? '' : ' disabled' ?><?= $fa ?>> <?= $dm ? 'Giao bằng xe của kho' : 'Xe của kho' ?></label>
+    <label class="check"><input type="radio" name="hinh_thuc" value="THUE_NGOAI"<?= !$dm && !$ready ? ' checked' : '' ?><?= $fa ?>> Thuê vận tải ngoài</label>
   </div>
   <?php
 // Xe và tài xế KHÔNG gắn cố định: chọn riêng. Tài xế nào có bằng đúng hạng cho xe đã chọn, đang rảnh và thuộc kho này thì lái được; danh sách tự lọc theo xe (crew.js).
@@ -67,9 +67,9 @@ $driverOptions = function () use ($crewDrivers, $crewFit): string {
   </fieldset>
   <div data-pay-fields<?= $dm ? ' hidden' : '' ?>>
     <?php if ($dm): ?>
-    <p class="muted small" style="margin:0"><b>Địa chỉ giao hàng</b> — chọn tỉnh, phường theo gợi ý; điểm giao trên bản đồ demo sẽ chọn ngẫu nhiên trong phường đó.</p>
+    <p class="muted small" style="margin:0"><b>Địa chỉ giao hàng</b></p>
     <?php $addr = \StockFlow\Domain\VnAddress::parse($cust['dia_chi'] ?? ''); $addrNeed = true; include __DIR__ . '/address_fields.php'; ?>
-    <?php if (!empty($v['doi_tac'])): ?><label class="check"><input type="checkbox" name="save_cust" value="1" checked> Lưu địa chỉ và người nhận này cho khách «<?= e($v['doi_tac']) ?>» — lần sau chọn khách là tự điền</label><?php endif; ?>
+    <?php if (!empty($v['doi_tac'])): ?><label class="check"><input type="checkbox" name="save_cust" value="1" checked> Lưu địa chỉ cho khách «<?= e($v['doi_tac']) ?>»</label><?php endif; ?>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Người nhận hàng<input name="giao_nguoi_nhan" data-need maxlength="120" autocomplete="off" value="<?= e(($cust['nguoi_lien_he'] ?? '') ?: ($cust['ten'] ?? '')) ?>"<?= $fa ?>></label>
       <label>Điện thoại người nhận<input name="giao_sdt" data-need inputmode="tel" pattern="0[0-9]{9}" maxlength="10" autocomplete="off" value="<?= e($cust['so_dien_thoai'] ?? '') ?>" placeholder="10 chữ số"<?= $fa ?>></label>
@@ -79,9 +79,9 @@ $driverOptions = function () use ($crewDrivers, $crewFit): string {
       <label>Quãng đường (km)<input name="km" data-need inputmode="numeric" maxlength="4" autocomplete="off" value="<?= (int)($payInfo['km'] ?? 0) ?: '' ?>"<?= ($payInfo['km'] ?? null) ? '' : ' placeholder="' . ($dm ? 'Nhập km tới nơi giao' : 'Chưa có số liệu — nhập km') . '"' ?><?= $fa ?>></label>
       <label>Tiền trả cho chuyến (đ)<input name="tien" data-need inputmode="numeric" maxlength="10" autocomplete="off"<?= $fa ?>></label>
     </div>
-    <?php if (!empty($payInfo['estimated'])): ?><p class="muted small"><?= icon('clock') ?> Quãng đường được tự ước tính theo vị trí hai kho — sửa lại nếu thực tế khác, số này sẽ được ghi nhớ cho lần sau.</p><?php endif; ?>
+    <?php if (!empty($payInfo['estimated'])): ?><p class="muted small"><?= icon('clock') ?> Km ước tính theo vị trí hai kho — sửa nếu khác.</p><?php endif; ?>
     <p class="muted small" data-pay-hint></p>
     <label>Ghi chú về giá (nếu khác gợi ý)<input name="gia_note" maxlength="255" autocomplete="off" placeholder="VD: đường xấu, hàng cồng kềnh"<?= $fa ?>></label>
-    <label class="check"><input type="checkbox" name="driver_ok" value="1" data-need<?= $fa ?>> Tài xế đã kiểm và xác nhận nhận đủ hàng</label>
+    <label class="check"><input type="checkbox" name="driver_ok" value="1" data-need<?= $fa ?>> Tài xế đã nhận đủ hàng</label>
   </div>
 </div>

@@ -76,6 +76,9 @@ final class DeliveryService
         if ($mode === 'NOI_BO' && ((int)$xe['thue_ngoai'] || (int)($xe['kho_hien_tai_id'] ?? 0) !== $wh)) {
             throw new DomainError('Xe ' . $xe['bien_so'] . ' hiện không ở kho này — chọn xe đang đứng tại kho');
         }
+        if ($mode === 'NOI_BO' && $this->fleet->vehicleOnDelivery($vehicleId)) {
+            throw new DomainError('Xe ' . $xe['bien_so'] . ' đang đi giao hàng — chờ tài xế báo giao đến nơi hoặc chọn xe khác');
+        }
         $driverId = (int)($d['driver_id'] ?? 0);
         if ($mode === 'NOI_BO' && $driverId) {
             $tx = $this->fleet->assignableDriver($driverId, $wh);   // tài xế chọn theo chuyến, không gắn cố định với xe

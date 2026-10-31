@@ -188,7 +188,7 @@ td.row-actions button, td.row-actions .btn { width: 100%; }
 .kpis { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 /* Tổng quan kho: bốn chỉ số gộp thành một ô dài, ngăn nhau bằng vạch dọc; icon bên trái, số và nhãn xếp dọc bên phải */
-.kpis.kpis-strip { gap: 0; padding: 4px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.kpis.kpis-strip { gap: 0; padding: 4px 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius, 4px); box-shadow: var(--shadow); }
 .kpis-strip .kpi { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; align-items: center; padding: 14px 22px; border: 0; border-radius: 0; background: none; box-shadow: none; animation: none; }
 .kpis-strip .kpi + .kpi { border-left: 1px solid var(--line); }
 .kpis-strip .kpi:hover { transform: none; box-shadow: none; background: var(--bg); }
@@ -226,7 +226,7 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 .app-shell main { height: 100%; overflow-x: auto; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-right: calc(clamp(14px, 2.2vw, 30px) + 14px); }
 .app-shell main::-webkit-scrollbar { display: none; }
 @media (min-width: 1001px) { .app-shell .sidebar { position: static; height: calc(100% - 28px); } }   /* 28px = lề trên + dưới của thẻ menu */
-@media (min-width: 1001px) { .app-shell .shell { position: relative; grid-template-columns: var(--sb-w, 264px) minmax(0, 1fr); } }   /* --sb-w do JS đặt khi kéo mép menu */
+@media (min-width: 1001px) { .app-shell .shell { position: relative; grid-template-columns: var(--sb-w, 220px) minmax(0, 1fr); } }   /* --sb-w do JS đặt khi kéo mép menu */
 .side-grip { position: absolute; z-index: 6; width: 10px; cursor: col-resize; touch-action: none; }
 .side-grip[hidden] { display: none; }
 .side-grip::after { content: ""; position: absolute; left: 4px; top: 50%; width: 3px; height: 36px; margin-top: -18px; border-radius: 3px; background: var(--brand); opacity: 0; transition: opacity .2s; }

@@ -5,6 +5,7 @@
  * Cần $pick; tuỳ chọn $stock (tồn theo kho) và $checkStock (cảnh báo khi số lượng vượt tồn).
  */
 $pickRows = $pick;
+$showSup = empty($suppliers) && !empty($pickSups);
 if (!empty($newLots)) {   // phiếu nhập: hàng theo lô chỉ liệt kê một lần cho mỗi mặt hàng — số lô và hạn dùng gõ ngay trên dòng
     $seen = [];
     $pickRows = [];
@@ -67,10 +68,15 @@ if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét m
 }
 ?>
 <fieldset class="lines picker" id="picker"<?= !empty($suppliers) || !empty($supplierMode) ? ' data-supplier="1"' : '' ?> data-items="<?= e(json_encode($pickItems, JSON_UNESCAPED_UNICODE)) ?>"
-          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-bad-reasons="<?= e(json_encode(array_map(null, array_keys(\StockFlow\Service\SupplierReturnService::REASONS), array_values(\StockFlow\Service\SupplierReturnService::REASONS)), JSON_UNESCAPED_UNICODE)) ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
+          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-bad-reasons="<?= e(json_encode(array_map(null, array_keys(\StockFlow\Service\SupplierReturnService::REASONS), array_values(\StockFlow\Service\SupplierReturnService::REASONS)), JSON_UNESCAPED_UNICODE)) ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($supplierFirst) && $showSup && empty($lockPick) ? ' data-sup-first="1"' : '' ?><?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
   <legend>Dòng hàng</legend>
   <?php $showSup = empty($suppliers) && !empty($pickSups); ?>
-  <?php if (empty($lockPick) && (!empty($pickCats) || $showSup)): ?>
+  <?php if (!empty($supplierFirst) && $showSup && empty($lockPick)): ?>
+  <div class="pick-filters">
+    <label>Nhà cung cấp<select id="pick-sup" aria-label="Chọn nhà cung cấp trước" data-combo><option value="">Chọn nhà cung cấp…</option><?php foreach ($pickSups as $s): ?><option value="<?= (int)$s['id'] ?>"><?= e($s['ten']) ?></option><?php endforeach; ?><option value="none">Hàng chưa gắn nhà cung cấp</option></select></label>
+    <?php if (!empty($pickCats)): ?><label id="pick-cat-label" hidden>Danh mục hàng<select id="pick-cat" aria-label="Lọc theo danh mục"><option value="">Tất cả danh mục</option><?php foreach ($pickCats as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['ten']) ?></option><?php endforeach; ?></select></label><?php endif; ?>
+  </div>
+  <?php elseif (empty($lockPick) && (!empty($pickCats) || $showSup)): ?>
   <div class="pick-filters">
     <?php if (!empty($pickCats)): ?><label>Danh mục hàng<select id="pick-cat" aria-label="Lọc theo danh mục"><option value="">Tất cả danh mục</option><?php foreach ($pickCats as $c): ?><option value="<?= (int)$c['id'] ?>"><?= e($c['ten']) ?></option><?php endforeach; ?></select></label><?php endif; ?>
     <?php if ($showSup): ?><label>Nhà cung cấp<select id="pick-sup" aria-label="Lọc theo nhà cung cấp"><option value="">Tất cả nhà cung cấp</option><?php foreach ($pickSups as $s): ?><option value="<?= (int)$s['id'] ?>"><?= e($s['ten']) ?></option><?php endforeach; ?></select></label><?php endif; ?>
@@ -82,7 +88,7 @@ if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét m
            role="combobox" aria-expanded="false" aria-controls="pick-list" aria-label="Tìm mặt hàng">
     <ul id="pick-list" role="listbox" hidden></ul>
   </div>
-  <p class="empty" id="pick-empty"<?= !empty($lockPick) ? ' hidden' : '' ?>>Chưa có mặt hàng nào. Bấm vào ô tìm kiếm phía trên để chọn hàng.</p>
+  <p class="empty" id="pick-empty"<?= !empty($lockPick) ? ' hidden' : '' ?>>Chưa chọn mặt hàng nào. Bấm vào một mặt hàng ở danh sách phía trên, hoặc gõ tên / SKU để tìm.</p>
   <div class="table-wrap" id="pick-wrap" hidden>
     <table class="dense pick-table">
       <thead><tr><th>Mặt hàng</th><th class="num">Tồn tại kho</th><th class="num"><?= !empty($newLots) ? 'Số lượng nhận' : 'Số lượng' ?></th><?php if (!empty($newLots)): ?><th>Kiểm tra chất lượng (không đạt)</th><?php endif; ?><th></th></tr></thead>

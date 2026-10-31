@@ -52,6 +52,14 @@ same($f->stock($f->wa, 'x'), 180, 'phiếu xuất 10 cái ghi sổ trừ tồn: 
 $mine = array_values(array_filter($fleet->drivers($f->wa), fn($x) => (int)$x['id'] === $d['driver_id']))[0];
 same([(int)$mine['so_chuyen'], (int)$mine['tong_km'], (int)$mine['tien_chuyen']], [1, 18, 150000], 'chuyến giao hàng tính vào lương tài xế theo km');
 
+section('Xe và tài xế bận khi đang đi giao');
+$freeCars = fn() => array_map('intval', array_column($fleet->availableVehicles($f->wa), 'id'));
+truthy(!in_array((int)$d['vehicle_id'], $freeCars(), true), 'xe đang đi giao (chưa báo đến nơi) không còn «sẵn sàng»');
+truthy(!in_array((int)$d['driver_id'], array_map('intval', array_column($fleet->availableDrivers($f->wa), 'id')), true), 'tài xế đang đi giao không còn rảnh');
+truthy($fleet->driverBusy((int)$d['driver_id']), 'tài xế đang giao hàng được tính là bận');
+$vBusy = $draft(1);
+throws(fn() => $svc->confirm($f->approverA, $vBusy, $base), DomainError::class, 'xe đang đi giao không nhận thêm đơn');
+
 section('Thuê đơn vị vận tải ngoài để giao');
 $ext = ['company' => 'Nhà xe Hoàng Long', 'driver' => 'Lê Văn Thuê', 'cccd' => $cccd(), 'phone' => '0987654321', 'plate' => $plate(), 'type' => 'Xe tải 5 tấn', 'coc_ok' => '1', 'coc_pt' => 'CHUYEN_KHOAN'];
 $payExt = ['thanh_toan' => 'DA_TT', 'phuong_thuc_tt' => 'CHUYEN_KHOAN', 'hinh_thuc' => 'THUE_NGOAI', 'dia_chi' => 'KCN Quế Võ, Bắc Ninh', 'nguoi_nhan' => 'Trần Văn Kho', 'sdt_nhan' => '0987000222', 'driver_ok' => true, 'km' => 60, 'tien' => 1200000, 'ghi_chu' => '', 'ngoai' => $ext];
@@ -83,6 +91,8 @@ throws(fn() => $del->markArrived($f->approverB, $v2), StockFlow\Domain\Forbidden
 throws(fn() => $del->markArrived($f->keeperA, $v2), StockFlow\Domain\Forbidden::class, 'nhân viên không có chức năng xác nhận phiếu không bấm được');
 throws(fn() => $del->markArrived($f->approverA, $v1), DomainError::class, 'khách tự lấy thì không có «giao đến nơi»');
 same($del->markArrived($f->approverA, $v2), true, 'quản lý kho phát hành ghi nhận tài xế đã giao đến nơi');
+truthy(in_array((int)$d['vehicle_id'], $freeCars(), true), 'bấm «tài xế đã giao đến nơi» xong thì xe sẵn sàng lại');
+truthy(!$fleet->driverBusy((int)$d['driver_id']), 'và tài xế rảnh lại');
 $when = $del->of($v2)['ngay_giao_den'];
 truthy($when !== null, 'có thời điểm giao đến nơi');
 same($del->markArrived($f->approverA, $v2), false, 'bấm lại không ghi đè (đã ghi nhận từ trước)');

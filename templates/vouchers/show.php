@@ -57,16 +57,6 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
   <?php if ($v['trang_thai'] === 'CONFIRMED' && $v['loai'] !== 'ADJUSTMENT'): ?>
   <div class="actions"><a class="btn" href="/vouchers/<?= (int)$v['id'] ?>/print" target="_blank" rel="noopener"><?= icon('printer') ?>In phiếu</a></div>
   <?php endif; ?>
-  <?php if ($headActions): ?>
-  <div class="actions">
-    <?php if ($canApprove): ?>
-    <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/confirm" id="confirm-form" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-      <button<?= $allOk ? '' : ' disabled title="Một số dòng không đủ tồn"' ?>><?= icon('check') ?>Xác nhận &amp; ghi sổ</button></form>
-    <?php endif; ?>
-    <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/cancel" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-      <button class="btn-ghost btn-danger-ghost" data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button></form>
-  </div>
-  <?php endif; ?>
 </header>
 
 <?php if ($draft && $v['loai'] !== 'TRANSFER_IN' && ($canApprove || $canDraft)): ?><span hidden data-guard-draft data-cancel="/vouchers/<?= (int)$v['id'] ?>/cancel"></span><?php endif; ?>
@@ -191,7 +181,6 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
     <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/confirm" class="card" id="confirm-form" data-once data-guard="local" data-guard-save="Lưu tạm"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <h2>Giao hàng cho khách</h2>
       <?php require __DIR__ . '/../partials/load_summary.php'; ?>
-      <p class="muted small">Đơn nhỏ thì khách tự đến lấy. Đơn lớn cần chở tới khách: chọn xe của kho hoặc thuê đơn vị vận tải ngoài. </p>
       <?php $ready = array_values($vehicles); $deliveryMode = true; $formId = ''; $cust = $custInfo ?? []; $saleTotal = $sumNet + $sumTax; require __DIR__ . '/../partials/pay_box.php'; ?>
       <button class="btn-block"<?= $allOk ? '' : ' disabled title="Một số dòng không đủ tồn"' ?>><?= icon('check') ?>Xác nhận &amp; ghi sổ</button>
       <button class="btn-ghost btn-danger-ghost btn-block" formaction="/vouchers/<?= (int)$v['id'] ?>/cancel" formnovalidate data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button>
@@ -396,6 +385,17 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
       <summary>Nhật ký thao tác <span class="count"><?= count($trail) ?></span></summary>
       <ul class="rows tight"><?php foreach ($trail as $a): ?><li><span><b><?= e(audit_label($a['hanh_dong'])) ?></b><br><small class="muted"><?= e($a['ho_ten'] ?? '—') ?> · <?= e(dt($a['ngay_tao'])) ?></small></span></li><?php endforeach; ?></ul>
     </details>
+    <?php endif; ?>
+
+    <?php if ($headActions): ?>
+    <div class="side-actions">
+      <?php if ($canApprove): ?>
+      <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/confirm" id="confirm-form" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+        <button<?= $allOk ? '' : ' disabled title="Một số dòng không đủ tồn"' ?>><?= icon('check') ?>Xác nhận &amp; ghi sổ</button></form>
+      <?php endif; ?>
+      <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/cancel" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+        <button class="btn-ghost btn-danger-ghost" data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button></form>
+    </div>
     <?php endif; ?>
   </aside>
 </div>

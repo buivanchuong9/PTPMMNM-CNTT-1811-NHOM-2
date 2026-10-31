@@ -273,10 +273,17 @@ final class FleetService
 
     // ───── tài xế và xe quản lý riêng: mỗi chuyến chọn xe + tài xế lúc xuất kho ─────
 
-    /** Tài xế đang chạy một chuyến chưa giao xong (chuyến điều chuyển). */
+    /** Tài xế đang chạy một chuyến chưa giao xong: chuyến điều chuyển, hoặc đơn giao khách bằng xe kho chưa bấm «đã giao đến nơi». */
     public function driverBusy(int $driverId): bool
     {
-        return (bool)$this->db->value("SELECT 1 FROM chuyen_van_chuyen WHERE tai_xe_id = ? AND trang_thai = 'IN_TRANSIT'", [$driverId]);
+        return (bool)$this->db->value("SELECT 1 FROM chuyen_van_chuyen WHERE tai_xe_id = ? AND trang_thai = 'IN_TRANSIT'", [$driverId])
+            || (bool)$this->db->value("SELECT 1 FROM giao_hang WHERE tai_xe_id = ? AND hinh_thuc = 'NOI_BO' AND ngay_giao_den IS NULL", [$driverId]);
+    }
+
+    /** Xe đang đi giao hàng cho khách (đơn đã xác nhận, tài xế chưa báo giao đến nơi) ⇒ chưa «sẵn sàng». */
+    public function vehicleOnDelivery(int $vehicleId): bool
+    {
+        return (bool)$this->db->value("SELECT 1 FROM giao_hang WHERE xe_id = ? AND hinh_thuc = 'NOI_BO' AND ngay_giao_den IS NULL", [$vehicleId]);
     }
 
     /**
@@ -288,6 +295,7 @@ final class FleetService
         return $this->db->all(
             "SELECT t.* FROM tai_xe t WHERE t.hoat_dong AND t.thue_ngoai = 0 AND t.kho_id = ?
                AND NOT EXISTS (SELECT 1 FROM chuyen_van_chuyen c WHERE c.tai_xe_id = t.id AND c.trang_thai = 'IN_TRANSIT')
+               AND NOT EXISTS (SELECT 1 FROM giao_hang g WHERE g.tai_xe_id = t.id AND g.hinh_thuc = 'NOI_BO' AND g.ngay_giao_den IS NULL)
              ORDER BY t.ho_ten", [$warehouseId]);
     }
 
@@ -355,8 +363,11 @@ final class FleetService
                     t.ho_ten AS tai_xe_ten, t.cccd AS tai_xe_cccd, t.so_dien_thoai AS tai_xe_sdt, t.hoat_dong AS tai_xe_hoat_dong,
                     t.so_gplx AS tx_so_gplx, t.hang_gplx AS tx_hang_gplx, t.ngay_sinh AS tx_ngay_sinh, t.ngay_cap_gplx AS tx_ngay_cap_gplx, t.han_gplx AS tx_han_gplx,
                     t.noi_cap_gplx AS tx_noi_cap_gplx, t.han_kham_sk AS tx_han_kham_sk, t.diem_gplx AS tx_diem_gplx, t.anh_gplx AS tx_anh_gplx,
-                    c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id, tc.ho_ten AS chay_tai_xe, tc.id AS chay_tai_xe_id
+                    c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id, tc.ho_ten AS chay_tai_xe, tc.id AS chay_tai_xe_id,
+                    gh.phieu_nhap_xuat_id AS giao_phieu_id, pg.ma AS giao_phieu_ma, tg.ho_ten AS giao_tai_xe, gh.dia_chi AS giao_dia_chi
              FROM xe x JOIN kho g ON g.id = x.kho_goc_id LEFT JOIN kho h ON h.id = x.kho_hien_tai_id LEFT JOIN kho d ON d.id = x.dang_den_kho_id
+             LEFT JOIN giao_hang gh ON gh.id = (SELECT MAX(z.id) FROM giao_hang z WHERE z.xe_id = x.id AND z.hinh_thuc = 'NOI_BO' AND z.ngay_giao_den IS NULL)
+             LEFT JOIN phieu_nhap_xuat pg ON pg.id = gh.phieu_nhap_xuat_id LEFT JOIN tai_xe tg ON tg.id = gh.tai_xe_id
              LEFT JOIN tai_xe t ON t.id = x.tai_xe_id
              LEFT JOIN chuyen_van_chuyen c ON c.xe_id = x.id AND c.trang_thai = 'IN_TRANSIT'
              LEFT JOIN phieu_nhap_xuat p ON p.id = c.phieu_di_id LEFT JOIN tai_xe tc ON tc.id = c.tai_xe_id
@@ -368,7 +379,7 @@ final class FleetService
     public function drivers(?int $wh = null, ?string $month = null): array
     {
         return $this->db->all(
-            "SELECT t.*, k.ma AS kho_ma, v.id AS xe_phu_trach_id, v.bien_so AS xe_phu_trach, cx.bien_so AS xe_dang_chay, c.id AS chuyen_id, p.ma AS phieu_ma, p.id AS phieu_id,
+            "SELECT t.*, k.ma AS kho_ma, v.id AS xe_phu_trach_id, v.bien_so AS xe_phu_trach, COALESCE(cx.bien_so, gx.bien_so) AS xe_dang_chay, COALESCE(c.id, gd.id) AS chuyen_id, COALESCE(p.ma, pg.ma) AS phieu_ma, COALESCE(p.id, pg.id) AS phieu_id,
                     (SELECT COUNT(*) FROM that_thoat_hang h WHERE h.tai_xe_id = t.id AND h.nguoi_chiu = 'TAI_XE') AS so_vu_mat,
                     (SELECT COALESCE(SUM(h.tien_tru_luong), 0) FROM that_thoat_hang h WHERE h.tai_xe_id = t.id AND h.ngay_tao >= ? AND h.ngay_tao < ?) AS tru_thang,
                     (SELECT COUNT(*) FROM chuyen_van_chuyen z WHERE z.tai_xe_id = t.id AND z.hinh_thuc = 'NOI_BO' AND z.trang_thai = 'DELIVERED' AND z.ngay_di >= ? AND z.ngay_di < ?)
@@ -380,6 +391,8 @@ final class FleetService
              FROM tai_xe t LEFT JOIN kho k ON k.id = t.kho_id LEFT JOIN xe v ON v.tai_xe_id = t.id
              LEFT JOIN chuyen_van_chuyen c ON c.tai_xe_id = t.id AND c.trang_thai = 'IN_TRANSIT' LEFT JOIN xe cx ON cx.id = c.xe_id
              LEFT JOIN phieu_nhap_xuat p ON p.id = c.phieu_di_id
+             LEFT JOIN giao_hang gd ON gd.id = (SELECT MAX(z.id) FROM giao_hang z WHERE z.tai_xe_id = t.id AND z.hinh_thuc = 'NOI_BO' AND z.ngay_giao_den IS NULL)
+             LEFT JOIN xe gx ON gx.id = gd.xe_id LEFT JOIN phieu_nhap_xuat pg ON pg.id = gd.phieu_nhap_xuat_id
              WHERE t.thue_ngoai = 0" . ($wh !== null ? ' AND t.kho_id = ' . (int)$wh : '') . "
              ORDER BY t.ho_ten", [...($r = self::monthRange($month)), ...$r, ...$r, ...$r, ...$r, ...$r, ...$r]);
     }
@@ -640,7 +653,8 @@ final class FleetService
     {
         return $this->db->all(
             'SELECT x.id, x.bien_so, x.loai_xe, x.kieu_xe, x.dung_tich_cc, x.tai_trong_kg, x.gvw_kg, x.ro_mooc_kg, x.tai_xe_id, t.ho_ten, t.cccd, t.hoat_dong AS tai_xe_hoat_dong
-             FROM xe x LEFT JOIN tai_xe t ON t.id = x.tai_xe_id WHERE x.hoat_dong AND x.thue_ngoai = 0 AND x.kho_hien_tai_id = ? ORDER BY x.bien_so', [$warehouseId]);
+             FROM xe x LEFT JOIN tai_xe t ON t.id = x.tai_xe_id WHERE x.hoat_dong AND x.thue_ngoai = 0 AND x.kho_hien_tai_id = ?
+               AND NOT EXISTS (SELECT 1 FROM giao_hang gx WHERE gx.xe_id = x.id AND gx.hinh_thuc = \'NOI_BO\' AND gx.ngay_giao_den IS NULL) ORDER BY x.bien_so', [$warehouseId]);
     }
 
     /** Chuyến của một phiếu điều chuyển (phiếu đi hoặc phiếu đến); null nếu phiếu không có thông tin vận chuyển (dữ liệu trước khi có đội xe). */
