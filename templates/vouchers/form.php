@@ -14,7 +14,7 @@ $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
       <label>Kho<select name="warehouse_id" required data-addr-for="addr-wh"><?= wh_options($warehouses, $selected, 'Chọn kho…') ?></select><small class="muted wh-addr" id="addr-wh"></small></label>
     <?php endif; ?>
     <?php if ($isIn): ?>
-    <label>Nhà cung cấp<select name="partner" id="supplier-select" required<?= $suppliers ? '' : ' disabled' ?>><option value=""><?= $suppliers ? 'Chọn nhà cung cấp…' : 'Chưa có nhà cung cấp' ?></option><?php foreach ($suppliers as $sp): ?><option value="<?= e($sp['ten']) ?>" data-sup="<?= (int)$sp['id'] ?>"<?= !empty($replace) && $replace['doi_tac'] === $sp['ten'] ? ' selected' : '' ?>><?= e($sp['ten']) ?> (<?= e($sp['ma']) ?>)</option><?php endforeach; ?></select></label>
+    <label>Nhà cung cấp<select name="partner" id="supplier-select" required<?= $suppliers ? '' : ' disabled' ?>><option value=""><?= $suppliers ? 'Chọn nhà cung cấp…' : 'Chưa có nhà cung cấp' ?></option><?php foreach ($suppliers as $sp): ?><option value="<?= e($sp['ten']) ?>" data-sup="<?= (int)$sp['id'] ?>"<?= (!empty($replace) && $replace['doi_tac'] === $sp['ten']) || (!empty($presetPartner) && $presetPartner === $sp['ten']) ? ' selected' : '' ?>><?= e($sp['ten']) ?> (<?= e($sp['ma']) ?>)</option><?php endforeach; ?></select></label>
     <?php else: ?>
     <label>Khách hàng<input name="partner" maxlength="120" list="partner-list" autocomplete="off" placeholder="Chọn khách hàng có sẵn hoặc gõ tên khách mới…"><datalist id="partner-list"><?php foreach ($partnerNames ?? [] as $pn): ?><option value="<?= e($pn) ?>"<?= !empty($partnerKho[$pn]) ? ' label="' . e($pn . ' · kho ' . $partnerKho[$pn]) . '"' : '' ?>><?php endforeach; ?></datalist></label>
     <?php endif; ?>

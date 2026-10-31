@@ -417,7 +417,7 @@ final class StockQuery
              FROM kho w LEFT JOIN (SELECT kho_id, SUM(bien_dong) AS units, COUNT(DISTINCT mat_hang_id) AS skus FROM so_phat_sinh GROUP BY kho_id) s ON s.kho_id = w.id
              WHERE w.id IN ($in) ORDER BY w.ma", $ids);
         $low = $this->db->all(
-            "SELECT i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma AS unit, SUM(m.bien_dong) AS so_luong FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
+            "SELECT i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma AS unit, SUM(m.bien_dong) AS so_luong FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
              LEFT JOIN so_phat_sinh m ON m.mat_hang_id = i.id AND m.kho_id IN ($in)
              WHERE i.hoat_dong AND i.dinh_muc_toi_thieu > 0 GROUP BY i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu, u.ma
              HAVING COALESCE(SUM(m.bien_dong),0) <= i.dinh_muc_toi_thieu ORDER BY COALESCE(SUM(m.bien_dong),0) - i.dinh_muc_toi_thieu", $ids);

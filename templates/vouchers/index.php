@@ -13,9 +13,10 @@ $create = array_filter([
 ?>
 <header class="page-head">
   <div><h1>Phiếu nhập xuất</h1></div>
-  <?php if ($create): ?><div class="actions">
+  <div class="actions">
+    <a class="btn btn-ghost" href="/vouchers?<?= e($qs(['format' => 'csv'])) ?>"><?= icon('download') ?>Xuất CSV</a>
     <?php foreach ($create as [, $href, $ic, $title]): ?><a class="btn btn-ghost" href="<?= e($href) ?>"><?= icon($ic) ?><?= e($title) ?></a><?php endforeach; ?>
-  </div><?php endif; ?>
+  </div>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => $label): $n = $k === '' ? $total : ($counts[$k] ?? 0); ?>

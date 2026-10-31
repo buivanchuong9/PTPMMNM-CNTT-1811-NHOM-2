@@ -160,10 +160,52 @@ function audit_label(string $action): string
 {
     static $map = [
         'voucher.create' => 'Lập phiếu', 'voucher.confirm' => 'Xác nhận & ghi sổ', 'voucher.cancel' => 'Huỷ phiếu', 'voucher.correct' => 'Lập phiếu điều chỉnh',
-        'transfer.create' => 'Lập phiếu điều chuyển', 'transfer.dispatch' => 'Xuất kho đi', 'transfer.vehicle' => 'Chọn xe & tài xế',
-        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi', 'transfer.loss' => 'Xác nhận mất hàng', 'transfer.recall' => 'Thu hồi chuyến', 'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm tài xế', 'voucher.delivered' => 'Tài xế đã giao đến nơi', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
+        'voucher.delivery' => 'Ghi nhận giao hàng', 'voucher.delivered' => 'Tài xế đã giao đến nơi',
+        'transfer.create' => 'Lập phiếu điều chuyển', 'transfer.confirm' => 'Xác nhận điều chuyển', 'transfer.dispatch' => 'Xuất kho đi', 'transfer.vehicle' => 'Chọn xe & tài xế',
+        'transfer.receive' => 'Nhận hàng', 'transfer.short' => 'Nhận thiếu hàng', 'transfer.missing' => 'Báo chưa nhận được hàng', 'transfer.reply' => 'Quản trị phản hồi',
+        'transfer.loss' => 'Xác nhận mất hàng', 'transfer.recall' => 'Thu hồi chuyến', 'transfer.split' => 'Chia hàng nhiều xe', 'transfer.discrepancy' => 'Báo sai lệch', 'transfer.correct' => 'Điều chỉnh điều chuyển',
+        'request.create' => 'Gửi yêu cầu chuyển hàng', 'request.approve' => 'Duyệt yêu cầu chuyển hàng', 'request.accept' => 'Nhận yêu cầu chuyển hàng', 'request.cancel' => 'Huỷ yêu cầu chuyển hàng',
+        'return.create' => 'Lập phiếu trả nhà cung cấp',
+        'item.create' => 'Thêm mặt hàng', 'item.update' => 'Sửa mặt hàng', 'item.price' => 'Đặt giá', 'item.suppliers' => 'Gắn nhà cung cấp cho hàng', 'batch.create' => 'Thêm lô hàng',
+        'category.create' => 'Thêm danh mục', 'proposal.create' => 'Đề xuất hàng mới', 'proposal.reject' => 'Từ chối đề xuất hàng',
+        'partner.create' => 'Thêm đối tác', 'partner.update' => 'Sửa đối tác', 'partner.items' => 'Gắn hàng cho nhà cung cấp', 'partner.auto' => 'Tự gắn nhà cung cấp', 'partner.enable' => 'Dùng lại đối tác', 'partner.disable' => 'Ngừng dùng đối tác',
+        'warranty.receive' => 'Nhận hàng bảo hành', 'warranty.da_sua' => 'Bảo hành: đã sửa xong', 'warranty.doi_moi' => 'Bảo hành: đổi mới', 'warranty.tu_choi' => 'Bảo hành: từ chối', 'warranty.return' => 'Trả hàng bảo hành cho khách',
+        'disposal.propose' => 'Đề xuất huỷ hàng', 'disposal.approve' => 'Duyệt huỷ hàng', 'disposal.load' => 'Xếp hàng huỷ lên xe', 'disposal.destroy' => 'Tiêu huỷ hàng', 'disposal.undo' => 'Hoàn tác huỷ hàng',
+        'vehicle.create' => 'Thêm xe', 'vehicle.update' => 'Sửa xe', 'vehicle.relocate' => 'Đặt vị trí xe', 'driver.create' => 'Thêm tài xế', 'driver.update' => 'Sửa tài xế',
+        'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm tài xế', 'fleet.distance' => 'Cập nhật quãng đường',
+        'count.open' => 'Mở đợt kiểm kê', 'count.submit' => 'Nộp kết quả kiểm kê', 'count.approve' => 'Duyệt kiểm kê', 'count.cancel' => 'Huỷ đợt kiểm kê',
+        'user.create' => 'Tạo tài khoản', 'user.profile' => 'Sửa hồ sơ', 'user.avatar' => 'Đổi ảnh đại diện', 'user.avatar.remove' => 'Xoá ảnh đại diện', 'role.grant' => 'Cấp / thu quyền', 'warehouse.create' => 'Thêm kho',
     ];
     return $map[$action] ?? $action;
+}
+
+/** Chi tiết một dòng nhật ký, dễ đọc: mã phiếu + ghi chú (bỏ mã loại thô như ISSUE / RECEIPT khi đã có mã phiếu). */
+function audit_detail(array $a): string
+{
+    $d = (string)($a['chi_tiet'] ?? '');
+    $ma = (string)($a['phieu_ma'] ?? '');
+    if ($ma === '') {
+        return $d;
+    }
+    $kinds = ['ISSUE' => 'phiếu xuất', 'RECEIPT' => 'phiếu nhập', 'ADJUSTMENT' => 'phiếu điều chỉnh', 'TRANSFER_OUT' => 'điều chuyển đi', 'TRANSFER_IN' => 'điều chuyển đến'];
+    $d = $kinds[$d] ?? $d;
+    return $d === '' || $d === $ma ? $ma : (str_contains($d, $ma) ? $d : $ma . ' · ' . $d);
+}
+
+/** Nhóm của một hành động trong nhật ký (để lọc). */
+const AUDIT_GROUPS = [
+    'voucher' => 'Phiếu & chuyển kho', 'goods' => 'Hàng hoá & đối tác', 'warranty' => 'Bảo hành', 'disposal' => 'Kho huỷ',
+    'fleet' => 'Đội xe', 'count' => 'Kiểm kê', 'account' => 'Tài khoản & kho',
+];
+function audit_group(string $action): string
+{
+    $head = explode('.', $action)[0];
+    return match ($head) {
+        'voucher', 'transfer', 'request', 'return' => 'voucher',
+        'item', 'batch', 'category', 'proposal', 'partner' => 'goods',
+        'warranty' => 'warranty', 'disposal' => 'disposal', 'vehicle', 'driver', 'fleet' => 'fleet', 'count' => 'count',
+        default => 'account',
+    };
 }
 
 /** Đối tượng này có nằm trong phần «thay đổi mới» của trang đang mở không (người khác vừa tạo / sửa, chưa xem). */

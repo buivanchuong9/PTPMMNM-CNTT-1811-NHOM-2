@@ -63,6 +63,13 @@ final class VoucherController extends Controller
         ));
         $item = $r->int('item');
         $item = $item && in_array($item, array_map(fn($i) => (int)$i['id'], $itemOptions), true) ? $item : null;   // đổi danh mục thì bỏ mặt hàng không còn thuộc danh mục
+        if ($r->str('format') === 'csv') {   // cùng bộ lọc đang xem, tối đa 5.000 phiếu
+            $stt = ['DRAFT' => 'Chờ xác nhận', 'CONFIRMED' => 'Đã xác nhận', 'CANCELLED' => 'Đã huỷ'];
+            $rows = array_map(fn($v) => [$v['ma'], TYPE_LABELS[$v['loai']][0] ?? $v['loai'], $v['wh_code'], $v['doi_tac'] ?: $v['ly_do'], $v['first_item'] ?? '',
+                (int)$v['line_count'] > 1 ? '+' . ((int)$v['line_count'] - 1) . ' mặt hàng khác' : abs((int)$v['first_qty']) . ' ' . ($v['first_unit'] ?? ''), $stt[$v['trang_thai']] ?? $v['trang_thai'], $v['creator_name'], $v['ngay_tao']],
+                $this->repo->search($scope, $type, $status, $q, 5000, 0, $from, $to, $sort === 'old', $category, $item));
+            return Response::csv('phieu-nhap-xuat-' . gmdate('Ymd') . '.csv', ['Mã phiếu', 'Loại', 'Kho', 'Đối tác / lý do', 'Hàng hoá', 'Số lượng', 'Trạng thái', 'Người lập', 'Thời gian (UTC)'], $rows);
+        }
         $pg = new Paginator($this->repo->searchCount($scope, $type, $status, $q, $from, $to, $category, $item), $r->int('page'));
         return $this->render('vouchers/index', $user, 'vouchers', [
             'rows' => $this->repo->search($scope, $type, $status, $q, $pg->per, $pg->offset, $from, $to, $sort === 'old', $category, $item), 'pg' => $pg,
@@ -101,7 +108,19 @@ final class VoucherController extends Controller
                 }
             }
         }
+        $presetPartner = null;   // nhập từ cảnh báo «sắp hết hàng»: restock=mã hàng:số lượng ⇒ điền sẵn hàng, số lượng và nhà cung cấp đầu tiên của hàng đó
+        if ($type === VoucherType::Receipt && !$replace && preg_match('/^(\d+):(\d{1,7})$/', $r->str('restock'), $m)) {
+            foreach ($pick as $pi) {
+                if ((int)$pi['mat_hang_id'] === (int)$m[1]) {
+                    $prefill[] = [$pi['mat_hang_id'] . ':' . ($pi['quan_ly_lo'] ? 'new' : $pi['lo_hang_id']), (int)$m[2]];
+                    $sup = $this->db->one("SELECT d.ten FROM mat_hang_nha_cung_cap x JOIN doi_tac d ON d.id = x.doi_tac_id WHERE x.mat_hang_id = ? AND d.hoat_dong ORDER BY d.ten LIMIT 1", [(int)$m[1]]);
+                    $presetPartner = $sup['ten'] ?? null;
+                    break;
+                }
+            }
+        }
         return $this->render('vouchers/form', $user, 'vouchers', [
+            'presetPartner' => $presetPartner,
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $pick, 'stock' => $this->query->stockMap($ids),
             'replace' => $replace, 'prefill' => $prefill,
             'idem' => bin2hex(random_bytes(16)), 'selected' => $replace ? (int)$replace['kho_id'] : $r->int('warehouse'), 'prefillItem' => $r->int('item'),
