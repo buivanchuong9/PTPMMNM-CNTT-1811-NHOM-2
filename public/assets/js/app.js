@@ -1316,7 +1316,7 @@
 
   new MutationObserver(() => { initHScroll(); initTabScroll(); initStickyHead(); queueHeads(); }).observe(document.body, { childList: true, subtree: true });
 
-  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); };
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); window.paintCols && window.paintCols(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
@@ -1562,6 +1562,27 @@
   addEventListener('resize', place);
   new ResizeObserver(place).observe(side);
   place();
+})();
+
+// Bảng Hàng hoá: «Hiện thêm cột» bật / tắt các cột ít dùng (nhớ lựa chọn). Lớp đặt ở <html> để vẫn giữ khi bảng được tải lại theo bộ lọc.
+(() => {
+  const KEY = 'inv-cols-all';
+  try { if (localStorage.getItem(KEY) === '1') document.documentElement.classList.add('cols-all'); } catch (e) {}
+  const paint = () => document.querySelectorAll('[data-toggle-cols]').forEach((b) => {
+    const on = document.documentElement.classList.contains('cols-all');
+    b.textContent = on ? 'Ẩn bớt cột' : 'Hiện thêm cột';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest || !e.target.closest('[data-toggle-cols]')) return;
+    const on = document.documentElement.classList.toggle('cols-all');
+    try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (err) {}
+    paint();
+  });
+  window.paintCols = paint;
+  paint();
+  document.addEventListener('DOMContentLoaded', paint);
+  window.addEventListener('load', paint);
 })();
 
 // Thêm lô: chọn loại hàng hoá trước thì danh sách mặt hàng chỉ còn hàng thuộc loại đó

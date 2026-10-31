@@ -216,3 +216,30 @@ th { letter-spacing: .03em; }
 .pay-mode { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 12px 0; }
 .pay-money { padding-top: 6px; padding-bottom: 8px; }
 .pay-money .check { margin: 4px 0; }
+
+/* Bảng Hàng hoá: cột ít dùng (mã vạch, nhà cung cấp, đóng gói, cân nặng) ẩn mặc định, bấm «Hiện thêm cột» để mở */
+.tbl-tools { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+html:not(.cols-all) .inv-compact .col-x { display: none; }
+
+/* Quy ước nút: đỏ đặc = việc chính của trang; viền xám = việc phụ; viền đỏ = việc nguy hiểm (huỷ, xoá). Mọi cỡ nút cùng chiều cao. */
+.btn-sm { min-height: 28px; padding: 3px 10px; font-size: 13px; }
+.btn-danger, .btn-danger-ghost { background: var(--surface); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line)); }
+.btn-danger:hover, .btn-danger-ghost:hover { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.filters > * { flex: 1 1 120px; min-width: 0; }   /* thanh lọc: ô nhỏ lại để cả thanh nằm một hàng */
+.filters > .tag, .filters > .wh-fixed { flex: 0 0 auto; }
+
+/* Tổng quan: việc cần làm lên đầu trang */
+.todo-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 12px; padding: 10px 12px; background: var(--brand-50); border: 1px solid var(--brand-100); border-radius: var(--radius); }
+.todo-strip > b { margin-right: 4px; }
+.todo-strip a { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; color: var(--ink); text-decoration: none; }
+.todo-strip a:hover { border-color: var(--brand); }
+.todo-n { min-width: 22px; padding: 1px 6px; border-radius: 999px; background: var(--brand); color: #fff; font-weight: 700; text-align: center; font-size: .8rem; }
+
+/* Điện thoại / máy tính bảng: menu trượt ra nên nội dung chiếm trọn chiều ngang (quy tắc 220px ở trên không còn áp dụng) */
+@media (max-width: 1000px) {
+  .shell, .app-shell .shell { grid-template-columns: minmax(0, 1fr); }
+  .app-shell main { padding-left: 12px; padding-right: 24px; }
+}
+.filters > input[type=search] { flex-basis: 140px; }
+.filters > select { min-width: 112px; }
+.cancel-draft { margin-top: 8px; }

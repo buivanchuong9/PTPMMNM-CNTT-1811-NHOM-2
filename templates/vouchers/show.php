@@ -183,7 +183,10 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
       <?php require __DIR__ . '/../partials/load_summary.php'; ?>
       <?php $ready = array_values($vehicles); $deliveryMode = true; $formId = ''; $cust = $custInfo ?? []; $saleTotal = $sumNet + $sumTax; require __DIR__ . '/../partials/pay_box.php'; ?>
       <button class="btn-block"<?= $allOk ? '' : ' disabled title="Một số dòng không đủ tồn"' ?>><?= icon('check') ?>Xác nhận &amp; ghi sổ</button>
-      <button class="btn-ghost btn-danger-ghost btn-block" formaction="/vouchers/<?= (int)$v['id'] ?>/cancel" formnovalidate data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button>
+    </form>
+    <?php /* form riêng: huỷ không bị ràng buộc bởi các ô bắt buộc (thanh toán, địa chỉ…) của form xác nhận ở trên */ ?>
+    <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/cancel" class="cancel-draft" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+      <button class="btn-ghost btn-danger-ghost btn-block" data-confirm="Huỷ phiếu nháp này?">Huỷ phiếu</button>
     </form>
     <?php endif; ?>
 
@@ -275,7 +278,7 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
     <?php if ($canRecall): ?>
     <section class="card">
       <h2>Thu hồi chuyến</h2>
-      <p class="muted small"><?= $convoy ? 'Chỉ thu hồi phần hàng của xe được chọn — các xe khác cùng đợt vẫn chạy. ' : '' ?>Xe còn trên đường, kho đến chưa nhận. Thu hồi thì hàng được cộng lại vào kho <?= e($v['wh_code']) ?>, xe quay về kho này và phiếu nhận ở kho đến bị huỷ.</p>
+      <p class="muted small"><?= $convoy ? 'Chỉ thu hồi hàng của xe được chọn. ' : '' ?>Thu hồi: hàng cộng lại vào kho <?= e($v['wh_code']) ?>, xe quay về, phiếu nhận ở kho đến bị huỷ.</p>
       <form method="post" action="/vouchers/<?= (int)$v['id'] ?>/recall" class="form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
         <?= $carPick($liveCars, 'Thu hồi xe nào?') ?>
         <label>Lý do<select name="reason" required><option value="">Chọn lý do…</option><?php foreach (\StockFlow\Service\TransferService::RECALL_REASONS as $rr): ?><option><?= e($rr) ?></option><?php endforeach; ?></select></label>

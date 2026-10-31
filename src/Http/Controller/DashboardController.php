@@ -66,6 +66,6 @@ final class DashboardController extends Controller
             $this->need($user, Permission::XemTongQuan);
         }
         $d = $this->query->dashboard($user);
-        return $this->render('dashboard/index', $user, 'dashboard', ['d' => $d, 'value' => $user->isAdmin ? $this->stockValue($user, $d['warehouses']) : null], 'Tổng quan');
+        return $this->render('dashboard/index', $user, 'dashboard', ['d' => $d, 'todo' => $this->badges->todo($user), 'value' => $user->isAdmin ? $this->stockValue($user, $d['warehouses']) : null], 'Tổng quan');
     }
 }
