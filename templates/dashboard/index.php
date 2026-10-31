@@ -60,7 +60,8 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
       <?php $need = max(1, 2 * (int)$r['dinh_muc_toi_thieu'] - (int)$r['so_luong']);   // gợi ý nhập đủ tới gấp đôi mức tối thiểu ?>
       <li><span><b><?= e($r['ma_hang']) ?></b> <span class="muted"><?= e($r['ten']) ?></span><br><small class="muted">Tối thiểu <?= n($r['dinh_muc_toi_thieu']) ?> <?= e($r['unit']) ?></small></span>
         <span><span class="tag tag-<?= (int)$r['so_luong'] <= 0 ? 'danger' : 'warn' ?>"><?= n($r['so_luong']) ?> <?= e($r['unit']) ?></span>
-        <?php if (!empty($canReceive)): ?><a class="btn btn-ghost btn-sm" href="/vouchers/new?type=RECEIPT&amp;restock=<?= (int)$r['id'] ?>:<?= $need ?>" title="Lập phiếu nhập <?= n($need) ?> <?= e($r['unit']) ?>">Nhập <?= n($need) ?></a><?php endif; ?></span></li>
+        <?php if (!empty($canOrder)): ?><a class="btn btn-ghost btn-sm" href="/orders/new?restock=<?= (int)$r['id'] ?>:<?= $need ?>" title="Đặt nhà cung cấp <?= n($need) ?> <?= e($r['unit']) ?>">Đặt <?= n($need) ?></a>
+        <?php elseif (!empty($canReceive)): ?><a class="btn btn-ghost btn-sm" href="/vouchers/new?type=RECEIPT&amp;restock=<?= (int)$r['id'] ?>:<?= $need ?>" title="Lập phiếu nhập <?= n($need) ?> <?= e($r['unit']) ?>">Nhập <?= n($need) ?></a><?php endif; ?></span></li>
     <?php endforeach; ?>
     </ul>
   </section>

@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NavBadges
 {
-    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals, private StockQuery $stock) {}
+    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals, private StockQuery $stock, private OrderService $orders) {}
 
     /** @return array<string,int> chỉ gồm các mục có số > 0 */
     public function for(User $user): array
@@ -46,15 +46,27 @@ final class NavBadges
     {
         $b = $this->for($user);
         $delivering = $this->auth->allows($user, Permission::XemPhieu) ? $this->vouchers->deliveringCount($this->auth->visibleWarehouseIds($user)) : 0;
+        $noBackup = 0;
+        if ($user->isAdmin) {   // quản trị: nhắc khi quá 7 ngày chưa sao lưu (số = số ngày)
+            $bk = SettingsService::backupInfo();
+            $noBackup = !$bk ? 99 : ($bk['days'] > 7 ? $bk['days'] : 0);
+        }
         $expired = $soon = 0;
         if ($this->auth->allows($user, Permission::XemTonKho)) {   // lô còn tồn đã hết hạn / sắp hết hạn trong EXPIRY_WARN_DAYS ngày
             foreach ($this->stock->expiring($this->auth->visibleWarehouseIds($user)) as $e) {
                 $e['status'] === 'expired' ? $expired++ : $soon++;
             }
         }
+        $waiting = 0;
+        if ($this->auth->allows($user, Permission::XemDonDatHang)) {   // đơn đã gửi nhà cung cấp, đang chờ hàng về
+            $c = $this->orders->counts($this->auth->visibleWarehouseIds($user));
+            $waiting = (int)($c['DA_GUI'] ?? 0) + (int)($c['NHAN_MOT_PHAN'] ?? 0);
+        }
         $items = [
+            ['ngày chưa sao lưu dữ liệu', $noBackup, '/settings?tab=he-thong'],
             ['lô đã hết hạn còn tồn', $expired, '/inventory?view=batch&expiry=expired'],
             ['lô sắp hết hạn (' . StockQuery::EXPIRY_WARN_DAYS . ' ngày)', $soon, '/inventory?view=batch&expiry=soon'],
+            ['đơn đặt hàng đang chờ hàng về', $waiting, '/orders'],
             ['phiếu chờ xác nhận', (int)($b['vouchers'] ?? 0), '/vouchers?status=DRAFT'],
             ['đơn đang giao', $delivering, '/vouchers?type=ISSUE&status=CONFIRMED'],
             ['phiếu bảo hành đang xử lý', (int)($b['warranty'] ?? 0), '/warranty'],

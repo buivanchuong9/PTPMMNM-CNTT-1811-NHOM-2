@@ -282,7 +282,7 @@ final class CatalogService
     public function itemByBarcode(string $code): ?array
     {
         return $this->db->one('SELECT i.*, u.ma AS unit, c.ten AS category FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
-                               WHERE i.ma_vach = ? AND i.hoat_dong', [$code]);
+                               WHERE (i.ma_vach = ? OR i.ma_hang = ?) AND i.hoat_dong ORDER BY (i.ma_vach = ?) DESC LIMIT 1', [$code, strtoupper($code), $code]);   // tem của hàng chưa gắn mã vạch in mã theo SKU
     }
 
     /** Gán, đổi hoặc gỡ mã vạch của mặt hàng — chỉ tài khoản có chức năng «Gán mã vạch» (quản lý kho). Chỉ lưu chuỗi mã, không lưu ảnh. */

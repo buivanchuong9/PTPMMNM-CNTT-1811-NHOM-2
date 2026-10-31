@@ -324,6 +324,28 @@ final class SettingsService
     }
 
     /** @return array<string,int> */
+    /** Lần sao lưu gần nhất (file database/backup/stockflow-data.json.gz): thời điểm, dung lượng, số ngày đã qua; null nếu chưa có. */
+    public static function backupInfo(): ?array
+    {
+        $file = \StockFlow\Core\DataBackup::path();
+        if (!is_file($file)) {
+            return null;
+        }
+        $t = (int)filemtime($file);
+        return ['time' => $t, 'size' => (int)filesize($file), 'days' => (int)floor((time() - $t) / 86400)];
+    }
+
+    /** Quản trị bấm «Sao lưu ngay»: ghi toàn bộ dữ liệu ra file sao lưu. @return int tổng số dòng đã sao lưu */
+    public function backupNow(User $actor): int
+    {
+        if (!$actor->isAdmin) {
+            throw new \StockFlow\Domain\Forbidden('Chỉ quản trị hệ thống mới sao lưu được dữ liệu');
+        }
+        $rows = array_sum((new \StockFlow\Core\DataBackup($this->db))->export(\StockFlow\Core\DataBackup::path()));
+        $this->audit->record($actor->id, 'system.backup', 'system', null, number_format($rows, 0, ',', '.') . ' dòng');
+        return $rows;
+    }
+
     public function overview(): array
     {
         $count = fn(string $sql) => (int)$this->db->value($sql);

@@ -85,6 +85,16 @@ $rowsLabel = fn(int $n) => $n . ' dòng / trang';
   <div class="kpi kpi-ok"><span class="kpi-ic"><?= icon('box') ?></span><b><?= n($overview['mat_hang']) ?></b><span>Mặt hàng</span></div>
   <div class="kpi kpi-warn"><span class="kpi-ic"><?= icon('file') ?></span><b><?= n($overview['phieu']) ?></b><span>Phiếu</span></div>
 </div>
+<?php $bk = \StockFlow\Service\SettingsService::backupInfo(); ?>
+<section class="card">
+  <div class="card-head"><h2>Sao lưu dữ liệu</h2>
+    <span class="muted small"><?php if ($bk): ?>Lần cuối: <b><?= e(date('d/m/Y H:i', $bk['time'])) ?></b> (<?= $bk['days'] === 0 ? 'hôm nay' : $bk['days'] . ' ngày trước' ?>) · <?= e(number_format($bk['size'] / 1024, 0, ',', '.')) ?> KB<?php else: ?>Chưa có bản sao lưu nào<?php endif; ?></span></div>
+  <?php if (!$bk || $bk['days'] > 7): ?><p class="small" style="color:var(--danger);margin:0 0 10px"><?= icon('alert') ?> <?= $bk ? 'Đã hơn 7 ngày chưa sao lưu.' : 'Chưa sao lưu lần nào.' ?></p><?php endif; ?>
+  <div class="actions">
+    <form method="post" action="/settings/backup" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit"><?= icon('download') ?>Sao lưu ngay</button></form>
+    <?php if ($bk): ?><a class="btn btn-ghost" href="/settings/backup/download"><?= icon('download') ?>Tải bản sao lưu</a><?php endif; ?>
+  </div>
+</section>
 <section class="card">
   <div class="card-head"><h2>Tham số hệ thống</h2><span class="muted small">áp dụng cho mọi tài khoản</span></div>
   <form method="post" action="/settings/system">

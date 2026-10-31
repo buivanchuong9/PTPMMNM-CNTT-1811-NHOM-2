@@ -174,7 +174,7 @@ function audit_label(string $action): string
         'vehicle.create' => 'Thêm xe', 'vehicle.update' => 'Sửa xe', 'vehicle.relocate' => 'Đặt vị trí xe', 'driver.create' => 'Thêm tài xế', 'driver.update' => 'Sửa tài xế',
         'driver.penalty' => 'Trừ điểm, lương tài xế', 'driver.pay' => 'Sửa điểm tài xế', 'fleet.distance' => 'Cập nhật quãng đường',
         'count.open' => 'Mở đợt kiểm kê', 'count.submit' => 'Nộp kết quả kiểm kê', 'count.approve' => 'Duyệt kiểm kê', 'count.cancel' => 'Huỷ đợt kiểm kê',
-        'user.create' => 'Tạo tài khoản', 'user.profile' => 'Sửa hồ sơ', 'user.avatar' => 'Đổi ảnh đại diện', 'user.avatar.remove' => 'Xoá ảnh đại diện', 'role.grant' => 'Cấp / thu quyền', 'warehouse.create' => 'Thêm kho',
+        'system.backup' => 'Sao lưu dữ liệu', 'creturn.create' => 'Lập phiếu khách trả hàng', 'creturn.confirm' => 'Xác nhận khách trả hàng', 'creturn.cancel' => 'Huỷ phiếu khách trả hàng', 'order.create' => 'Lập đơn đặt hàng', 'order.send' => 'Gửi đơn cho nhà cung cấp', 'order.close' => 'Đóng đơn đặt hàng', 'order.cancel' => 'Huỷ đơn đặt hàng', 'user.create' => 'Tạo tài khoản', 'user.profile' => 'Sửa hồ sơ', 'user.avatar' => 'Đổi ảnh đại diện', 'user.avatar.remove' => 'Xoá ảnh đại diện', 'role.grant' => 'Cấp / thu quyền', 'warehouse.create' => 'Thêm kho',
     ];
     return $map[$action] ?? $action;
 }
@@ -399,6 +399,9 @@ function voucher_status_tag(array $v): string
     if ($v['loai'] === 'TRANSFER_IN') {
         return $s === 'DRAFT' ? '<span class="tag tag-info">Hàng đang tới — chờ nhận</span>' : ($s === 'CONFIRMED' ? '<span class="tag tag-ok">Đã nhận hàng</span>' : status_tag($s));
     }
+    if ($v['loai'] === 'ISSUE' && $s === 'CONFIRMED' && (int)($v['da_tra'] ?? 0) > 0) {   // khách đã trả hàng (phiếu trả đã xác nhận)
+        return (int)$v['da_tra'] >= (int)$v['da_ban'] ? '<span class="tag tag-warn">Hoàn trả</span>' : '<span class="tag tag-info">Hoàn trả một phần</span>';
+    }
     if ($v['loai'] === 'ISSUE' && $s === 'CONFIRMED' && !empty($v['dang_giao'])) {   // đã ghi sổ nhưng hàng chưa tới tay khách (tài xế chưa báo giao đến nơi)
         return '<span class="tag tag-info">Đang giao hàng</span>';
     }
@@ -408,6 +411,9 @@ function voucher_status_tag(array $v): string
 /** Màu dòng của phiếu trong danh sách: phiếu xuất đang giao hàng cho khách thì màu «đang xử lý» thay vì «đã xong». */
 function voucher_tone(array $v): string
 {
+    if ($v['loai'] === 'ISSUE' && $v['trang_thai'] === 'CONFIRMED' && (int)($v['da_tra'] ?? 0) > 0) {
+        return 'warn';
+    }
     return $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'CONFIRMED' && !empty($v['dang_giao']) ? 'info' : status_tone($v['trang_thai']);
 }
 

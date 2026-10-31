@@ -37,6 +37,9 @@ final class SettingsController extends Controller
     public function index(Request $r, array $p, ?User $user): Response
     {
         $tabs = $this->tabsFor($user);
+        if ($r->str('tab') === 'nhat-ky' && in_array('nhat-ky', $tabs, true)) {   // nhật ký có trang riêng, lọc được theo người, nhóm việc, thời gian
+            return Response::redirect('/audit');
+        }
         $tab = in_array($r->str('tab'), $tabs, true) ? $r->str('tab') : 'ca-nhan';
         $data = ['tabs' => $tabs, 'tab' => $tab, 'prefs' => $this->settings->preferences($user), 'system' => $this->settings->system(),
                  'rowOptions' => SettingsService::ROWS, 'idleOptions' => SettingsService::IDLE];
@@ -113,6 +116,24 @@ final class SettingsController extends Controller
     {
         return $this->act(fn() => $this->settings->editStaff($user, (int)$r->int('user_id'), $r->str('username'), (string)($r->post['password'] ?? '')),
             'Đã lưu thay đổi nhân viên. Tên đăng nhập / mật khẩu mới dùng được ngay.', '/warehouses');
+    }
+
+    public function backup(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(fn() => $this->settings->backupNow($user), 'Đã sao lưu dữ liệu.', $this->back('he-thong'));
+    }
+
+    /** Tải file sao lưu mới nhất về máy (chỉ quản trị). */
+    public function backupDownload(Request $r, array $p, ?User $user): Response
+    {
+        if (!$user || !$user->isAdmin) {
+            throw new Forbidden('Chỉ quản trị hệ thống mới tải được bản sao lưu');
+        }
+        $file = \StockFlow\Core\DataBackup::path();
+        if (!is_file($file)) {
+            throw new NotFound('Chưa có bản sao lưu nào');
+        }
+        return new Response((string)file_get_contents($file), 200, ['Content-Type' => 'application/gzip', 'Content-Disposition' => 'attachment; filename="stockflow-' . gmdate('Ymd-His', (int)filemtime($file)) . '.json.gz"']);
     }
 
     public function system(Request $r, array $p, ?User $user): Response

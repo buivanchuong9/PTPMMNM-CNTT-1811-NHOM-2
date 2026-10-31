@@ -11,6 +11,8 @@ $groups = [
             'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
             'returns' => ['/returns', 'truck', 'Trả hàng nhà cung cấp', [P::XemPhieu]],
             'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
+            'orders' => ['/orders', 'file', 'Đặt hàng nhà cung cấp', [P::XemDonDatHang]],
+            'creturns' => ['/customer-returns', 'in', 'Khách trả hàng', [P::XemPhieu]],
             'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
         ]],
         'warranty' => ['/warranty', 'shield', 'Bảo hành', [P::XemBaoHanh]],
@@ -19,11 +21,14 @@ $groups = [
     'Tra cứu' => [
         'inventory-group' => ['#', 'box', 'Hàng hoá', [P::XemTonKho], [
             'inventory' => ['/inventory', 'box', 'Danh sách hàng hoá', [P::XemTonKho]],
+            'import' => ['/import', 'in', 'Nhập từ file', [P::QuanLyMatHang, P::LapPhieuNhap]],
+            'labels' => ['/labels', 'scan', 'In tem mã vạch', [P::XemTonKho]],
             'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
             'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
         ]],
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
         'audit' => ['/audit', 'clipboard', 'Nhật ký thao tác', [P::XemLichSu]],
+        'nxt' => ['/reports/nxt', 'scale', 'Nhập – Xuất – Tồn', [P::XemBaoCao]],
         'valuation-group' => ['#', 'scale', 'Vốn kho', [P::XemBaoCao], [
             'valuation' => ['/valuation', 'scale', 'Tổng quan vốn kho', [P::XemBaoCao]],
             'money-in' => ['/money/in', 'in', 'Tiền nhập', [P::XemBaoCao]],

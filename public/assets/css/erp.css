@@ -243,3 +243,8 @@ html:not(.cols-all) .inv-compact .col-x { display: none; }
 .filters > input[type=search] { flex-basis: 140px; }
 .filters > select { min-width: 112px; }
 .cancel-draft { margin-top: 8px; }
+
+/* Khách trả hàng: ô theo nguyên nhân lỗi và dòng tiền hoàn */
+#creturn-form [hidden] { display: none !important; }
+.refund-line { margin: 12px 0 4px; font-size: 15px; }
+.refund-line b { font-size: 18px; }

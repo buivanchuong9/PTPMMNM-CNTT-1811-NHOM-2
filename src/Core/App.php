@@ -57,6 +57,8 @@ final class App
         $r->post('/settings/avatar/remove', [C\SettingsController::class, 'avatarRemove']);
         $r->get('/avatar/{id}', [C\SettingsController::class, 'avatarFile']);
         $r->post('/settings/system', [C\SettingsController::class, 'system']);
+        $r->post('/settings/backup', [C\SettingsController::class, 'backup']);
+        $r->get('/settings/backup/download', [C\SettingsController::class, 'backupDownload']);
         $r->get('/finova/orders', [C\FinovaController::class, 'orders']);
 
         $r->get('/vouchers', [C\VoucherController::class, 'index']);
@@ -117,6 +119,26 @@ final class App
 
         $r->get('/history', [C\HistoryController::class, 'index']);
         $r->get('/audit', [C\AuditController::class, 'index']);
+        $r->get('/reports/nxt', [C\NxtController::class, 'index']);
+        $r->get('/customer-returns', [C\CustomerReturnController::class, 'index']);
+        $r->get('/customer-returns/new', [C\CustomerReturnController::class, 'create']);
+        $r->post('/customer-returns', [C\CustomerReturnController::class, 'store']);
+        $r->get('/customer-returns/{id}', [C\CustomerReturnController::class, 'show']);
+        $r->post('/customer-returns/{id}/confirm', [C\CustomerReturnController::class, 'confirm']);
+        $r->post('/customer-returns/{id}/cancel', [C\CustomerReturnController::class, 'cancel']);
+        $r->get('/orders', [C\OrderController::class, 'index']);
+        $r->get('/orders/new', [C\OrderController::class, 'create']);
+        $r->post('/orders', [C\OrderController::class, 'store']);
+        $r->get('/orders/{id}', [C\OrderController::class, 'show']);
+        $r->post('/orders/{id}/send', [C\OrderController::class, 'send']);
+        $r->post('/orders/{id}/close', [C\OrderController::class, 'close']);
+        $r->get('/import', [C\ImportController::class, 'index']);
+        $r->get('/labels', [C\LabelController::class, 'index']);
+        $r->get('/labels/print', [C\LabelController::class, 'print']);
+        $r->get('/import/template', [C\ImportController::class, 'template']);
+        $r->post('/import/preview', [C\ImportController::class, 'preview']);
+        $r->post('/import/apply', [C\ImportController::class, 'apply']);
+        $r->get('/reports/stock-card', [C\NxtController::class, 'card']);
         $r->get('/reconcile', [C\HistoryController::class, 'reconcile']);
         $r->get('/reports', [C\HistoryController::class, 'reports']);
         $r->get('/valuation', [C\ValuationController::class, 'index']);
