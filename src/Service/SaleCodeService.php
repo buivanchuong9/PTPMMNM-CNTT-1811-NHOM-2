@@ -46,7 +46,7 @@ final class SaleCodeService
         if ($this->db->value('SELECT 1 FROM san_pham_ban WHERE phieu_nhap_xuat_id = ? LIMIT 1', [$voucherId])) {
             return 0;
         }
-        $purchaseDate ??= gmdate('Y-m-d');
+        $purchaseDate ??= StockQuery::today();
         $made = 0;
         foreach ($lines as $l) {
             $qty = (int)$l['so_luong'];

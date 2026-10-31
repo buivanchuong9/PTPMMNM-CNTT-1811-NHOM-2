@@ -8,7 +8,7 @@ dist/
 .vscode/
 
 # Các bài lab gốc (mỗi bài là một git repo riêng) — giữ ở máy, không đẩy lên
-lab*/
+/lab*/
 
 .claude/
 
