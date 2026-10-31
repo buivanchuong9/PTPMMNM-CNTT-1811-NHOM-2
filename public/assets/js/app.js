@@ -1316,7 +1316,7 @@
 
   new MutationObserver(() => { initHScroll(); initTabScroll(); initStickyHead(); queueHeads(); }).observe(document.body, { childList: true, subtree: true });
 
-  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); window.paintCols && window.paintCols(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); };
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); window.paintCols && window.paintCols(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); window.initCreturn && window.initCreturn(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
@@ -1837,3 +1837,33 @@ document.addEventListener('click', (ev) => {
   const notice = document.getElementById('notice-dlg');
   if (dlg && notice && notice.open) { notice.close(); notice.showModal(); }
 })();
+
+// Phiếu khách trả hàng: ô «người chịu» đổi theo nguyên nhân lỗi, và tiền hoàn cho khách tính ngay khi nhập. Chạy lại mỗi lần đổi trang kiểu SPA.
+window.initCreturn = () => {
+  const form = document.getElementById('creturn-form');
+  if (!form || form._creturn) return;
+  form._creturn = true;
+  const total = document.getElementById('refund-total');
+  const fmt = (n) => Math.round(n).toLocaleString('vi-VN');
+  const sync = () => {
+    let sum = 0;
+    form.querySelectorAll('tr[data-unit]').forEach((tr) => {
+      const unit = Number(tr.dataset.unit) || 0;
+      const qty = Number(tr.querySelector('[name="qty[]"]')?.value) || 0;
+      const bad = Math.min(qty, Number(tr.querySelector('[name="bad[]"]')?.value) || 0);
+      const cause = bad > 0 ? tr.querySelector('[name="why[]"]')?.value || '' : '';
+      tr.querySelectorAll('[data-for]').forEach((el) => { el.hidden = el.dataset.for !== cause; });
+      let deduct = 0;
+      if (cause === 'KHACH') {
+        const typed = tr.querySelector('[name="deduct[]"]')?.value.trim() ?? '';
+        deduct = typed === '' ? bad * unit : Math.min(bad * unit, Number(typed) || 0);
+      }
+      sum += qty * unit - deduct;
+    });
+    if (total) total.textContent = fmt(sum);
+  };
+  form.addEventListener('input', sync);
+  form.addEventListener('change', sync);
+  sync();
+};
+window.initCreturn();

@@ -16,7 +16,7 @@ final class VoucherService
 {
     public function __construct(private Db $db, private VoucherRepository $repo, private Ledger $ledger,
                                 private Authorizer $auth, private AuditLog $audit, private TransferService $transfers, private StockQuery $query, private PricingService $pricing,
-                                private SupplierReturnService $returns, private DeliveryService $deliveries, private SaleCodeService $saleCodes) {}
+                                private SupplierReturnService $returns, private DeliveryService $deliveries, private SaleCodeService $saleCodes, private OrderService $orders) {}
 
     /**
      * Lập phiếu nhập/xuất ở trạng thái nháp (chưa ảnh hưởng tồn).
@@ -27,7 +27,7 @@ final class VoucherService
      * @param array<string,array{loi:int,ly_do:string,ghi_chu:string}> $quality
      * @return array{voucher:array,created:bool}
      */
-    public function createDraft(User $user, VoucherType $type, int $warehouseId, array $lines, string $partner, string $note, ?string $idempotencyKey, array $quality = [], ?int $replaceId = null): array
+    public function createDraft(User $user, VoucherType $type, int $warehouseId, array $lines, string $partner, string $note, ?string $idempotencyKey, array $quality = [], ?int $replaceId = null, ?int $orderId = null): array
     {
         if (!in_array($type, [VoucherType::Receipt, VoucherType::Issue], true)) {
             throw new DomainError('Chỉ lập tay phiếu nhập hoặc phiếu xuất');
@@ -43,7 +43,7 @@ final class VoucherService
             return ['voucher' => $existing, 'created' => false];
         }
         try {
-            $id = $this->db->transaction(function () use ($user, $type, $warehouseId, $lines, $partner, $note, $idempotencyKey, $quality, $replaceId) {
+            $id = $this->db->transaction(function () use ($user, $type, $warehouseId, $lines, $partner, $note, $idempotencyKey, $quality, $replaceId, $orderId) {
                 $this->requireActiveWarehouse($warehouseId);
                 $this->validateLines($lines);
                 $received = [];
@@ -52,7 +52,10 @@ final class VoucherService
                     if ($replaceId !== null) {
                         $this->returns->assertReplacement($replaceId, $warehouseId, $partner, $lines);
                     }
-                } elseif ($replaceId !== null || $quality) {
+                    if ($orderId !== null) {   // nhập hàng theo đơn đặt hàng nhà cung cấp
+                        $this->orders->assertReceipt($orderId, $warehouseId, $partner, $lines);
+                    }
+                } elseif ($replaceId !== null || $quality || $orderId !== null) {
                     throw new DomainError('Chỉ phiếu nhập mới có kiểm tra chất lượng');
                 }
                 $lines = $this->priceLines($type, $warehouseId, $lines);
@@ -60,6 +63,9 @@ final class VoucherService
                     'loai' => $type->value, 'kho_id' => $warehouseId, 'doi_tac' => trim($partner), 'ghi_chu' => trim($note),
                     'khoa_chong_trung' => $idempotencyKey, 'nguoi_lap_id' => $user->id, 'cap_lai_cho_id' => $replaceId,
                 ], $lines);
+                if ($orderId !== null) {
+                    $this->db->exec('UPDATE phieu_nhap_xuat SET don_dat_hang_id = ? WHERE id = ?', [$orderId, $id]);
+                }
                 foreach ($received as $q) {
                     $this->db->exec('INSERT INTO nhap_loi (phieu_nhap_xuat_id, mat_hang_id, lo_hang_id, so_luong_nhan, so_luong_loi, ly_do, ghi_chu) VALUES (?,?,?,?,?,?,?)',
                         [$id, $q['mat_hang_id'], $q['lo_hang_id'], $q['so_luong'], $q['loi'], $q['ly_do'], $q['ghi_chu']]);
@@ -139,6 +145,7 @@ final class VoucherService
             if ($v['loai'] === VoucherType::Receipt->value) {   // hàng không đạt ⇒ phiếu trả nhà cung cấp; hàng cấp lại ⇒ trừ vào số còn thiếu
                 $this->returns->createFromReceipt($user, $v);
                 $this->returns->fulfil($v, $lines);
+                $this->orders->fulfil($v, $lines);   // phiếu nhập theo đơn đặt hàng: cộng số đã nhận
             }
             return false;
         });

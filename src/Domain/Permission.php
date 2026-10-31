@@ -21,6 +21,7 @@ enum Permission: string
     case XemDoiXe = 'xem_doi_xe';
     case XemBaoHanh = 'xem_bao_hanh';
     case XemKhoHuy = 'xem_kho_huy';
+    case XemDonDatHang = 'xem_don_dat_hang';
     // ── Tác nghiệp kho ──
     case LapPhieuNhap = 'lap_phieu_nhap';
     case LapPhieuXuat = 'lap_phieu_xuat';
@@ -39,6 +40,7 @@ enum Permission: string
     case XuLyBaoHanh = 'xu_ly_bao_hanh';
     case LapPhieuHuy = 'lap_phieu_huy';
     case XacNhanHuy = 'xac_nhan_huy';
+    case LapDonDatHang = 'lap_don_dat_hang';
     // ── Nhân sự kho ──
     case QuanLyNhanVien = 'quan_ly_nhan_vien';
     // ── Quản trị hệ thống (chỉ ADMIN) ──
@@ -61,6 +63,7 @@ enum Permission: string
             self::XemDoiXe => 'Xem đội xe & tài xế',
             self::XemBaoHanh => 'Xem kho bảo hành',
             self::XemKhoHuy => 'Xem kho huỷ hàng',
+            self::XemDonDatHang => 'Xem đơn đặt hàng nhà cung cấp',
             self::LapPhieuNhap => 'Lập phiếu nhập',
             self::LapPhieuXuat => 'Lập phiếu xuất',
             self::LapPhieuDieuChuyen => 'Lập phiếu điều chuyển',
@@ -83,6 +86,7 @@ enum Permission: string
             self::XuLyBaoHanh => 'Nhận và xử lý bảo hành',
             self::LapPhieuHuy => 'Đề xuất huỷ hàng (hết hạn, vỡ, hỏng)',
             self::XacNhanHuy => 'Duyệt huỷ hàng và xác nhận đã tiêu huỷ',
+            self::LapDonDatHang => 'Lập và theo dõi đơn đặt hàng nhà cung cấp',
         };
     }
 
@@ -98,6 +102,7 @@ enum Permission: string
             self::XemDanhMuc => 'Xem danh sách kho và mặt hàng',
             self::XemKiemKe => 'Xem các đợt kiểm kê và kết quả (chỉ đọc)',
             self::XemBaoHanh => 'Danh sách hàng khách gửi bảo hành và kết quả xử lý (chỉ đọc)',
+            self::XemDonDatHang => 'Danh sách đơn đặt hàng nhà cung cấp, số đã nhận và còn thiếu (chỉ đọc)',
             self::XemKhoHuy => 'Danh sách hàng chờ huỷ, đang ở kho huỷ, đã tiêu huỷ và giá trị thiệt hại (chỉ đọc)',
             self::XemDoiXe => 'Xem xe, tài xế, điểm & lương, chuyến chưa thấy hàng và thất thoát (chỉ đọc; quản lý kho chỉ thấy đội xe của kho mình)',
             self::LapPhieuNhap => 'Tạo phiếu nhập nháp tại kho của mình',
@@ -122,15 +127,16 @@ enum Permission: string
             self::XuLyBaoHanh => 'Tiếp nhận hàng khách mang đến bảo hành, ghi kết quả (sửa xong, đổi mới, từ chối) và trả khách. Đổi mới sẽ trừ tồn kho',
             self::LapPhieuHuy => 'Chọn hàng/lô trong kho, ghi lý do (hết hạn, vỡ, hỏng, không bán được) để chờ quản lý duyệt. Chưa trừ tồn',
             self::XacNhanHuy => 'Duyệt đề xuất huỷ: hàng rời tồn và nằm ở kho huỷ; sau đó xác nhận đã tiêu huỷ thật',
+            self::LapDonDatHang => 'Lập đơn đặt hàng gửi nhà cung cấp, đánh dấu đã gửi, theo dõi số đã nhận (tự cập nhật khi nhập hàng theo đơn), đóng hoặc huỷ đơn',
         };
     }
 
     public function group(): string
     {
         return match ($this) {
-            self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe, self::XemDoiXe, self::XemBaoHanh, self::XemKhoHuy => 'Xem & tra cứu',
+            self::XemTongQuan, self::XemTonKho, self::XemPhieu, self::XemLichSu, self::XemDoiChieu, self::XemBaoCao, self::XemDanhMuc, self::XemKiemKe, self::XemDoiXe, self::XemBaoHanh, self::XemKhoHuy, self::XemDonDatHang => 'Xem & tra cứu',
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::DieuChinhPhieu,
-            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia, self::QuanLyDoiXe, self::GanMaVach, self::XuLyBaoHanh, self::LapPhieuHuy, self::XacNhanHuy => 'Tác nghiệp kho',
+            self::KiemKeThucHien, self::KiemKeDuyet, self::ThemLo, self::DieuChinhGia, self::QuanLyDoiXe, self::GanMaVach, self::XuLyBaoHanh, self::LapPhieuHuy, self::XacNhanHuy, self::LapDonDatHang => 'Tác nghiệp kho',
             self::QuanLyNhanVien => 'Nhân sự kho',
             self::QuanLyKho, self::QuanLyMatHang, self::QuanLyTaiKhoan, self::PhanQuyen, self::DatGiaGoc, self::DuyetDeXuatHang => 'Quản trị hệ thống',
         };
@@ -144,7 +150,7 @@ enum Permission: string
     {
         return in_array($this, [
             self::LapPhieuNhap, self::LapPhieuXuat, self::LapPhieuDieuChuyen, self::XacNhanPhieu, self::NhanHangDieuChuyen, self::KiemKeThucHien, self::KiemKeDuyet, self::DieuChinhGia, self::QuanLyDoiXe, self::GanMaVach,
-            self::XuLyBaoHanh, self::LapPhieuHuy, self::XacNhanHuy,
+            self::XuLyBaoHanh, self::LapPhieuHuy, self::XacNhanHuy, self::LapDonDatHang,
         ], true);
     }
 
@@ -162,6 +168,7 @@ enum Permission: string
             self::QuanLyDoiXe => self::XemDoiXe,
             self::XuLyBaoHanh => self::XemBaoHanh,
             self::LapPhieuHuy, self::XacNhanHuy => self::XemKhoHuy,
+            self::LapDonDatHang => self::XemDonDatHang,
             default => null,
         };
     }

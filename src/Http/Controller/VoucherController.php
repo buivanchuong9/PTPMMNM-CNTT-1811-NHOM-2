@@ -26,7 +26,7 @@ use StockFlow\Service\VoucherService;
 final class VoucherController extends Controller
 {
     public function __construct(View $view, Session $session, Authorizer $auth, private VoucherService $vouchers, private TransferService $transfers,
-                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries, private \StockFlow\Service\TransportService $transport, private \StockFlow\Service\SaleCodeService $saleCodes)
+                                private VoucherRepository $repo, private StockQuery $query, private AuditLog $audit, private Db $db, private FleetService $fleet, private \StockFlow\Service\CatalogService $catalog, private \StockFlow\Service\SupplierReturnService $returns, private \StockFlow\Service\DeliveryService $deliveries, private \StockFlow\Service\TransportService $transport, private \StockFlow\Service\SaleCodeService $saleCodes, private \StockFlow\Service\CustomerReturnService $customerReturns)
     {
         parent::__construct($view, $session, $auth);
     }
@@ -108,8 +108,26 @@ final class VoucherController extends Controller
                 }
             }
         }
-        $presetPartner = null;   // nhập từ cảnh báo «sắp hết hàng»: restock=mã hàng:số lượng ⇒ điền sẵn hàng, số lượng và nhà cung cấp đầu tiên của hàng đó
-        if ($type === VoucherType::Receipt && !$replace && preg_match('/^(\d+):(\d{1,7})$/', $r->str('restock'), $m)) {
+        $presetPartner = null;
+        $orderId = null;   // nhập hàng theo đơn đặt hàng: po=mã đơn ⇒ điền sẵn nhà cung cấp và số còn thiếu
+        if ($type === VoucherType::Receipt && !$replace && ($poId = $r->int('po'))) {
+            $order = (new \StockFlow\Service\OrderService($this->db, $this->auth, $this->audit))->find($poId);
+            if (!in_array($order['trang_thai'], \StockFlow\Service\OrderService::RECEIVABLE, true) || !in_array((int)$order['kho_id'], $ids, true)) {
+                throw new DomainError('Đơn ' . $order['ma'] . ' không còn nhận hàng hoặc thuộc kho khác');
+            }
+            $orderId = $poId;
+            $presetPartner = $order['doi_tac'];
+            foreach ((new \StockFlow\Service\OrderService($this->db, $this->auth, $this->audit))->outstanding($poId) as $itemId => $qty) {
+                foreach ($pick as $pi) {
+                    if ((int)$pi['mat_hang_id'] === $itemId) {
+                        $prefill[] = [$itemId . ':' . ($pi['quan_ly_lo'] ? 'new' : $pi['lo_hang_id']), $qty];
+                        break;
+                    }
+                }
+            }
+        }
+        // nhập từ cảnh báo «sắp hết hàng»: restock=mã hàng:số lượng ⇒ điền sẵn hàng, số lượng và nhà cung cấp đầu tiên của hàng đó
+        if ($type === VoucherType::Receipt && !$replace && !$orderId && preg_match('/^(\d+):(\d{1,7})$/', $r->str('restock'), $m)) {
             foreach ($pick as $pi) {
                 if ((int)$pi['mat_hang_id'] === (int)$m[1]) {
                     $prefill[] = [$pi['mat_hang_id'] . ':' . ($pi['quan_ly_lo'] ? 'new' : $pi['lo_hang_id']), (int)$m[2]];
@@ -120,7 +138,7 @@ final class VoucherController extends Controller
             }
         }
         return $this->render('vouchers/form', $user, 'vouchers', [
-            'presetPartner' => $presetPartner,
+            'presetPartner' => $presetPartner, 'orderId' => $orderId,
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $pick, 'stock' => $this->query->stockMap($ids),
             'replace' => $replace, 'prefill' => $prefill,
             'idem' => bin2hex(random_bytes(16)), 'selected' => $replace ? (int)$replace['kho_id'] : $r->int('warehouse'), 'prefillItem' => $r->int('item'),
@@ -180,7 +198,7 @@ final class VoucherController extends Controller
                 $partnerSvc->requireNewCustomerInfo($r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $this->custAddress($r), $user->warehouseId);
             }
             $res = $this->vouchers->createDraft($user, $type, (int)$r->int('warehouse_id'), $lines, $r->str('partner'), $r->str('note'), $this->idemKey($r),
-                $quality, $type === VoucherType::Receipt ? ($r->int('replace') ?: null) : null);
+                $quality, $type === VoucherType::Receipt ? ($r->int('replace') ?: null) : null, $type === VoucherType::Receipt ? ($r->int('po') ?: null) : null);
             if ($type === VoucherType::Issue && $res['created'] && $partnerSvc->ensureCustomer($user, $r->str('partner'), $r->str('cust_contact'), $r->str('cust_phone'), $this->custAddress($r))) {
                 $this->session->flash('ok', 'Đã lưu «' . $r->str('partner') . '» vào danh sách khách hàng.');
             }
@@ -287,6 +305,7 @@ final class VoucherController extends Controller
         };
         return $this->render('vouchers/show', $user, 'vouchers', [
             'v' => $v, 'lines' => $lines, 'check' => $check, 'movements' => $movements,
+            'custReturns' => $v['loai'] === 'ISSUE' ? $this->customerReturns->forIssueDetail((int)$v['id']) : [],
             'saleCodes' => $v['loai'] === 'ISSUE' && $v['trang_thai'] === 'CONFIRMED' ? $this->saleCodes->forVoucher((int)$v['id']) : [],
             'quality' => $v['loai'] === 'RECEIPT' ? $this->repo->quality((int)$v['id']) : [],
             'returnNote' => $v['loai'] === 'RECEIPT' ? $this->db->one('SELECT id, ma, trang_thai FROM tra_hang_ncc WHERE phieu_nhap_xuat_id = ?', [(int)$v['id']]) : null,

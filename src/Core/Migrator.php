@@ -116,6 +116,15 @@ final class Migrator
         ['mat_hang', 'ma_vach', 'varchar(64) NULL'],
         ['mat_hang', 'bao_hanh_thang', 'integer NOT NULL DEFAULT 0'],
         ['lo_hang', 'bao_hanh_thang', 'integer NOT NULL DEFAULT 0'],   // thời hạn bảo hành (tháng) của từng lô hàng; lô mới lấy mặc định từ mặt hàng
+        ['phieu_nhap_xuat', 'don_dat_hang_id', 'integer NULL'],   // phiếu nhập theo đơn đặt hàng nhà cung cấp
+        ['chi_tiet_tra_hang_khach', 'don_gia', 'bigint NOT NULL DEFAULT 0'],   // giá khách đã trả cho 1 đơn vị (đã gồm thuế), chốt từ phiếu bán lúc lập phiếu trả
+        ['chi_tiet_tra_hang_khach', 'tien_tru_khach', 'bigint NOT NULL DEFAULT 0'],   // trừ vào tiền hoàn khi khách làm hỏng
+        ['chi_tiet_tra_hang_khach', 'tien_den_bu', 'bigint NOT NULL DEFAULT 0'],   // giá vốn hàng hỏng mà bên chịu trách nhiệm (tài xế / nhân viên kho) phải đền
+        ['chi_tiet_tra_hang_khach', 'tai_xe_id', 'integer NULL'],   // lỗi vận chuyển: tài xế chịu
+        ['chi_tiet_tra_hang_khach', 'nguoi_chiu_id', 'integer NULL'],   // lỗi do kho: nhân viên chịu
+        ['chi_tiet_tra_hang_khach', 'bao_hanh_id', 'integer NULL'],   // lỗi nhà sản xuất: phiếu kho bảo hành đã mở
+        ['tra_hang_khach', 'tien_hoan', 'bigint NOT NULL DEFAULT 0'],   // số tiền hoàn lại cho khách
+        ['tra_hang_khach', 'hinh_thuc_hoan', "varchar(20) NOT NULL DEFAULT 'TIEN_MAT'"],
         ['bao_hanh', 'san_pham_ban_id', 'bigint NULL'],   // phiếu bảo hành nhận theo mã bán hàng (san_pham_ban)
         ['bao_hanh', 'ma_lo', 'varchar(20) NULL'],   // phiếu nhận CẢ LÔ (chỉ nhập mã lô hàng): so_luong = số chiếc trong lô, san_pham_ban_id để trống
         ['bao_hanh', 'ngay_nhan', 'date NULL'],   // ngày khách mang hàng đến (mặc định hôm nay)

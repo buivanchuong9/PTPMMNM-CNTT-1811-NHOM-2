@@ -6,7 +6,7 @@ $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu.</p></section>
 <?php else: ?>
 <form method="post" action="/vouchers" class="card form" data-once data-guard="submit" data-guard-save="Lưu phiếu nháp">
-  <input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="idem" value="<?= e($idem) ?>"><input type="hidden" name="type" value="<?= e($type->value) ?>"><?php if (!empty($replace)): ?><input type="hidden" name="replace" value="<?= (int)$replace['id'] ?>"><?php endif; ?>
+  <input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="idem" value="<?= e($idem) ?>"><input type="hidden" name="type" value="<?= e($type->value) ?>"><?php if (!empty($replace)): ?><input type="hidden" name="replace" value="<?= (int)$replace['id'] ?>"><?php endif; ?><?php if (!empty($orderId)): ?><input type="hidden" name="po" value="<?= (int)$orderId ?>"><?php endif; ?>
   <div class="row-3">
     <?php if (!$user->isAdmin && $myWarehouse): ?>
       <?= wh_fixed($myWarehouse, $isIn ? 'Nhập vào kho' : 'Xuất từ kho', 'warehouse_id') ?>

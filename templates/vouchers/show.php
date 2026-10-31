@@ -55,7 +55,10 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
       <?php if ($v['cp_code']): ?> <span class="arrow"><?= $v['loai'] === 'TRANSFER_IN' ? '←' : '→' ?></span> <span class="wh-code"><?= e($v['cp_code']) ?></span> <?= e($v['cp_name']) ?><?php endif; ?>
       · <?php endif; ?><?= e(dt($v['ngay_tao'])) ?></p></div>
   <?php if ($v['trang_thai'] === 'CONFIRMED' && $v['loai'] !== 'ADJUSTMENT'): ?>
-  <div class="actions"><a class="btn" href="/vouchers/<?= (int)$v['id'] ?>/print" target="_blank" rel="noopener"><?= icon('printer') ?>In phiếu</a></div>
+  <div class="actions">
+    <?php if ($v['loai'] === 'ISSUE' && $auth->can($user, (int)$v['kho_id'], \StockFlow\Domain\Permission::LapPhieuNhap)): ?><a class="btn btn-ghost" href="/customer-returns/new?voucher=<?= (int)$v['id'] ?>"><?= icon('in') ?>Khách trả hàng</a><?php endif; ?>
+    <a class="btn" href="/vouchers/<?= (int)$v['id'] ?>/print" target="_blank" rel="noopener"><?= icon('printer') ?>In phiếu</a>
+  </div>
   <?php endif; ?>
 </header>
 
@@ -208,6 +211,29 @@ foreach ($trail as $a) { if (in_array($a['hanh_dong'], ['voucher.cancel'], true)
         <?php endforeach; ?>
         </tbody></table></div>
       <?php if ($draft && $qBad): ?><p class="muted small pad">Khi xác nhận, tồn kho chỉ cộng phần đạt và hệ thống tự lập phiếu trả nhà cung cấp cho phần không đạt.</p><?php endif; ?>
+    </section>
+    <?php endif; ?>
+
+    <?php if (!empty($custReturns)): ?>
+    <section class="card flush">
+      <div class="card-head pad"><h2>Khách trả hàng <span class="count"><?= count($custReturns) ?></span></h2><span class="muted small">hàng dùng được nhập lại kho, hàng lỗi chia sang huỷ / bảo hành</span></div>
+      <?php foreach ($custReturns as $cr): [$crLabel, $crTone] = \StockFlow\Service\CustomerReturnService::STATUS[$cr['trang_thai']]; $done = $cr['trang_thai'] === 'CONFIRMED'; ?>
+      <div class="pad" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line,#e5e7eb)">
+        <a href="/customer-returns/<?= (int)$cr['id'] ?>"><b><?= e($cr['ma']) ?></b></a><span class="tag tag-<?= e($crTone) ?>"><?= e($crLabel) ?></span>
+        <span class="muted small"><?= e(dt($done ? $cr['ngay_xac_nhan'] : $cr['ngay_tao'])) ?><?= $cr['ly_do'] !== '' ? ' · ' . e($cr['ly_do']) : '' ?></span>
+        <span style="margin-left:auto">Hoàn khách <b><?= n($cr['tien_hoan']) ?> đ</b> <span class="muted small">(<?= e(\StockFlow\Service\CustomerReturnService::REFUND_METHODS[$cr['hinh_thuc_hoan']] ?? '') ?>)</span></span>
+      </div>
+      <div class="table-wrap"><table class="dense">
+        <thead><tr><th>Hàng hoá</th><th class="num">Khách trả</th><th class="num">Nhập lại kho</th><th class="num">Huỷ</th><th class="num">Bảo hành</th><th>Lỗi do</th></tr></thead>
+        <tbody><?php foreach ($cr['lines'] as $l): ?>
+          <tr><td><b><?= e($l['ma_hang']) ?></b> <?= e($l['ten']) ?></td><td class="num"><b><?= n($l['so_luong']) ?></b> <small class="muted"><?= e($l['unit']) ?></small></td>
+            <td class="num <?= $l['good'] ? 'pos' : 'muted' ?>"><?= $l['good'] ? '+' . n($l['good']) : '0' ?></td>
+            <td class="num <?= $l['scrap'] ? 'neg' : 'muted' ?>"><?= n($l['scrap']) ?></td>
+            <td class="num <?= $l['warranty'] ? '' : 'muted' ?>"><?= n($l['warranty']) ?></td>
+            <td class="small"><?= (int)$l['so_luong_loi'] ? e(\StockFlow\Service\CustomerReturnService::CAUSES[$l['ly_do_loi']] ?? '') : '<span class="muted">—</span>' ?></td></tr>
+        <?php endforeach; ?></tbody></table></div>
+      <?php if (!$done): ?><p class="muted small pad">Chờ quản lý kho xác nhận — lúc đó mới ghi vào sổ phát sinh.</p><?php endif; ?>
+      <?php endforeach; ?>
     </section>
     <?php endif; ?>
 
