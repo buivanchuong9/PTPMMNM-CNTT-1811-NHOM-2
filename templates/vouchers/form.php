@@ -1,7 +1,7 @@
 <?php /** @var \StockFlow\Domain\VoucherType $type */
 $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
 ?>
-<header class="page-head"><div><p class="crumb"><?php if (!empty($replace)): ?><a href="/returns/<?= (int)$replace['id'] ?>">← Phiếu trả <?= e($replace['ma']) ?></a><?php else: ?><a href="/vouchers">← Phiếu nhập xuất</a><?php endif; ?></p><h1><?= e($type->label()) ?> mới</h1><?php if (!empty($replace)): ?><p class="muted">Hàng nhà cung cấp cấp lại cho phiếu trả <a href="/returns/<?= (int)$replace['id'] ?>"><b><?= e($replace['ma']) ?></b></a> — số lượng điền sẵn là phần còn thiếu.</p><?php endif; ?></div></header>
+<header class="page-head"><div><p class="crumb"><?php if (!empty($replace)): ?><a href="/returns/<?= (int)$replace['id'] ?>">← Phiếu trả <?= e($replace['ma']) ?></a><?php else: ?><a href="/vouchers">← Phiếu nhập xuất</a><?php endif; ?></p><h1><?= e($type->label()) ?> mới</h1><?php if (!empty($replace)): ?><p class="muted">Cấp lại cho phiếu trả <a href="/returns/<?= (int)$replace['id'] ?>"><b><?= e($replace['ma']) ?></b></a> — số lượng điền sẵn là phần còn thiếu.</p><?php endif; ?></div></header>
 <?php if (!$warehouses): ?>
   <section class="card"><p class="empty">Bạn chưa có quyền «Nhân viên kho» ở kho nào nên không thể lập phiếu.</p></section>
 <?php else: ?>
@@ -20,7 +20,7 @@ $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
     <?php endif; ?>
     <label>Ghi chú<input name="note" maxlength="255" placeholder="Số phiếu gốc, lý do…"></label>
   </div>
-  <?php if ($isIn): ?><p class="muted small">Với mỗi dòng: <b>Số lượng</b> là số nhận từ nhà cung cấp, <b>Không đạt</b> là phần kiểm tra thấy không đạt chất lượng. Tồn kho chỉ cộng phần đạt (nhận − không đạt); phần không đạt được lập phiếu trả nhà cung cấp để cấp lại.</p><?php endif; ?>
+  <?php if ($isIn): ?><p class="muted small">Tồn kho chỉ cộng phần đạt (nhận − không đạt); phần không đạt lập phiếu trả nhà cung cấp.</p><?php endif; ?>
   <?php $checkStock = !$isIn; $newLots = $isIn; $autoLots = !$isIn; $supplierFirst = !$isIn; require __DIR__ . '/../partials/lines.php'; ?>
   <div class="actions"><button type="submit">Bước tiếp theo</button><a class="btn btn-ghost" href="<?= !empty($replace) ? '/returns/' . (int)$replace['id'] : '/vouchers' ?>">Quay lại</a></div>
 </form>

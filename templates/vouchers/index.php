@@ -24,7 +24,7 @@ $create = array_filter([
 </nav>
 <form class="filters" method="get">
   <input type="hidden" name="status" value="<?= e($status ?? '') ?>">
-  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu hoặc đối tác…" aria-label="Tìm kiếm">
+  <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu, đối tác…" aria-label="Tìm kiếm">
   <select name="category"<?= $catSel !== '' ? ' class="on"' : '' ?> aria-label="Danh mục hàng hoá" data-live-reload><option value="">Mọi danh mục</option><?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>"<?= $catSel === (string)$c['id'] ? ' selected' : '' ?>><?= e($c['ten']) ?></option><?php endforeach; ?><option value="none"<?= $catSel === 'none' ? ' selected' : '' ?>>Chưa phân loại</option></select>
   <select name="item"<?= $item ? ' class="on"' : '' ?> aria-label="Mặt hàng" data-combo><option value="">Mọi mặt hàng</option><?php foreach ($itemOptions as $i): ?><option value="<?= (int)$i['id'] ?>"<?= $item === (int)$i['id'] ? ' selected' : '' ?>><?= e($i['ma_hang'] . ' — ' . $i['ten']) ?></option><?php endforeach; ?></select>
   <select name="type"<?= $type ? ' class="on"' : '' ?> aria-label="Loại"><option value="">Mọi loại</option><?php foreach (TYPE_LABELS as $k => [$l]): ?><option value="<?= $k ?>"<?= $k === $type ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select>

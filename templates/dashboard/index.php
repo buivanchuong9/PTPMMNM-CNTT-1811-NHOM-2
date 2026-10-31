@@ -11,6 +11,11 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
   </div>
 </header>
 
+<?php if (!empty($todo)): ?>
+<nav class="todo-strip" aria-label="Việc cần làm"><b>Việc cần làm</b>
+  <?php foreach ($todo as [$label, $count, $href]): ?><a href="<?= e($href) ?>"><span class="todo-n"><?= n($count) ?></span> <?= e($label) ?></a><?php endforeach; ?>
+</nav>
+<?php endif; ?>
 <section class="kpis kpis-strip" aria-label="Chỉ số chính">
   <a class="kpi" href="/inventory"><span class="kpi-ic"><?= icon('layers') ?></span><b data-count="<?= (int)$d['units'] ?>"><?= n($d['units']) ?></b><span>Đơn vị đang tồn</span></a>
   <a class="kpi kpi-warn" href="/vouchers?status=DRAFT"><span class="kpi-ic"><?= icon('file') ?></span><b data-count="<?= (int)$d['drafts'] ?>"><?= n($d['drafts']) ?></b><span>Phiếu chờ xác nhận</span></a>

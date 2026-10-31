@@ -20,7 +20,7 @@ $vnd = fn($v) => n((int)$v) . ' đ';
   <div class="card pad"><p class="muted small">Giá trị tồn theo giá gốc</p><p class="stat"><b class="money"><?= $vnd($totals['cost']) ?></b></p><p class="muted small">số lượng × giá gốc</p></div>
   <div class="card pad"><p class="muted small">Giá trị tồn theo giá bán</p><p class="stat"><b class="money"><?= $vnd($totals['sell']) ?></b></p><p class="muted small">lãi gộp tiềm năng <b class="<?= $totals['sell'] - $totals['cost'] >= 0 ? 'pos' : 'neg' ?>"><?= $vnd($totals['sell'] - $totals['cost']) ?></b> (chưa thuế)</p></div>
 </section>
-<?php if ($unpriced): ?><p class="muted small" style="margin:-4px 0 12px"><?= icon('alert') ?> <b><?= n($unpriced) ?></b> mặt hàng chưa có giá gốc hoặc giá bán nên giá trị đang thấp hơn thực tế — quản trị đặt giá gốc, quản lý kho đặt giá bán ở trang Hàng hoá.</p><?php endif; ?>
+<?php if ($unpriced): ?><p class="muted small" style="margin:-4px 0 12px"><?= icon('alert') ?> <b><?= n($unpriced) ?></b> mặt hàng chưa có giá gốc hoặc giá bán — giá trị đang thấp hơn thực tế.</p><?php endif; ?>
 
 <section class="card flush" style="margin-bottom:16px">
   <div class="card-head pad"><h2>Tồn kho theo từng kho</h2></div>

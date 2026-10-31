@@ -37,4 +37,24 @@ final class NavBadges
         $out['proposals'] = $this->proposals->attention($user);
         return array_filter($out);
     }
+
+    /**
+     * Việc đang chờ xử lý, hiện ở đầu Tổng quan. Chỉ gồm mục có số > 0.
+     * @return list<array{0:string,1:int,2:string}> [nhãn, số, đường dẫn]
+     */
+    public function todo(User $user): array
+    {
+        $b = $this->for($user);
+        $delivering = $this->auth->allows($user, Permission::XemPhieu) ? $this->vouchers->deliveringCount($this->auth->visibleWarehouseIds($user)) : 0;
+        $items = [
+            ['phiếu chờ xác nhận', (int)($b['vouchers'] ?? 0), '/vouchers?status=DRAFT'],
+            ['đơn đang giao', $delivering, '/vouchers?type=ISSUE&status=CONFIRMED'],
+            ['phiếu bảo hành đang xử lý', (int)($b['warranty'] ?? 0), '/warranty'],
+            ['yêu cầu chuyển hàng', (int)($b['requests'] ?? 0), '/requests'],
+            ['đề xuất huỷ hàng', (int)($b['disposals'] ?? 0), '/disposals'],
+            ['chuyến xe báo sai lệch', (int)($b['fleet'] ?? 0), '/fleet'],
+            ['đề xuất hàng mới', (int)($b['proposals'] ?? 0), '/proposals'],
+        ];
+        return array_values(array_filter($items, fn($i) => $i[1] > 0));
+    }
 }

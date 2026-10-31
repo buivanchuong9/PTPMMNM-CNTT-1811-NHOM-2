@@ -166,6 +166,16 @@ final class VoucherRepository
     }
 
     /** @return array<string,int> số phiếu theo trạng thái trong phạm vi kho */
+    /** Số đơn xuất đã ghi sổ đang giao tận nơi (tài xế chưa báo giao đến nơi). */
+    public function deliveringCount(array $warehouseIds): int
+    {
+        if ($warehouseIds === []) {
+            return 0;
+        }
+        $in = implode(',', array_fill(0, count($warehouseIds), '?'));
+        return (int)$this->db->value("SELECT COUNT(*) FROM giao_hang WHERE kho_id IN ($in) AND hinh_thuc <> 'TU_LAY' AND ngay_giao_den IS NULL", $warehouseIds);
+    }
+
     public function statusCounts(array $warehouseIds): array
     {
         if ($warehouseIds === []) {

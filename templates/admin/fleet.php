@@ -261,7 +261,7 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
 <?php elseif ($tab === 'gia'): ?>
 <section class="card pad">
   <h2>Đơn giá mỗi km</h2>
-  <p class="muted small">Kho đi đặt đơn giá. Khi xuất kho điều chuyển, hệ thống gợi ý tiền = số km × đơn giá; người lập chuyến vẫn nhập được số tiền khác nếu hợp lý. Lương tài xế của kho tính từ các chuyến đã giao theo số tiền này.</p>
+  <p class="muted small">Tiền chuyến gợi ý = số km × đơn giá, có thể nhập số khác. Lương tài xế tính theo số tiền này.</p>
   <table class="dense"><thead><tr><th>Kho</th><th class="num">Xe của kho (trả tài xế)</th><th class="num">Thuê ngoài</th></tr></thead><tbody>
   <?php foreach ($warehouses as $w): $rt = $rates[(int)$w['id']] ?? ['noi_bo' => 0, 'thue_ngoai' => 0]; $mine = $canManage && (int)$myWh === (int)$w['id']; ?>
     <tr><td><span class="wh-code"><?= e($w['ma']) ?></span> <?= e($w['ten']) ?></td>
