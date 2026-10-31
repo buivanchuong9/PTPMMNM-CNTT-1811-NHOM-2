@@ -6,17 +6,21 @@ $groups = [
     'Tác nghiệp' => [
         'dashboard' => ['/', 'home', 'Tổng quan', [P::XemTongQuan]],
         // mục có con (phần tử thứ 5): bấm mở trang cha, bấm mũi tên ▾ để xổ / gập các mục con; mục con lọc theo quyền riêng
-        // mục cha chỉ xổ / gập các mục con (href '#'), không phải một trang
-        'vouchers-group' => ['#', 'file', 'Nghiệp vụ kho', [P::XemPhieu], [
+        // mục cha chỉ xổ / gập các mục con (href '#'), không phải một trang; quyền mục cha = một trong các quyền của mục con
+        'inout-group' => ['#', 'file', 'Nhập xuất hàng', [P::XemPhieu, P::XemDonDatHang], [
             'vouchers' => ['/vouchers', 'file', 'Phiếu nhập xuất', [P::XemPhieu]],
-            'returns' => ['/returns', 'truck', 'Trả hàng nhà cung cấp', [P::XemPhieu]],
-            'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
             'orders' => ['/orders', 'file', 'Đặt hàng nhà cung cấp', [P::XemDonDatHang]],
+        ]],
+        'returns-group' => ['#', 'shield', 'Đổi trả & hỏng', [P::XemPhieu, P::XemBaoHanh, P::XemKhoHuy], [
+            'returns' => ['/returns', 'truck', 'Trả hàng nhà cung cấp', [P::XemPhieu]],
             'creturns' => ['/customer-returns', 'in', 'Khách trả hàng', [P::XemPhieu]],
+            'warranty' => ['/warranty', 'shield', 'Bảo hành', [P::XemBaoHanh]],
+            'disposals' => ['/disposals', 'box', 'Kho huỷ', [P::XemKhoHuy]],
+        ]],
+        'moves-group' => ['#', 'truck', 'Chuyển hàng & kiểm kê', [P::XemPhieu, P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet], [
+            'requests' => ['/requests', 'truck', 'Yêu cầu chuyển hàng', [P::XemPhieu]],
             'counts' => ['/counts', 'clipboard', 'Kiểm kê', [P::XemKiemKe, P::KiemKeThucHien, P::KiemKeDuyet]],
         ]],
-        'warranty' => ['/warranty', 'shield', 'Bảo hành', [P::XemBaoHanh]],
-        'disposals' => ['/disposals', 'box', 'Kho huỷ', [P::XemKhoHuy]],
     ],
     'Tra cứu' => [
         'inventory-group' => ['#', 'box', 'Hàng hoá', [P::XemTonKho], [
@@ -26,14 +30,17 @@ $groups = [
             'reconcile' => ['/reconcile', 'scale', 'Đối chiếu tồn', [P::XemDoiChieu]],
             'proposals' => ['/proposals', 'box', 'Đề xuất hàng mới', [P::GanMaVach, P::DuyetDeXuatHang]],
         ]],
+    ],
+    'Sổ sách & báo cáo' => [
         'history' => ['/history', 'clock', 'Lịch sử phát sinh', [P::XemLichSu]],
         'audit' => ['/audit', 'clipboard', 'Nhật ký thao tác', [P::XemLichSu]],
-        'nxt' => ['/reports/nxt', 'scale', 'Nhập – Xuất – Tồn', [P::XemBaoCao]],
-        'valuation-group' => ['#', 'scale', 'Vốn kho', [P::XemBaoCao], [
-            'valuation' => ['/valuation', 'scale', 'Tổng quan vốn kho', [P::XemBaoCao]],
+        'reports-group' => ['#', 'chart', 'Báo cáo', [P::XemBaoCao], [
+            'nxt' => ['/reports/nxt', 'scale', 'Nhập – Xuất – Tồn', [P::XemBaoCao]],
+            'valuation' => ['/valuation', 'scale', 'Vốn kho', [P::XemBaoCao]],
             'money-in' => ['/money/in', 'in', 'Tiền nhập', [P::XemBaoCao]],
             'money-out' => ['/money/out', 'out', 'Tiền xuất', [P::XemBaoCao]],
             'money-profit' => ['/money/profit', 'chart', 'Tiền lãi', [P::XemBaoCao]],
+            'reports' => ['/reports', 'chart', 'Tổng hợp & xuất CSV', [P::XemBaoCao]],
         ]],
     ],
     'Danh mục' => [
@@ -47,8 +54,8 @@ $groups = [
         'users' => ['/users', 'users', 'Tài khoản', [P::QuanLyTaiKhoan]],
         'roles' => ['/roles', 'shield', 'Phân quyền chức năng', [P::PhanQuyen]],
     ],
+    'Tài khoản' => ['settings' => ['/settings', 'settings', 'Cài đặt', []]],
 ];
-$groups['Báo cáo & tài khoản'] = ['reports' => ['/reports', 'chart', 'Báo cáo', [P::XemBaoCao]], 'settings' => ['/settings', 'settings', 'Cài đặt', []]];
 $canSee = fn(array $e) => $e[3] === [] || array_filter($e[3], fn($perm) => $auth->allows($user, $perm));
 foreach ($groups as $label => $entries) {
     $kept = [];
@@ -65,10 +72,6 @@ foreach ($groups as $label => $entries) {
     if (!$groups[$label]) {
         unset($groups[$label]);
     }
-}
-if (isset($groups['Báo cáo & tài khoản']) && !isset($groups['Báo cáo & tài khoản']['reports'])) {   // không xem được Báo cáo ⇒ nhóm chỉ còn Cài đặt
-    $groups['Tài khoản'] = $groups['Báo cáo & tài khoản'];
-    unset($groups['Báo cáo & tài khoản']);
 }
 // Dòng mô tả dưới tên: vai trò + kho được gắn (tài khoản cấp cao thấy mọi kho)
 $whLabel = $myWarehouse ? $myWarehouse['ma'] . ' — ' . $myWarehouse['ten'] : 'Tất cả các kho';
@@ -92,12 +95,13 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <link rel="stylesheet" href="<?= asset_url('/assets/css/dialog.css') ?>">
 <link rel="stylesheet" href="<?= asset_url('/assets/css/scan.css') ?>">
 <link rel="stylesheet" href="<?= asset_url('/assets/css/erp.css') ?>">
+<link rel="stylesheet" href="<?= asset_url('/assets/css/navy.css') ?>">
 </head>
 <body class="app-shell<?= !empty($compact) ? ' compact' : '' ?>">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <header class="topbar">
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
-  <a class="brand" href="/" aria-label="<?= e(strip_tags(app_brand())) ?> — Tổng quan" title="Tổng quan"><img src="/assets/img/logo-mark.png" alt="" width="40" height="40"></a>
+  <a class="brand" href="/" aria-label="<?= e(strip_tags(app_brand())) ?> — Tổng quan" title="Tổng quan"><img class="brand-full" src="/assets/img/stockflow-logo.png" alt="<?= e(APP_NAME) ?>" width="62" height="34"></a>
   <form class="topsearch" action="/history" method="get" role="search">
     <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>

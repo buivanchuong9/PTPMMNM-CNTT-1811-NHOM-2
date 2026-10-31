@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/assets/css/theme.css">
 <link rel="stylesheet" href="/assets/css/dark.css">
 <link rel="stylesheet" href="/assets/css/erp.css">
+<link rel="stylesheet" href="/assets/css/navy.css">
 </head>
 <body class="bare">
 <?= $content ?>

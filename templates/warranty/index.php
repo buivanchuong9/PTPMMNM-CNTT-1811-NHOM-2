@@ -58,6 +58,7 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
           <?php if ($b['trang_thai'] === 'DA_TRA'): ?><br><small class="muted">Trả <?= e(dt_short($b['ngay_tra'])) ?></small>
           <?php elseif ($canHandle): ?>
           <form method="post" action="/warranty/<?= (int)$b['id'] ?>/return" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit"><?= icon('check') ?>Trả khách</button></form>
+          <?php if (in_array($b['trang_thai'], ['DA_SUA', 'TU_CHOI'], true)): ?><form method="post" action="/warranty/<?= (int)$b['id'] ?>/reopen" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit" class="btn-ghost" data-confirm="Thu lại kết quả «<?= e($st[0]) ?>»? Phiếu quay về «Đang giữ» để ghi kết quả khác."><?= $b['trang_thai'] === 'TU_CHOI' ? '↩ Thu lại từ chối' : '↩ Thu lại kết quả' ?></button></form><?php endif; ?>
           <?php endif; ?>
         <?php endif; ?>
       </td>

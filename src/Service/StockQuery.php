@@ -20,7 +20,7 @@ final class StockQuery
     public function pickList(): array
     {
         return $this->db->all(
-            'SELECT i.id AS mat_hang_id, i.danh_muc_id, b.id AS lo_hang_id, i.ma_hang, i.ten, u.ma AS unit, i.quan_ly_lo, b.so_lo, b.han_dung, i.gia_von, i.gia_ban,
+            'SELECT i.id AS mat_hang_id, i.danh_muc_id, b.id AS lo_hang_id, i.ma_hang, i.ten, i.ma_vach, u.ma AS unit, i.quan_ly_lo, b.so_lo, b.han_dung, i.gia_von, i.gia_ban,
                     i.quy_cach_lo, i.khoi_luong_g, i.dai_mm, i.rong_mm, i.cao_mm, i.kien_g, i.kien_dai_mm, i.kien_rong_mm, i.kien_cao_mm
              FROM mat_hang i JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id JOIN lo_hang b ON b.mat_hang_id = i.id WHERE i.hoat_dong ORDER BY i.ma_hang, (b.han_dung IS NULL), b.han_dung, b.so_lo'
         );
@@ -304,21 +304,21 @@ final class StockQuery
 
     /**
      * Đối chiếu: so sánh 3 nguồn — số dư (ton_kho), tổng sổ phát sinh, và tổng dòng phiếu nhập xuất đã xác nhận.
-     * @return array{rows:list<array>,mismatches:int,checked:int,voucher_mismatches:list<array>}
+     * @return array{rows:list<array>,mismatches:int,checked:int,voucher_mismatches:list<array>,voucher_lines:int,position_mismatches:int}
      */
     public function reconcile(array $warehouseIds): array
     {
         if ($warehouseIds === []) {
-            return ['rows' => [], 'mismatches' => 0, 'checked' => 0, 'voucher_mismatches' => []];
+            return ['rows' => [], 'mismatches' => 0, 'checked' => 0, 'voucher_mismatches' => [], 'voucher_lines' => 0, 'position_mismatches' => 0];
         }
         $in = $this->in($warehouseIds);
         $rows = $this->db->all(
             "SELECT k.kho_id, w.ma AS wh_code, k.mat_hang_id, i.ma_hang, i.ten, i.danh_muc_id, c.ten AS category, u.ma AS unit, k.lo_hang_id, b.so_lo, b.han_dung,
-                    COALESCE(sb.so_luong, 0) AS balance, COALESCE(sm.q, 0) AS ledger, sm.last_move
+                    COALESCE(sb.so_luong, 0) AS balance, COALESCE(sm.q, 0) AS ledger, sm.last_move, COALESCE(sm.n, 0) AS n_moves, i.dinh_muc_toi_thieu, i.gia_von
              FROM (SELECT kho_id, mat_hang_id, lo_hang_id FROM ton_kho WHERE kho_id IN ($in)
                    UNION SELECT kho_id, mat_hang_id, lo_hang_id FROM so_phat_sinh WHERE kho_id IN ($in)) k
              LEFT JOIN ton_kho sb ON sb.kho_id = k.kho_id AND sb.mat_hang_id = k.mat_hang_id AND sb.lo_hang_id = k.lo_hang_id
-             LEFT JOIN (SELECT kho_id, mat_hang_id, lo_hang_id, SUM(bien_dong) AS q, MAX(ngay_ghi_so) AS last_move FROM so_phat_sinh GROUP BY kho_id, mat_hang_id, lo_hang_id) sm
+             LEFT JOIN (SELECT kho_id, mat_hang_id, lo_hang_id, SUM(bien_dong) AS q, MAX(ngay_ghi_so) AS last_move, COUNT(*) AS n FROM so_phat_sinh GROUP BY kho_id, mat_hang_id, lo_hang_id) sm
                     ON sm.kho_id = k.kho_id AND sm.mat_hang_id = k.mat_hang_id AND sm.lo_hang_id = k.lo_hang_id
              JOIN kho w ON w.id = k.kho_id JOIN mat_hang i ON i.id = k.mat_hang_id JOIN lo_hang b ON b.id = k.lo_hang_id
              JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
@@ -335,7 +335,22 @@ final class StockQuery
              LIMIT 100",
             $warehouseIds
         );
-        return ['rows' => $rows, 'mismatches' => count($mismatch) + count($voucherMismatch), 'checked' => count($rows), 'voucher_mismatches' => $voucherMismatch];
+        $voucherLines = (int)$this->db->value("SELECT COUNT(*) FROM phieu_nhap_xuat v JOIN chi_tiet_phieu_nhap_xuat l ON l.phieu_nhap_xuat_id = v.id WHERE v.trang_thai = 'CONFIRMED' AND v.kho_id IN ($in)", $warehouseIds);
+        return ['rows' => $rows, 'mismatches' => count($mismatch) + count($voucherMismatch), 'checked' => count($rows), 'voucher_mismatches' => $voucherMismatch, 'voucher_lines' => $voucherLines, 'position_mismatches' => count($mismatch)];
+    }
+
+    /**
+     * Các dòng sổ gần nhất của một vị trí (kho · hàng · lô), mới nhất trước — kèm tồn sau từng dòng. Dùng cho phần «Chi tiết» ở trang đối chiếu.
+     * @return list<array<string,mixed>>
+     */
+    public function recentMoves(int $warehouseId, int $itemId, int $lotId, int $limit = 10): array
+    {
+        return $this->db->all(
+            'SELECT m.id, m.ngay_ghi_so, m.bien_dong, m.ton_sau, v.id AS voucher_id, v.ma AS voucher_code, v.loai, v.doi_tac, v.ly_do
+             FROM so_phat_sinh m JOIN phieu_nhap_xuat v ON v.id = m.phieu_nhap_xuat_id
+             WHERE m.kho_id = ? AND m.mat_hang_id = ? AND m.lo_hang_id = ? ORDER BY m.id DESC LIMIT ' . max(1, min(100, $limit)),
+            [$warehouseId, $itemId, $lotId]
+        );
     }
 
     /**

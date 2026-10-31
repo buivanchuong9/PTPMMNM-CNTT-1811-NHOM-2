@@ -30,8 +30,13 @@ final class LabelController extends Controller
         $this->need($user, Permission::XemTonKho);
         $q = trim($r->str('q'));
         $cat = (int)$r->int('category');
+        $sup = (int)$r->int('supplier');
+        $code = in_array($r->str('code'), ['has', 'none'], true) ? $r->str('code') : '';       // đã / chưa gắn mã vạch (chưa gắn thì tem in mã theo SKU)
+        $lot = in_array($r->str('lot'), ['lot', 'nolot'], true) ? $r->str('lot') : '';         // hàng quản lý theo lô (tem in kèm số lô, hạn dùng) hay không
         $items = $this->db->all('SELECT i.id, i.ma_hang, i.ten, i.ma_vach, i.quan_ly_lo, c.ten AS category FROM mat_hang i LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
-                                 WHERE i.hoat_dong' . ($cat ? ' AND i.danh_muc_id = ?' : '') . ' ORDER BY i.ma_hang', $cat ? [$cat] : []);
+                                 WHERE i.hoat_dong' . ($cat ? ' AND i.danh_muc_id = ?' : '') . ($sup ? ' AND EXISTS (SELECT 1 FROM mat_hang_nha_cung_cap x WHERE x.mat_hang_id = i.id AND x.doi_tac_id = ?)' : '')
+                                 . ($code === 'has' ? " AND i.ma_vach IS NOT NULL AND i.ma_vach <> ''" : ($code === 'none' ? " AND (i.ma_vach IS NULL OR i.ma_vach = '')" : ''))
+                                 . ($lot === 'lot' ? ' AND i.quan_ly_lo = 1' : ($lot === 'nolot' ? ' AND i.quan_ly_lo = 0' : '')) . ' ORDER BY i.ma_hang', array_values(array_filter([$cat, $sup])));
         $items = filter_rows($items, $q, fn($i) => $i['ma_hang'] . ' ' . $i['ten'] . ' ' . ($i['ma_vach'] ?? '') . ' ' . ($i['category'] ?? ''));
         [$rows, $pg] = Paginator::of($items, $r);
         $lots = [];
@@ -41,7 +46,8 @@ final class LabelController extends Controller
                 $lots[(int)$l['mat_hang_id']][] = $l;
             }
         }
-        return $this->render('labels/index', $user, 'labels', ['rows' => $rows, 'pg' => $pg, 'lots' => $lots, 'q' => $q, 'cat' => $cat, 'formats' => self::FORMATS,
+        return $this->render('labels/index', $user, 'labels', ['rows' => $rows, 'pg' => $pg, 'lots' => $lots, 'q' => $q, 'cat' => $cat, 'sup' => $sup, 'code' => $code, 'lot' => $lot, 'formats' => self::FORMATS,
+            'suppliers' => $this->db->all("SELECT id, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten"),
             'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten')], 'In tem mã vạch');
     }
 

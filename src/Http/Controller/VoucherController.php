@@ -109,6 +109,7 @@ final class VoucherController extends Controller
             }
         }
         $presetPartner = null;
+        $orderLines = [];
         $orderId = null;   // nhập hàng theo đơn đặt hàng: po=mã đơn ⇒ điền sẵn nhà cung cấp và số còn thiếu
         if ($type === VoucherType::Receipt && !$replace && ($poId = $r->int('po'))) {
             $order = (new \StockFlow\Service\OrderService($this->db, $this->auth, $this->audit))->find($poId);
@@ -117,10 +118,13 @@ final class VoucherController extends Controller
             }
             $orderId = $poId;
             $presetPartner = $order['doi_tac'];
+            foreach ($order['lines'] as $ol) {   // bảng đối chiếu: đặt bao nhiêu, đã nhận bao nhiêu, còn thiếu bao nhiêu (theo mặt hàng)
+                $orderLines[(int)$ol['mat_hang_id']] = ['ord' => (int)$ol['so_luong'], 'got' => (int)$ol['so_luong_da_nhan'], 'left' => max(0, (int)$ol['so_luong'] - (int)$ol['so_luong_da_nhan'])];
+            }
             foreach ((new \StockFlow\Service\OrderService($this->db, $this->auth, $this->audit))->outstanding($poId) as $itemId => $qty) {
                 foreach ($pick as $pi) {
                     if ((int)$pi['mat_hang_id'] === $itemId) {
-                        $prefill[] = [$itemId . ':' . ($pi['quan_ly_lo'] ? 'new' : $pi['lo_hang_id']), $qty];
+                        $prefill[] = [$itemId . ':' . ($pi['quan_ly_lo'] ? 'new' : $pi['lo_hang_id']), 0];   // thực nhận bắt đầu từ 0: nhân viên đếm / quét đến đâu tăng đến đó
                         break;
                     }
                 }
@@ -138,7 +142,7 @@ final class VoucherController extends Controller
             }
         }
         return $this->render('vouchers/form', $user, 'vouchers', [
-            'presetPartner' => $presetPartner, 'orderId' => $orderId,
+            'presetPartner' => $presetPartner, 'orderId' => $orderId, 'orderLines' => $orderLines,
             'type' => $type, 'warehouses' => $this->warehouseRows($ids), 'pick' => $pick, 'stock' => $this->query->stockMap($ids),
             'replace' => $replace, 'prefill' => $prefill,
             'idem' => bin2hex(random_bytes(16)), 'selected' => $replace ? (int)$replace['kho_id'] : $r->int('warehouse'), 'prefillItem' => $r->int('item'),

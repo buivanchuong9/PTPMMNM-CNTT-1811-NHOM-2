@@ -6,16 +6,16 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $t
 ?>
 <?php use StockFlow\Domain\Permission as Pm;
 $create = array_filter([
-    [Pm::LapPhieuNhap, '/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập'],
-    [Pm::LapPhieuXuat, '/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất'],
-    [Pm::LapPhieuDieuChuyen, '/transfers/new', 'truck', 'Điều chuyển kho'],
+    [Pm::LapPhieuNhap, '/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập', 'in'],
+    [Pm::LapPhieuXuat, '/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất', 'out'],
+    [Pm::LapPhieuDieuChuyen, '/transfers/new', 'truck', 'Điều chuyển kho', 'xfer'],
 ], fn($c) => $auth->allows($user, $c[0]));
 ?>
 <header class="page-head">
   <div><h1>Phiếu nhập xuất</h1></div>
   <div class="actions">
     <a class="btn btn-ghost" href="/vouchers?<?= e($qs(['format' => 'csv'])) ?>"><?= icon('download') ?>Xuất CSV</a>
-    <?php foreach ($create as [, $href, $ic, $title]): ?><a class="btn btn-ghost" href="<?= e($href) ?>"><?= icon($ic) ?><?= e($title) ?></a><?php endforeach; ?>
+    <?php foreach ($create as [, $href, $ic, $title, $kind]): ?><a class="btn btn-act btn-act-<?= e($kind) ?>" href="<?= e($href) ?>"><?= icon($ic) ?><?= e($title) ?></a><?php endforeach; ?>
   </div>
 </header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">

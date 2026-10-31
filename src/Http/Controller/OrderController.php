@@ -33,8 +33,14 @@ final class OrderController extends Controller
         $ids = $this->auth->visibleWarehouseIds($user);
         $status = isset(OrderService::STATUS[$r->str('status')]) ? $r->str('status') : '';
         $q = trim($r->str('q'));
-        [$rows, $pg] = Paginator::of($this->orders->list($ids, $status, $q), $r);
-        return $this->render('orders/index', $user, 'orders', ['rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'counts' => $this->orders->counts($ids),
+        $suppliers = $this->orders->suppliers($ids);
+        $supplier = in_array($r->str('supplier'), $suppliers, true) ? $r->str('supplier') : '';
+        [$from, $to, $rangeSel] = range_params($r);
+        $found = $this->orders->search($ids, $q, $supplier, $from, $to);
+        $counts = array_count_values(array_column($found, 'trang_thai'));   // số trên từng tab theo đúng bộ lọc đang chọn
+        [$rows, $pg] = Paginator::of($status === '' ? $found : array_values(array_filter($found, fn($o) => $o['trang_thai'] === $status)), $r);
+        return $this->render('orders/index', $user, 'orders', ['rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'counts' => $counts,
+            'supplier' => $supplier, 'suppliers' => $suppliers, 'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to,
             'canMake' => $this->auth->allows($user, Permission::LapDonDatHang) && $user->warehouseId !== null], 'Đặt hàng nhà cung cấp');
     }
 
@@ -65,7 +71,8 @@ final class OrderController extends Controller
         $by = $this->partners->suppliersByItem();
         return $this->render('orders/form', $user, 'orders', [
             'pick' => $pick, 'stock' => [], 'prefill' => $prefill, 'presetPartner' => $presetPartner, 'idem' => bin2hex(random_bytes(16)),
-            'suppliers' => $this->db->all("SELECT id, ma, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten"),
+            'suppliers' => $this->db->all("SELECT id, ma, ten, nguoi_lien_he, so_dien_thoai, email, dia_chi FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten"),
+            'orderInfo' => $this->orders->itemInfo((int)$user->warehouseId),
             'itemSuppliers' => array_map(fn($l) => array_column($l, 'id'), $by),
             'pickCats' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
             'pickSups' => $this->db->all("SELECT id, ten FROM doi_tac WHERE loai = 'SUPPLIER' AND hoat_dong ORDER BY ten"),

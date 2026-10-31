@@ -62,11 +62,37 @@ final class OrderService
         });
     }
 
+    /**
+     * Thông tin giúp quyết định số lượng đặt cho kho: tồn hiện có (mọi lô), định mức tối thiểu, và số đã đặt nhưng chưa về (đơn đã gửi / nhận một phần).
+     * @return array<int,array{have:int,min:int,open:int}> theo mã mặt hàng
+     */
+    public function itemInfo(int $warehouseId): array
+    {
+        $out = [];
+        foreach ($this->db->all('SELECT id, dinh_muc_toi_thieu AS min_q FROM mat_hang WHERE hoat_dong') as $r) {
+            $out[(int)$r['id']] = ['have' => 0, 'min' => (int)$r['min_q'], 'open' => 0];
+        }
+        foreach ($this->db->all('SELECT mat_hang_id, SUM(so_luong) AS q FROM ton_kho WHERE kho_id = ? GROUP BY mat_hang_id', [$warehouseId]) as $r) {
+            if (isset($out[(int)$r['mat_hang_id']])) {
+                $out[(int)$r['mat_hang_id']]['have'] = (int)$r['q'];
+            }
+        }
+        $in = implode(',', array_fill(0, count(self::RECEIVABLE), '?'));
+        foreach ($this->db->all("SELECT c.mat_hang_id, SUM(GREATEST(c.so_luong - c.so_luong_da_nhan, 0)) AS q FROM chi_tiet_don_dat_hang c JOIN don_dat_hang d ON d.id = c.don_id
+                                 WHERE d.kho_id = ? AND d.trang_thai IN ($in) GROUP BY c.mat_hang_id", [$warehouseId, ...self::RECEIVABLE]) as $r) {
+            if (isset($out[(int)$r['mat_hang_id']])) {
+                $out[(int)$r['mat_hang_id']]['open'] = (int)$r['q'];
+            }
+        }
+        return $out;
+    }
+
     public function find(int $id): array
     {
         $o = $this->db->one('SELECT d.*, w.ma AS wh_code, w.ten AS wh_name, u.ho_ten AS creator_name FROM don_dat_hang d JOIN kho w ON w.id = d.kho_id JOIN nguoi_dung u ON u.id = d.nguoi_lap_id WHERE d.id = ?', [$id])
             ?? throw new NotFound('Không tìm thấy đơn đặt hàng');
-        $o['lines'] = $this->db->all('SELECT c.*, i.ma_hang, i.ten, u.ma AS unit FROM chi_tiet_don_dat_hang c JOIN mat_hang i ON i.id = c.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id WHERE c.don_id = ? ORDER BY c.id', [$id]);
+        $o['lines'] = $this->db->all('SELECT c.*, i.ma_hang, i.ten, i.gia_von, u.ma AS unit FROM chi_tiet_don_dat_hang c JOIN mat_hang i ON i.id = c.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id WHERE c.don_id = ? ORDER BY c.id', [$id]);
+        $o['supplier'] = $this->db->one("SELECT ma, nguoi_lien_he, so_dien_thoai, email, dia_chi FROM doi_tac WHERE loai = 'SUPPLIER' AND ten = ? LIMIT 1", [$o['doi_tac']]);
         $o['receipts'] = $this->db->all("SELECT id, ma, trang_thai FROM phieu_nhap_xuat WHERE don_dat_hang_id = ? AND trang_thai <> 'CANCELLED' ORDER BY id", [$id]);
         return $o;
     }
@@ -88,6 +114,25 @@ final class OrderService
                                        (SELECT COUNT(*) FROM chi_tiet_don_dat_hang c WHERE c.don_id = d.id) AS line_count
                                 FROM don_dat_hang d JOIN kho w ON w.id = d.kho_id WHERE $where ORDER BY d.id DESC LIMIT 500", $args);
         return filter_rows($rows, $q, fn($r) => $r['ma'] . ' ' . $r['doi_tac'] . ' ' . $r['ghi_chu']);
+    }
+
+    /**
+     * Đơn theo từ khoá, nhà cung cấp và khoảng ngày lập (giờ Việt Nam), KHÔNG lọc trạng thái — để tính số trên từng tab theo đúng bộ lọc đang chọn.
+     * @return list<array<string,mixed>>
+     */
+    public function search(array $warehouseIds, string $q = '', string $supplier = '', ?string $from = null, ?string $to = null): array
+    {
+        $rows = array_filter($this->list($warehouseIds, '', $q), fn($o) => ($supplier === '' || $o['doi_tac'] === $supplier) && in_vn_range($o['ngay_tao'], $from, $to));
+        return array_values($rows);
+    }
+
+    /** Tên nhà cung cấp đã có đơn ở các kho này (cho ô lọc). @return list<string> */
+    public function suppliers(array $warehouseIds): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        return array_column($this->db->all('SELECT DISTINCT doi_tac FROM don_dat_hang WHERE kho_id IN (' . implode(',', array_fill(0, count($warehouseIds), '?')) . ') ORDER BY doi_tac', $warehouseIds), 'doi_tac');
     }
 
     /** @return array<string,int> */

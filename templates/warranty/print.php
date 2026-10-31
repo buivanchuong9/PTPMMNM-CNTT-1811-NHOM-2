@@ -16,7 +16,7 @@ $received = $b['ngay_nhan'] ?: substr((string)$b['ngay_tao'], 0, 10);
   body { margin: 0; background: #eceff3; color: #111; font: 14px/1.5 "Times New Roman", Times, serif; }
   .bar { position: sticky; top: 0; z-index: 2; display: flex; gap: 10px; align-items: center; padding: 10px 16px; background: #fff; border-bottom: 1px solid #d9dde3; font-family: system-ui, "Segoe UI", sans-serif; }
   .bar a, .bar button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid #c9ced6; background: #fff; color: #222; text-decoration: none; cursor: pointer; }
-  .bar button { margin-left: auto; background: #d6283f; border-color: #d6283f; color: #fff; }
+  .bar button { margin-left: auto; background: #1e3a5f; border-color: #1e3a5f; color: #fff; }
   .sheet { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 14mm 16mm; background: #fff; box-shadow: 0 2px 16px rgba(0,0,0,.12); }
   .top { display: flex; justify-content: space-between; gap: 16px; }
   .top b { text-transform: uppercase; } .top small { color: #444; } .top .no { text-align: right; white-space: nowrap; }

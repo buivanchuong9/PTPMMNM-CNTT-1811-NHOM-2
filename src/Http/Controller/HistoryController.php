@@ -55,17 +55,27 @@ final class HistoryController extends Controller
         $wh = $wh && in_array($wh, $ids, true) && $user->isAdmin ? $wh : null;
         $cat = $r->str('category') === 'none' ? -1 : (int)$r->int('category');
         $status = in_array($r->str('status'), ['bad', 'ok'], true) ? $r->str('status') : '';
+        [$from, $to, $rangeSel] = range_params($r);   // lọc theo «phát sinh cuối» của vị trí
         $bad = fn($x) => (int)$x['balance'] !== (int)$x['ledger'];
         // vị trí hết sạch (số dư 0 và sổ 0) không có gì để đối chiếu nên không liệt kê
         $base = array_values(array_filter($res['rows'], fn($x) => ((int)$x['balance'] !== 0 || (int)$x['ledger'] !== 0)
-            && ($wh === null || (int)$x['kho_id'] === $wh)
+            && ($wh === null || (int)$x['kho_id'] === $wh) && in_vn_range($x['last_move'], $from, $to)
             && ($cat === 0 || ($cat === -1 ? !(int)$x['danh_muc_id'] : (int)$x['danh_muc_id'] === $cat))
             && ($needle === '' || str_contains(fold_vn($x['ma_hang'] . ' ' . $x['ten'] . ' ' . ($x['so_lo'] === 'NOLOT' ? '' : $x['so_lo'])), $needle))));
         $counts = ['' => count($base), 'bad' => count(array_filter($base, $bad)), 'ok' => count(array_filter($base, fn($x) => !$bad($x)))];
         $rows = array_values(array_filter($base, fn($x) => $status === '' || ($status === 'bad') === $bad($x)));
         usort($rows, fn($a, $b) => $bad($b) <=> $bad($a));   // vị trí lệch lên đầu (cùng nhóm giữ thứ tự kho · hàng · lô)
+        $stockOf = [];   // tổng tồn đang lưu của từng (kho · mặt hàng), cộng mọi lô — so với tồn tối thiểu của mặt hàng
+        foreach ($res['rows'] as $x) {
+            $stockOf[$x['kho_id'] . ':' . $x['mat_hang_id']] = ($stockOf[$x['kho_id'] . ':' . $x['mat_hang_id']] ?? 0) + (int)$x['balance'];
+        }
         [$res['rows'], $pg] = Paginator::of($rows, $r);
+        $moves = [];   // 10 dòng sổ gần nhất của từng vị trí đang hiện (phần «Chi tiết» mở ra từng dòng)
+        foreach ($res['rows'] as $x) {
+            $moves[$x['kho_id'] . ':' . $x['mat_hang_id'] . ':' . $x['lo_hang_id']] = $this->query->recentMoves((int)$x['kho_id'], (int)$x['mat_hang_id'], (int)$x['lo_hang_id']);
+        }
         return $this->render('history/reconcile', $user, 'reconcile', [
+            'moves' => $moves, 'stockOf' => $stockOf, 'checkedAt' => gmdate('Y-m-d H:i:s'), 'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to,
             'res' => $res, 'pg' => $pg, 'q' => $q, 'wh' => $wh, 'cat' => $cat, 'status' => $status, 'counts' => $counts,
             'warehouses' => $ids ? $this->db->all('SELECT id, ma, ten FROM kho WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') ORDER BY ma') : [],
             'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),

@@ -5,11 +5,14 @@ declare(strict_types=1);
  * Tên hệ thống hiển thị cho người dùng — đổi ở đây là đổi toàn bộ giao diện (thanh đầu, đăng nhập, tiêu đề tab, chân menu).
  * Từ đầu tiên viết thường, phần sau được tô màu nhấn trong logo chữ. Tên mã nguồn / lệnh `bin/stockflow` / CSDL `stockflow` giữ nguyên.
  */
-const APP_NAME = 'Chương Đại Dương';
+const APP_NAME = 'StockFlow';
 
-/** Tên hệ thống dạng logo chữ: «Chương <b>Đại Dương</b>». */
+/** Tên hệ thống dạng logo chữ: «Stock<b>Flow</b>» (tách ở chữ hoa thứ hai, hoặc ở dấu cách nếu tên có nhiều từ). */
 function app_brand(): string
 {
+    if (preg_match('/^(\S+?)([A-Z][a-z]+)$/', APP_NAME, $m)) {
+        return e($m[1]) . '<b>' . e($m[2]) . '</b>';
+    }
     $parts = explode(' ', APP_NAME, 2);
     return e($parts[0]) . (isset($parts[1]) ? ' <b>' . e($parts[1]) . '</b>' : '');
 }

@@ -3,7 +3,7 @@
   <main class="login-main">
     <section class="login-card" aria-label="Đăng nhập">
       <header class="login-head">
-        <div class="login-mark"><img src="/assets/img/logo.png" alt="" width="44" height="44"><span><b><?= app_brand() ?></b></span></div>
+        <div class="login-mark"><img class="login-full" src="/assets/img/stockflow-logo.png" alt="<?= e(APP_NAME) ?>" width="260" height="142"></div>
       </header>
       <?php $lock = (int)($lock ?? 0); ?>
       <?php if ($error): ?><div class="flash flash-err" role="alert" id="login-error"><?= icon('alert') ?><span><?php if ($lock > 0): ?>Tạm khoá <b data-countdown="<?= $lock ?>"><?= $lock >= 60 ? intdiv($lock, 60) . ' phút ' . sprintf('%02d', $lock % 60) . ' giây' : $lock . ' giây' ?></b> do nhập sai nhiều lần.<?php else: ?><?= e($error) ?><?php endif; ?></span></div><?php endif; ?>

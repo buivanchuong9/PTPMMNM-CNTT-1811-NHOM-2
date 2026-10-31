@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" role="img" aria-label="Chương Đại Dương: hàng hoá di chuyển giữa các kho">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" role="img" aria-label="StockFlow: hàng hoá di chuyển giữa các kho">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7a45"/><stop offset=".55" stop-color="#ee4d2d"/><stop offset="1" stop-color="#c9361a"/></linearGradient>
     <linearGradient id="road" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".15"/><stop offset=".5" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity=".15"/></linearGradient>
@@ -21,7 +21,7 @@
   <use href="#box"><animateMotion dur="5s" repeatCount="indefinite" begin="-0.5s"><mpath href="#r3"/></animateMotion></use>
   <use href="#box"><animateMotion dur="5s" repeatCount="indefinite" begin="-3s"><mpath href="#r3"/></animateMotion></use>
   <g font-family="system-ui,-apple-system,Segoe UI,sans-serif" fill="#fff" text-anchor="middle">
-    <text x="600" y="62" font-size="54" font-weight="800" letter-spacing="-1.5">Chương <tspan fill="#ffd166">Đại Dương</tspan> <tspan font-size="22" font-weight="700" letter-spacing="3" dy="-18">QUẢN LÝ KHO</tspan></text>
+    <text x="600" y="62" font-size="54" font-weight="800" letter-spacing="-1.5">Stock<tspan fill="#ffd166">Flow</tspan> <tspan font-size="22" font-weight="700" letter-spacing="3" dy="-18">QUẢN LÝ KHO</tspan></text>
     <text x="600" y="102" font-size="19" fill-opacity=".95">Quản lý kho · Điều chuyển hàng · Kiểm kê tại nhiều điểm</text>
   </g>
 </svg>

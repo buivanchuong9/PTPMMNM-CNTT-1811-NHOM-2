@@ -274,7 +274,7 @@ label.has-suggest { position: relative; }
 .app-shell main.vx-in > *:not(dialog) { animation: fx-up var(--vx-in, .42s) cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 55ms); }
 .main-wrap { overflow: hidden; }
 
-/* ── Logo Chương Đại Dương ── */
+/* ── Logo StockFlow ── */
 .brand img { width: 40px; height: 40px; object-fit: cover; border-radius: 11px; box-shadow: 0 1px 4px rgba(120, 12, 24, .35); }
 .login-brand img { object-fit: cover; padding: 0; border: 0; box-shadow: 0 1px 4px rgba(120, 12, 24, .3); }
 .login-head { text-align: left; }

@@ -88,7 +88,7 @@
   // Biểu đồ (Chart.js nạp cục bộ từ /assets/vendor)
   const initCharts = () => {
     if (!window.Chart) return;
-    const palette = ['#d12f3f', '#2b2f3a', '#f59e0b', '#2563eb', '#16a34a', '#7a8190', '#0ea5e9'];
+    const palette = ['#2b5797', '#2b2f3a', '#f59e0b', '#2563eb', '#16a34a', '#7a8190', '#0ea5e9'];
     Chart.defaults.font.family = '"Be Vietnam Pro", system-ui, sans-serif';
     const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
     const paintChartTheme = () => { Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line'); };
@@ -121,7 +121,7 @@
       } else {
         new Chart(cv, { type: 'bar',
           data: { labels, datasets: [
-            { label: 'Số mã hàng', data: JSON.parse(cv.dataset.skus || '[]'), backgroundColor: '#d12f3f', borderRadius: 8, maxBarThickness: 38 },
+            { label: 'Số mã hàng', data: JSON.parse(cv.dataset.skus || '[]'), backgroundColor: '#2b5797', borderRadius: 8, maxBarThickness: 38 },
             { label: 'Phiếu chờ xác nhận', data: JSON.parse(cv.dataset.drafts || '[]'), backgroundColor: '#2b2f3a', borderRadius: 8, maxBarThickness: 38 } ] },
           options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
             scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: () => css('--line') }, border: { display: false } } },
@@ -198,6 +198,51 @@
     out.innerHTML = `Lãi gộp mỗi đơn vị: <b class="${gain >= 0 ? 'pos' : 'neg'}">${vn.format(gain)} đ</b> (${Math.round(gain / price * 100)}% giá bán)${gain < 0 ? ' — giá bán đang thấp hơn giá vốn' : ''}`;
   });
 
+  // Đơn đặt hàng: chọn nhà cung cấp thì hiện liên hệ (người liên hệ, điện thoại, email, địa chỉ) để biết gửi đơn cho ai
+  const initSupplierCard = () => {
+    const sel = document.getElementById('supplier-select'), box = document.getElementById('supplier-card');
+    if (!sel || !box) return;
+    const draw = () => {
+      const o = sel.selectedOptions[0], d = o ? o.dataset : {};
+      const rows = [['Người liên hệ', d.contact], ['Điện thoại', d.phone], ['Email', d.email], ['Địa chỉ', d.addr]].filter((r) => r[1]);
+      box.hidden = !o || !o.value;
+      box.innerHTML = rows.length ? rows.map((r) => `<span><small>${r[0]}</small>${esc(r[1])}</span>`).join('') : '<span class="muted">Nhà cung cấp này chưa có thông tin liên hệ. Bổ sung ở «Đối tác & nhà cung cấp».</span>';
+    };
+    sel.addEventListener('change', draw);
+    draw();
+  };
+  // Kho huỷ: tích nhiều lô, chọn MỘT xe cho cả đợt. Tải của các lô đã tích do máy chủ tính (cùng quy tắc với lúc xuất) rồi đánh dấu xe nào chở nổi.
+  const disposeBoxes = () => [...document.querySelectorAll('input[data-pick-dispose]')];
+  const refreshDispatch = async () => {
+    const form = document.getElementById('dispatch-form');
+    if (!form) return;
+    const sum = form.querySelector('[data-dispatch-summary]'), veh = form.querySelector('select[name=vehicle_id]'), btn = form.querySelector('[data-dispatch-submit]');
+    const all = document.querySelector('[data-pick-all]'), boxes = disposeBoxes(), ids = boxes.filter((b) => b.checked).map((b) => b.value);
+    form.querySelector('[data-dispatch-count]').textContent = ids.length;
+    btn.disabled = ids.length === 0;
+    if (all) { all.checked = ids.length > 0 && ids.length === boxes.length; all.indeterminate = ids.length > 0 && ids.length < boxes.length; }
+    const mine = (refreshDispatch.seq = (refreshDispatch.seq || 0) + 1), keep = veh.value;
+    if (!ids.length) { sum.innerHTML = '<p class="muted small" style="margin:0">Chưa tích lô nào.</p>'; return; }
+    try {
+      const res = await fetch('/disposals/fit?' + ids.map((i) => 'ids[]=' + encodeURIComponent(i)).join('&'), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      if (!res.ok || mine !== refreshDispatch.seq) return;
+      const j = await res.json();
+      if (mine !== refreshDispatch.seq) return;
+      sum.innerHTML = j.summary;
+      veh.innerHTML = j.options;
+      if ([...veh.options].some((o) => o.value === keep && !o.disabled)) veh.value = keep;   // giữ xe đã chọn nếu vẫn chở được
+      if (window.crewSync) window.crewSync(form);
+    } catch (e) { /* mất mạng: giữ nguyên danh sách xe, máy chủ vẫn kiểm lại khi xuất */ }
+  };
+  if (!document.body.dataset.disposeBound) {
+    document.body.dataset.disposeBound = '1';
+    document.addEventListener('change', (ev) => {
+      const t = ev.target;
+      if (t.matches && t.matches('[data-pick-all]')) { disposeBoxes().forEach((b) => { b.checked = t.checked; }); refreshDispatch(); }
+      else if (t.matches && t.matches('input[data-pick-dispose]')) refreshDispatch();
+    });
+  }
+
   const initPickers = () => {
   // Ô chọn hàng của phiếu: bấm vào là gợi ý vài mặt hàng đầu danh sách, gõ để tìm, chọn xong mới sinh dòng có +/−
   const picker = document.getElementById('picker');
@@ -205,6 +250,8 @@
     const items = JSON.parse(picker.dataset.items || '[]').map((i) => ({ ...i, hay: fold([i.sku, i.name, i.lot].join(' ')) }));
     const stock = JSON.parse(picker.dataset.stock || '{}');
     const check = !!picker.dataset.check;
+    const orderMap = JSON.parse(picker.dataset.order || 'null');   // nhận hàng theo đơn đặt: {mã hàng: {ord, got, left}}
+    const orderMode = !!orderMap;
     const form = picker.closest('form');
     const search = picker.querySelector('#pick-search'), list = picker.querySelector('#pick-list'), body = picker.querySelector('#pick-rows');
     const wrap = picker.querySelector('#pick-wrap'), empty = picker.querySelector('#pick-empty'), sum = picker.querySelector('#pick-sum');
@@ -294,6 +341,7 @@
         const n = Object.entries(m).reduce((a, [k, v]) => (k.startsWith(item) ? a + v : a), 0);
         return `Tồn ${vn.format(n)} ${esc(i.unit)} · ${(i.lots || []).length} lô`;
       }
+      if (i.ord) return `Tồn ${vn.format(i.ord.have)} ${esc(i.unit)}${i.ord.min ? ' · tối thiểu ' + vn.format(i.ord.min) : ''}`;   // đơn đặt hàng: tồn cả kho, không theo lô
       const s = stockOf(i.k);
       return s === null ? '' : `Tồn ${vn.format(s)} ${esc(i.unit)}`;
     };
@@ -375,8 +423,11 @@
       else cell.innerHTML = `<b>${vn.format(s)}</b><small class="stock-sub">${s === 0 && !sel?.value ? 'lô mới' : 'lô ' + esc(lotNo)}</small><small class="stock-sub">tổng các lô ${vn.format(total)}</small>`;
     };
     const refresh = () => {
+      body.querySelectorAll('[data-zdis]').forEach((i) => { i.disabled = false; delete i.dataset.zdis; });   // phiếu bị chặn lại: mở khoá các dòng chưa đếm
       const trs = [...body.rows];
-      let total = 0, grams = 0;
+      let total = 0, grams = 0, money = 0;
+      const gotBy = {};   // nhận hàng theo đơn: số đang đếm của từng mặt hàng (cộng các dòng lô)
+      if (orderMode) trs.forEach((tr) => { const id = tr.dataset.k.split(':')[0], v = parseInt(tr.querySelector('input[data-qty]').value, 10); gotBy[id] = (gotBy[id] || 0) + (v > 0 ? v : 0); });
       trs.forEach((tr) => {
         const raw = tr.querySelector('input[data-qty]').value.trim();
         const s = rowStock(tr), cell = tr.querySelector('.stock-cell'), err = tr.querySelector('.row-err');
@@ -384,11 +435,30 @@
         total += qty;
         const itx = rowItem(tr), pinfo = tr.querySelector('.pack-info');
         if (itx) grams += weightOf(itx, qty);
-        if (pinfo) pinfo.textContent = packInfo(itx, qty);
-        if (tr.dataset.k.endsWith(':new')) showLotStock(tr, s, cell);
+        if (pinfo) pinfo.textContent = packInfo(itx, qty) + (itx && itx.ord && itx.cost > 0 && qty > 0 ? ' · ≈ ' + vn.format(itx.cost * qty) + ' đ' : '');
+        if (itx && itx.ord) {   // đơn đặt hàng: tồn hiện có, định mức tối thiểu, số đang đặt chưa về
+          const o = itx.ord, low = o.min > 0 && o.have <= o.min;
+          cell.innerHTML = `<b${low ? ' class="neg"' : ''}>${vn.format(o.have)}</b>` + (o.min ? `<small class="stock-sub">tối thiểu ${vn.format(o.min)}${low ? ' · sắp hết' : ''}</small>` : '') + (o.open ? `<small class="stock-sub">đang đặt chưa về ${vn.format(o.open)}</small>` : '');
+          money += itx.cost * qty;
+        }
+        else if (tr.dataset.k.endsWith(':new')) showLotStock(tr, s, cell);
         else cell.textContent = s === null ? '—' : vn.format(s);
         let msg = '';
+        if (orderMode) {   // chưa đếm (0) là hợp lệ; dòng chưa đếm không bắt buộc số lô / hạn dùng
+          tr.querySelectorAll('input[name="lot_no[]"], input[name="exp[]"]').forEach((i) => { i.required = qty > 0; });
+          const oc = tr.querySelector('.order-cell'), id = tr.dataset.k.split(':')[0], info = orderMap[id];
+          if (oc) {
+            const have = gotBy[id] || 0;
+            if (!info) oc.innerHTML = '<span class="tag tag-warn" title="Mặt hàng này không có trong đơn đặt hàng">Ngoài đơn</span>';
+            else {
+              const d = have - info.left;
+              oc.innerHTML = `<small class="muted">Đặt <b>${vn.format(info.ord)}</b>${info.got ? ' · đã nhận ' + vn.format(info.got) : ''}</small><br>Còn thiếu <b>${vn.format(info.left)}</b><br>`
+                + (have === 0 ? '<span class="tag">Chưa đếm</span>' : d === 0 ? '<span class="tag tag-ok">Đủ</span>' : d < 0 ? `<span class="tag tag-warn">Thiếu ${vn.format(-d)}</span>` : `<span class="tag tag-info">Thừa ${vn.format(d)}</span>`);
+            }
+          }
+        }
         if (raw === '' && tr._alloc && !picker._submitting) msg = '';   // dòng chọn lô còn trống: nhắc nhẹ, không tô đỏ
+        else if (orderMode && raw === '0') msg = '';
         else if (!/^\d+$/.test(raw) || qty < 1) msg = raw.startsWith('-') ? 'Không được nhập số âm' : 'Số lượng phải là số nguyên dương';
         else if (qty > 1000000) msg = 'Tối đa 1.000.000 mỗi dòng';
         else if (check && s !== null && qty > s) msg = s === 0 ? 'Kho đã hết hàng, không thể xuất' : `Vượt tồn kho — chỉ còn ${vn.format(s)}`;
@@ -402,7 +472,12 @@
       empty.hidden = trs.length > 0;
       sum.hidden = trs.length === 0;
       sum.classList.remove('bad');
-      sum.textContent = `${trs.length} dòng · tổng ${vn.format(total)} đơn vị${grams > 0 ? ' · nặng ≈ ' + kgText(grams) : ''}`;
+      sum.textContent = `${trs.length} dòng · tổng ${vn.format(total)} đơn vị${grams > 0 ? ' · nặng ≈ ' + kgText(grams) : ''}${money > 0 ? ' · tạm tính ≈ ' + vn.format(money) + ' đ' : ''}`;
+      if (orderMode) {   // tóm tắt so với đơn
+        const need = Object.values(orderMap).reduce((a, o) => a + o.left, 0), counted = Object.entries(gotBy).reduce((a, [id, v]) => a + (orderMap[id] ? Math.min(v, orderMap[id].left) : 0), 0);
+        const short = Object.entries(orderMap).filter(([id, o]) => (gotBy[id] || 0) < o.left).length, over = Object.entries(orderMap).filter(([id, o]) => (gotBy[id] || 0) > o.left).length;
+        sum.textContent += ` · so với đơn: đã đếm ${vn.format(counted)}/${vn.format(need)}${short ? ' · còn thiếu ' + short + ' mặt hàng' : ' · giao đủ'}${over ? ' · thừa ' + over + ' mặt hàng' : ''}`;
+      }
     };
 
     // Cộng/trừ số lượng; tăng quá tồn thì giữ nguyên và báo ngay
@@ -425,8 +500,8 @@
       const q = tr.querySelector('input[data-qty]');
       const cur = /^\d+$/.test(q.value.trim()) ? parseInt(q.value, 10) : 0;
       const s = stockOf(tr.dataset.k);
-      let next = Math.max(1, Math.min(1000000, cur + d));
-      if (Math.abs(d) > 1 && next < Math.abs(d)) next = Math.abs(d);   // bước theo kiện: tối thiểu 1 kiện
+      let next = Math.max(orderMode ? 0 : 1, Math.min(1000000, cur + d));
+      if (!orderMode && Math.abs(d) > 1 && next < Math.abs(d)) next = Math.abs(d);   // bước theo kiện: tối thiểu 1 kiện (đếm theo đơn thì được về 0)
       if (d > 0 && check && s !== null && next > s) {
         next = Math.max(1, Math.min(cur || 1, s) || 1);
         q.value = next; if (tr._alloc) syncLots(tr); refresh();
@@ -457,7 +532,8 @@
         const addLot = newLot ? '<div><button type="button" class="btn-ghost btn-sm add-lot">+ Thêm lô khác của hàng này</button></div>' : '';
         tr.innerHTML = `<td>${lotRow ? '<span class="auto-out"></span>' : `<input type="hidden" name="line[]" value="${esc(i.k)}">`}<b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}${lotCells}${addLot}</td>`
           + '<td class="num stock-cell"></td>'
-          + `<td class="num${lotRow ? ' qty-cell lot-cell' : ''}"><div class="qty-line">${lotRow ? '<div class="lot-chips"></div>' : ''}<div class="qty-box"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input${lotRow ? '' : ' name="qty[]"'} data-qty type="number" min="1" max="1000000" value="${(i.pack || 1) > 1 ? i.pack : 1}" inputmode="numeric" aria-label="Số lượng"${lotRow ? ' placeholder="Chọn lô"' : ''}><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small></div></div><div class="pack-line">${(i.pack || 1) > 1 ? '<label class="loose-opt"><input type="checkbox" class="loose"> lẻ (bước 1 cái)</label>' : ''}<span class="pack-info muted"></span></div><div class="row-err" role="alert" hidden></div></td>`
+          + (orderMode ? '<td class="num order-cell"></td>' : '')
+          + `<td class="num${lotRow ? ' qty-cell lot-cell' : ''}"><div class="qty-line">${lotRow ? '<div class="lot-chips"></div>' : ''}<div class="qty-box"><div class="stepper"><button type="button" class="step" data-d="-1" aria-label="Giảm 1">−</button><input${lotRow ? '' : ' name="qty[]"'} data-qty type="number" min="${orderMode ? 0 : 1}" max="1000000" value="${(i.pack || 1) > 1 ? i.pack : 1}" inputmode="numeric" aria-label="Số lượng"${lotRow ? ' placeholder="Chọn lô"' : ''}><button type="button" class="step" data-d="1" aria-label="Tăng 1">+</button></div> <small class="muted">${esc(i.unit)}</small></div></div><div class="pack-line">${(i.pack || 1) > 1 ? '<label class="loose-opt"><input type="checkbox" class="loose"> lẻ (bước 1 cái)</label>' : ''}<span class="pack-info muted"></span></div><div class="row-err" role="alert" hidden></div></td>`
           + (picker.dataset.newlots ? `<td class="bad-cell"><input name="bad[]" class="bad-qty" type="number" min="0" max="1000000" value="0" inputmode="numeric" aria-label="Số lượng không đạt chất lượng"><select name="bad_reason[]" class="bad-reason" aria-label="Tình trạng hàng không đạt" hidden><option value="">Tình trạng…</option>${(picker.dataset.badReasons ? JSON.parse(picker.dataset.badReasons) : []).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select><input name="bad_note[]" class="bad-note" maxlength="200" placeholder="Ghi chú" hidden></td>` : '')
           + '<td class="num"><button type="button" class="icon-btn remove-line" aria-label="Xoá dòng">✕</button></td>';
       }
@@ -582,6 +658,33 @@
       search.value = ''; open(false); refresh();
     };
 
+    // Nhận hàng theo đơn: quét mã (máy quét USB gõ mã + Enter, hoặc camera) ⇒ số «Thực nhận» của mặt hàng đó tăng 1; mặt hàng ngoài đơn thì báo, không tự thêm
+    const countIn = picker.querySelector('#count-code'), countMsg = picker.querySelector('#count-msg');
+    const countShow = (r) => { if (countMsg && r.text) { countMsg.textContent = r.text; countMsg.classList.toggle('bad', !r.ok); countMsg.classList.toggle('ok', r.ok); } };
+    const countCode = (raw) => {
+      const code = String(raw || '').trim(), low = code.toLowerCase();
+      if (!code) return { ok: false, text: '' };
+      const it = items.find((i) => (i.bc && i.bc === code) || i.sku.toLowerCase() === low);
+      if (!it) return { ok: false, text: `Mã «${code}» không thuộc mặt hàng nào của nhà cung cấp này — kiểm tra lại hàng giao.` };
+      const id = it.k.split(':')[0], info = orderMap && orderMap[id];
+      if (!info) return { ok: false, text: `${it.sku} — ${it.name} KHÔNG nằm trong đơn đặt hàng này (không tự thêm vào phiếu). Kiểm tra lại hàng giao.` };
+      let tr = [...body.rows].find((r) => r.dataset.k.split(':')[0] === id);
+      if (!tr) { add(it); tr = [...body.rows].find((r) => r.dataset.k.split(':')[0] === id); tr.querySelector('input[data-qty]').value = 0; }
+      const q = tr.querySelector('input[data-qty]'), step = stepSize(tr);   // mỗi lần quét = 1 kiện (hàng đóng kiện), hoặc 1 cái nếu hàng lẻ / đã tích «lẻ»
+      q.value = (parseInt(q.value, 10) || 0) + step;
+      refresh();
+      tr.classList.remove('flash-row'); void tr.offsetWidth; tr.classList.add('flash-row');
+      const have = [...body.rows].filter((r) => r.dataset.k.split(':')[0] === id).reduce((a, r) => a + (parseInt(r.querySelector('input[data-qty]').value, 10) || 0), 0);
+      return { ok: true, text: `${it.sku}: +${vn.format(step)}${step > 1 ? ' (1 kiện)' : ''} → đã đếm ${vn.format(have)} / còn thiếu ${vn.format(info.left)}${have > info.left ? ' — VƯỢT ĐƠN ' + vn.format(have - info.left) : have === info.left ? ' — đủ' : ''}` };
+    };
+    if (orderMode) {
+      window.countScan = (code) => { const r = countCode(code); countShow(r); return r; };
+      if (countIn) {
+        countIn.addEventListener('keydown', (ev) => { if (ev.key !== 'Enter') return; ev.preventDefault(); const r = countCode(countIn.value); countIn.value = ''; countShow(r); });
+        countIn.focus();
+      }
+    }
+
     // Hàng chọn sẵn từ nút «Yêu cầu chuyển hàng» (data-prefill = [["mã hàng:lô", số lượng], …])
     try {
       const pre = JSON.parse(picker.dataset.prefill || '[]');
@@ -594,6 +697,17 @@
       refresh();
       picker._submitting = false;
       const bad = [...body.rows].find((r) => r.dataset.err);
+      if (orderMode && body.rows.length && !bad) {
+        const counted = [...body.rows].filter((r) => (parseInt(r.querySelector('input[data-qty]').value, 10) || 0) > 0);
+        if (!counted.length) {
+          ev.preventDefault(); ev.stopImmediatePropagation();
+          sum.hidden = false; sum.classList.add('bad');
+          sum.textContent = 'Chưa đếm được mặt hàng nào. Quét mã hoặc nhập số thực nhận trước khi lưu phiếu.';
+          return;
+        }
+        [...body.rows].forEach((r) => { if (!counted.includes(r)) r.querySelectorAll('input, select').forEach((i) => { i.disabled = true; i.dataset.zdis = '1'; }); });   // dòng chưa đếm không vào phiếu
+        return;
+      }
       if (body.rows.length && !bad) return;
       ev.preventDefault(); ev.stopImmediatePropagation();
       if (bad) {
@@ -1193,6 +1307,16 @@
     ev.stopPropagation();
     caret.closest('[data-nav-tree]').classList.toggle('open');
   }, true);
+  // Dòng có phần «Chi tiết» (vd. Đối chiếu tồn): bấm nút mở / thu gọn dòng ngay bên dưới
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-row-toggle]');
+    const detail = b && b.closest('tr')?.nextElementSibling;
+    if (!detail || !detail.classList.contains('detail-row')) return;
+    const open = detail.hidden;
+    detail.hidden = !open;
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    b.textContent = open ? 'Thu gọn' : 'Chi tiết';
+  });
   // Khung tài khoản: bấm ảnh đại diện để mở / đóng; bấm ra ngoài hoặc Esc thì đóng
   const setAcct = (open) => {
     const root = document.querySelector('[data-acct]');
@@ -1316,7 +1440,7 @@
 
   new MutationObserver(() => { initHScroll(); initTabScroll(); initStickyHead(); queueHeads(); }).observe(document.body, { childList: true, subtree: true });
 
-  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); window.paintCols && window.paintCols(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); window.initCreturn && window.initCreturn(); };
+  const initPage = (swapped) => { initHScroll(); initTabScroll(); initStickyHead(); initRoles(); initAvatar(); initCounters(); initPickers(); initSupplierCard(); refreshDispatch(); window.paintCols && window.paintCols(); initNotice(); initForms(); initCounting(); initPay(); initGuard(); if (swapped) initCharts(); window.initVnAddr && window.initVnAddr(); window.initRouteMap && window.initRouteMap(); window.initConvoy && window.initConvoy(); window.initCrew && window.initCrew(); window.initDeliveryKm && window.initDeliveryKm(); window.initCreturn && window.initCreturn(); };
   initPage();
 
   const SPA_OK = document.querySelector('meta[name=spa-layout]')?.content === 'app' && window.fetch && history.pushState;
@@ -1429,7 +1553,7 @@
       const u = new URL(a.href, location.href);
       if (skipUrl(u) || (u.pathname + u.search === here && u.hash)) return;
       e.preventDefault();
-      load(u.pathname + u.search, { fx: !!a.closest('.sidebar') });
+      load(u.pathname + u.search, { fx: false });   // bỏ hiệu ứng trôi / mờ khi bấm menu: đổi trang tức thì (muốn bật lại: fx: !!a.closest('.sidebar'))
     });
 
     document.addEventListener('submit', (e) => {

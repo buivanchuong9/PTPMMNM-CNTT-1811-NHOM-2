@@ -248,3 +248,10 @@ html:not(.cols-all) .inv-compact .col-x { display: none; }
 #creturn-form [hidden] { display: none !important; }
 .refund-line { margin: 12px 0 4px; font-size: 15px; }
 .refund-line b { font-size: 18px; }
+
+/* Đơn đặt hàng: thẻ liên hệ nhà cung cấp */
+.supplier-card { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 12px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: .9rem; }
+.supplier-card span { display: flex; flex-direction: column; min-width: 0; } .supplier-card small { color: var(--muted, #6b7280); font-size: .72rem; }
+/* Menu hẹp: tên mục dài xuống dòng thay vì bị cắt «…» */
+.sidebar a > span:not(.nav-pills) { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
+.sidebar nav a { align-items: center; }

@@ -28,8 +28,14 @@ final class CustomerReturnController extends Controller
         $ids = $this->auth->visibleWarehouseIds($user);
         $status = isset(CustomerReturnService::STATUS[$r->str('status')]) ? $r->str('status') : '';
         $q = trim($r->str('q'));
-        [$rows, $pg] = Paginator::of($this->returns->list($ids, $status, $q), $r);
-        return $this->render('creturns/index', $user, 'creturns', ['rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'counts' => $this->returns->counts($ids)], 'Khách trả hàng');
+        $customers = $this->returns->customers($ids);
+        $customer = in_array($r->str('customer'), $customers, true) ? $r->str('customer') : '';
+        [$from, $to, $rangeSel] = range_params($r);
+        $found = $this->returns->search($ids, $q, $customer, $from, $to);
+        $counts = array_count_values(array_column($found, 'trang_thai'));   // số trên từng tab theo đúng bộ lọc đang chọn
+        [$rows, $pg] = Paginator::of($status === '' ? $found : array_values(array_filter($found, fn($t) => $t['trang_thai'] === $status)), $r);
+        return $this->render('creturns/index', $user, 'creturns', ['rows' => $rows, 'pg' => $pg, 'status' => $status, 'q' => $q, 'counts' => $counts,
+            'customer' => $customer, 'customers' => $customers, 'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to], 'Khách trả hàng');
     }
 
     public function create(Request $r, array $p, ?User $user): Response

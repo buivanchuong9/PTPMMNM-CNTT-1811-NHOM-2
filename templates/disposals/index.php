@@ -2,6 +2,8 @@
 use StockFlow\Service\DisposalService as D;
 $totalLoss = array_sum(array_column($loss, 'value'));
 $tabTone = ['CHO_DUYET' => 'warn', 'TRONG_KHO_HUY' => 'info', 'DA_TIEU_HUY' => 'all', 'TU_CHOI' => 'bad'];
+$keep = keep_params(['q' => $q, 'reason' => $reason, 'category' => $cat, 'warehouse' => $wh, 'range' => $rangeSel]);
+$qs = fn(array $over) => http_build_query(array_filter(array_merge(['q' => $q, 'reason' => $reason, 'category' => $cat ?: null, 'warehouse' => $wh ?: null, 'range' => $rangeSel === 'custom' ? '' : $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null], $over), fn($v) => $v !== null && $v !== ''));   // chuyển tab vẫn giữ các bộ lọc khác
 $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_dung'] ? ' (HSD ' . dt($r['han_dung'], false) . ')' : '') : '';
 ?>
 <header class="page-head">
@@ -36,19 +38,65 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
 
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach (D::STATUS as $k => [$label]): ?>
-  <a href="/disposals?<?= e(http_build_query(array_filter(['status' => $k, 'q' => $q]))) ?>" data-tone="<?= $tabTone[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a>
+  <a href="/disposals?<?= e($qs(['status' => $k])) ?>" data-tone="<?= $tabTone[$k] ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a>
   <?php endforeach; ?>
 </nav>
 <form class="filters" method="get">
   <input type="hidden" name="status" value="<?= e($status) ?>">
   <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="Mã phiếu, mặt hàng, số lô…" aria-label="Tìm kiếm">
+  <select name="reason"<?= $reason !== '' ? ' class="on"' : '' ?> aria-label="Lý do huỷ" data-live-reload><?= filter_options(D::REASONS, $reason, 'Mọi lý do') ?></select>
+  <select name="category"<?= $cat ? ' class="on"' : '' ?> aria-label="Loại hàng" data-live-reload><?= filter_options($catOptions, $cat ?: '', 'Mọi loại hàng') ?></select>
+  <?php if ($whOptions): ?><select name="warehouse"<?= $wh ? ' class="on"' : '' ?> aria-label="Kho" data-live-reload><?= filter_options($whOptions, $wh ?: '', 'Mọi kho') ?></select><?php endif; ?>
+  <?php include __DIR__ . '/../partials/range_filter.php'; ?>
+  <?php if ($keep): ?><a class="btn btn-ghost" href="/disposals?status=<?= e($status) ?>">Xoá lọc</a><?php endif; ?>
 </form>
 
+<?php $pickCol = $canApprove && $status === 'TRONG_KHO_HUY' && !empty($vehicles) && $rows; ?>
+<?php if ($trips): ?>
+<section class="card flush" style="margin-bottom:16px">
+  <div class="card-head pad"><h2><?= icon('truck') ?> Đang trên xe <span class="count"><?= n(count($trips)) ?></span></h2><span class="muted small">mỗi chuyến một xe, xác nhận đến nơi một lần cho cả chuyến</span></div>
+  <?php foreach ($trips as $list): $t0 = $list[0]; $ids = array_column($list, 'id'); $tv = array_sum(array_map(fn($x) => (int)$x['gia_von'] > 0 ? (int)$x['value'] : 0, $list)); ?>
+  <div class="trip">
+    <div class="trip-head"><b><?= e($t0['bien_so']) ?></b> · <?= e($t0['tai_xe_ten']) ?> · đi <?= e(dt_short($t0['ngay_xuat'])) ?> · <b><?= n(count($list)) ?></b> lô<?= $tv > 0 ? ' · ' . n($tv) . ' đ' : '' ?>
+      <br><small class="muted">Đến: <?= e($t0['don_vi_tieu_huy']) ?> · <?= e($t0['dia_chi_tieu_huy']) ?></small></div>
+    <ul class="trip-lots"><?php foreach ($list as $x): ?><li><b><?= e($x['ma']) ?></b> · <?= e($x['item_name']) ?> <small class="muted">(<?= e($x['ma_hang'] . $lotOf($x)) ?>)</small> — <b><?= n($x['so_luong']) ?></b> <?= e($x['unit']) ?></li><?php endforeach; ?></ul>
+    <?php if ($canApprove): ?>
+    <div class="trip-actions">
+      <form method="post" action="/disposals/arrive-batch" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><?php foreach ($ids as $i): ?><input type="hidden" name="ids[]" value="<?= (int)$i ?>"><?php endforeach; ?>
+        <button type="submit" data-confirm="Xe đã đến nơi tiêu huỷ? <?= count($list) > 1 ? 'Cả ' . count($list) . ' lô' : 'Hàng' ?> sẽ được ghi nhận đã tiêu huỷ."><?= icon('check') ?>Đã đến nơi tiêu huỷ</button></form>
+      <form method="post" action="/disposals/unload-batch" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><?php foreach ($ids as $i): ?><input type="hidden" name="ids[]" value="<?= (int)$i ?>"><?php endforeach; ?>
+        <button type="submit" class="btn-ghost" data-confirm="Hàng xuống xe, nằm lại kho huỷ?">↩ Quay lại</button></form>
+    </div>
+    <?php endif; ?>
+  </div>
+  <?php endforeach; ?>
+</section>
+<?php endif; ?>
+<?php if ($pickCol): ?>
+<form id="dispatch-form" method="post" action="/disposals/load-batch" class="card dispatch" data-once data-crew="<?= e(json_encode(\StockFlow\Domain\TransportRules::coverTable())) ?>">
+  <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+  <div class="dispatch-head"><h2><?= icon('truck') ?> Xuất đi tiêu huỷ</h2><span class="muted small">Tích các lô cần chở ở bảng bên dưới, chọn một xe và một tài xế cho cả đợt.</span></div>
+  <div data-dispatch-summary><p class="muted small" style="margin:0">Chưa tích lô nào.</p></div>
+  <div class="dispatch-row">
+    <select name="vehicle_id" required aria-label="Xe chở hàng"><?php $fit = []; $recommended = null; require __DIR__ . '/../partials/vehicle_options.php'; ?></select>
+    <select name="driver_id" required aria-label="Tài xế"><option value="">Chọn tài xế…</option>
+      <?php foreach ($drivers as $dr): $ft = $driverFit[(int)$dr['id']] ?? ['hard' => [], 'class' => '', 'age' => null]; ?>
+      <option value="<?= (int)$dr['id'] ?>" data-class="<?= e($ft['class']) ?>" data-bad="<?= e($ft['hard'][0] ?? '') ?>"><?= e($dr['ho_ten'] . ($ft['class'] !== '' ? ' — bằng ' . $ft['class'] : ' — chưa khai bằng')) ?></option>
+      <?php endforeach; ?></select>
+    <label class="check"><input type="checkbox" name="driver_ok" value="1" required> Tài xế đã nhận hàng lên xe</label>
+    <button type="submit" data-dispatch-submit disabled><?= icon('truck') ?>Xuất đi tiêu huỷ (<span data-dispatch-count>0</span> lô)</button>
+  </div>
+  <small class="muted">Giao đến: <?= e($site['name'] ?? '') ?> · <?= e($site['address'] ?? '') ?></small>
+</form>
+<?php elseif ($canApprove && $status === 'TRONG_KHO_HUY' && $rows): ?>
+<p class="muted" style="margin:0 0 12px"><?= icon('alert') ?> Kho chưa có xe nào đang đứng tại kho để chở hàng đi tiêu huỷ. Thêm hoặc đưa xe về kho ở «Đội xe &amp; tài xế».</p>
+<?php endif; ?>
 <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">
-  <thead><tr><th>Mã</th><th>Mặt hàng</th><th class="num">Số lượng</th><th>Lý do</th><th class="num">Giá trị vốn</th><th>Người lập</th><th></th></tr></thead>
+  <thead><tr><?php if ($pickCol): ?><th class="chk"><input type="checkbox" data-pick-all aria-label="Chọn tất cả các lô chờ xuất"></th><?php endif; ?><th>Mã</th><th>Mặt hàng</th><th class="num">Số lượng</th><th>Lý do</th><th class="num">Giá trị vốn</th><th>Người lập</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($rows as $h): $st = D::STATUS[$h['trang_thai']]; ?>
     <tr data-tone="<?= $tabTone[$h['trang_thai']] ?>">
+      <?php if ($pickCol): ?><td class="chk"><input type="checkbox" name="ids[]" value="<?= (int)$h['id'] ?>" form="dispatch-form" data-pick-dispose aria-label="Chọn <?= e($h['ma']) ?>"></td><?php endif; ?>
       <td class="nw"><b><?= e($h['ma']) ?></b><br><small class="muted"><?= e(dt_short($h['ngay_tao'])) ?> · <?= e($h['wh_code']) ?></small></td>
       <td><?= e($h['item_name']) ?><br><small class="muted"><?= e($h['ma_hang'] . $lotOf($h)) ?></small></td>
       <td class="num"><b><?= n($h['so_luong']) ?></b> <small class="muted"><?= e($h['unit']) ?></small></td>
@@ -60,23 +108,7 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
           <?php if ($canApprove): ?><form method="post" action="/disposals/<?= (int)$h['id'] ?>/approve" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit"><?= icon('check') ?>Duyệt</button></form><?php endif; ?>
           <?php if ($canApprove || $canPropose): ?><form method="post" action="/disposals/<?= (int)$h['id'] ?>/reject" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit" class="btn-ghost"><?= $canApprove ? 'Từ chối' : 'Rút lại' ?></button></form><?php endif; ?>
         <?php elseif ($h['trang_thai'] === 'TRONG_KHO_HUY' && $h['xe_id'] === null): ?>
-          <?php if ($canApprove): ?>
-          <?php $load = $loadBy[(int)$h['id']] ?? null; $fit = $fitBy[(int)$h['id']] ?? []; $recommended = $recBy[(int)$h['id']] ?? null; require __DIR__ . '/../partials/load_summary.php'; ?>
-          <form method="post" action="/disposals/<?= (int)$h['id'] ?>/load" class="inline-form" style="flex-wrap:wrap;align-items:center" data-once data-crew="<?= e(json_encode(\StockFlow\Domain\TransportRules::coverTable())) ?>"><input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-            <select name="vehicle_id" required aria-label="Xe chở hàng"><option value="">Chọn xe…</option>
-              <?php foreach ($vehicles as $x): $ft = $fit[(int)$x['id']] ?? null;
-                $note = !$ft ? '' : ((int)$x['id'] === (int)$recommended && !$ft['hard'] && !$ft['load'] ? ' — ★ Khuyên dùng' : ($ft['hard'] ? ' — ✘ ' . $ft['hard'][0] : ($ft['load'] ? ' — ⚠ không đủ tải' : ($ft['warns'] ? ' — ⚠ chưa khai đủ thông số' : ' — ✔ đủ điều kiện')))); ?>
-              <option value="<?= (int)$x['id'] ?>" data-need="<?= e((string)\StockFlow\Domain\TransportRules::needFor($x)) ?>"<?= $ft && ($ft['hard'] || $ft['load']) ? ' disabled' : '' ?><?= $ft ? ' title="' . e(implode(' · ', array_merge($ft['hard'], $ft['load'], $ft['warns']))) . '"' : '' ?>><?= e($x['bien_so'] . ($x['loai_xe'] ? ' · ' . $x['loai_xe'] : '') . ((int)($x['tai_trong_kg'] ?? 0) > 0 ? ' · ' . ((int)$x['tai_trong_kg'] < 1000 ? (int)$x['tai_trong_kg'] . ' kg' : rtrim(rtrim(number_format($x['tai_trong_kg'] / 1000, 2, ',', '.'), '0'), ',') . ' tấn') : '') . (($nd = \StockFlow\Domain\TransportRules::needFor($x)) ? ' · cần bằng ' . $nd : '') . $note) ?></option>
-              <?php endforeach; ?></select>
-            <select name="driver_id" required aria-label="Tài xế"><option value="">Chọn tài xế…</option>
-              <?php foreach ($drivers as $dr): $ft = $driverFit[(int)$dr['id']] ?? ['hard' => [], 'class' => '', 'age' => null]; ?>
-              <option value="<?= (int)$dr['id'] ?>" data-class="<?= e($ft['class']) ?>" data-bad="<?= e($ft['hard'][0] ?? '') ?>"><?= e($dr['ho_ten'] . ($ft['class'] !== '' ? ' — bằng ' . $ft['class'] : ' — chưa khai bằng')) ?></option>
-              <?php endforeach; ?></select>
-            <label class="check"><input type="checkbox" name="driver_ok" value="1" required> Tài xế đã nhận hàng lên xe</label>
-            <button type="submit"><?= icon('truck') ?>Xuất đi tiêu huỷ</button></form>
-          <small class="muted">Giao đến: <?= e($site['name'] ?? '') ?> · <?= e($site['address'] ?? '') ?></small>
           <?php if ($canApprove): ?><form method="post" action="/disposals/<?= (int)$h['id'] ?>/undo" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button type="submit" class="btn-ghost" data-confirm="Trả hàng về tồn kho và không huỷ nữa?">↩ Quay lại</button></form><?php endif; ?>
-          <?php endif; ?>
           <?php if ($h['voucher_code']): ?><a href="/vouchers/<?= (int)$h['phieu_nhap_xuat_id'] ?>"><small>Phiếu <?= e($h['voucher_code']) ?></small></a><?php endif; ?>
         <?php elseif ($h['trang_thai'] === 'TRONG_KHO_HUY'): ?>
           <small class="muted"><?= icon('truck') ?> Đang trên xe <b><?= e($h['bien_so']) ?></b> · <?= e($h['tai_xe_ten']) ?> · đi <?= e(dt_short($h['ngay_xuat'])) ?><br>Đến: <?= e($h['don_vi_tieu_huy']) ?> · <?= e($h['dia_chi_tieu_huy']) ?></small>
@@ -87,7 +119,7 @@ $lotOf = fn(array $r) => $r['quan_ly_lo'] ? ' · lô ' . $r['so_lo'] . ($r['han_
         <?php endif; ?>
       </td>
     </tr>
-  <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="empty"><?= $q !== '' ? 'Không có phiếu huỷ phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
+  <?php endforeach; if (!$rows): ?><tr><td colspan="<?= $pickCol ? 8 : 7 ?>" class="empty"><?= $keep ? 'Không có phiếu huỷ phù hợp.' : 'Chưa có hàng nào ở mục này.' ?></td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>
 
 <?php if ($canApprove && !empty($site)): ?>

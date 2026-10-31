@@ -324,6 +324,25 @@ final class WarrantyService
     }
 
     /** Trả hàng (đã sửa / đã đổi / bị từ chối) cho khách. */
+    /**
+     * Thu lại kết quả (bấm nhầm «Từ chối» / «Đã sửa xong»): phiếu quay về «Đang giữ» để ghi kết quả khác. Chỉ khi chưa trả khách.
+     * «Đã đổi mới» không thu lại được vì đã trừ một đơn vị khỏi tồn bằng phiếu điều chỉnh (đảo phiếu đó là việc khác).
+     */
+    public function reopen(User $user, int $id): void
+    {
+        $peek = $this->find($id);
+        $this->auth->require($user, (int)$peek['kho_id'], Permission::XuLyBaoHanh);
+        if ($peek['trang_thai'] === 'DOI_MOI') {
+            throw new DomainError('Hàng đã đổi mới nên đã trừ tồn kho (phiếu ' . ($peek['voucher_code'] ?? '') . ') — không thu lại kết quả được');
+        }
+        $n = $this->db->exec("UPDATE bao_hanh SET trang_thai = 'TIEP_NHAN', ket_qua = '', phieu_nhap_xuat_id = NULL, nguoi_xu_ly_id = NULL, ngay_xu_ly = NULL
+                              WHERE id = ? AND trang_thai IN ('DA_SUA','TU_CHOI')", [$id]);
+        if ($n !== 1) {
+            throw new DomainError('Chỉ phiếu đã sửa xong hoặc bị từ chối, chưa trả khách, mới thu lại kết quả được');
+        }
+        $this->audit->record($user->id, 'warranty.reopen', 'warranty', $id, $peek['ma'] . ' · thu lại kết quả «' . (self::STATUS[$peek['trang_thai']][0] ?? $peek['trang_thai']) . '», quay về đang giữ');
+    }
+
     public function handBack(User $user, int $id): void
     {
         $peek = $this->find($id);

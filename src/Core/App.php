@@ -107,6 +107,7 @@ final class App
         $r->post('/warranty', [C\WarrantyController::class, 'store']);
         $r->post('/warranty/{id}/resolve', [C\WarrantyController::class, 'resolve']);
         $r->post('/warranty/{id}/return', [C\WarrantyController::class, 'handBack']);
+        $r->post('/warranty/{id}/reopen', [C\WarrantyController::class, 'reopen']);
 
         $r->get('/disposals', [C\DisposalController::class, 'index']);
         $r->post('/disposals', [C\DisposalController::class, 'store']);
@@ -114,6 +115,10 @@ final class App
         $r->post('/disposals/{id}/reject', [C\DisposalController::class, 'reject']);
         $r->post('/disposals/{id}/destroy', [C\DisposalController::class, 'destroy']);
         $r->post('/disposals/site', [C\DisposalController::class, 'site']);
+        $r->post('/disposals/load-batch', [C\DisposalController::class, 'loadBatch']);
+        $r->post('/disposals/arrive-batch', [C\DisposalController::class, 'arriveBatch']);
+        $r->post('/disposals/unload-batch', [C\DisposalController::class, 'unloadBatch']);
+        $r->get('/disposals/fit', [C\DisposalController::class, 'fit']);
         $r->post('/disposals/{id}/load', [C\DisposalController::class, 'load']);
         $r->post('/disposals/{id}/undo', [C\DisposalController::class, 'undo']);
 

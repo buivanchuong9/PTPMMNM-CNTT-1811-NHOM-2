@@ -121,6 +121,11 @@ final class WarrantyController extends Controller
             $label[$r->str('result')] ?? 'Đã lưu kết quả.', '/warranty');
     }
 
+    public function reopen(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(fn() => $this->warranty->reopen($user, (int)$p['id']), 'Đã thu lại kết quả, phiếu quay về «Đang giữ».', '/warranty?tab=TIEP_NHAN');
+    }
+
     public function handBack(Request $r, array $p, ?User $user): Response
     {
         return $this->act(fn() => $this->warranty->handBack($user, (int)$p['id']), 'Đã trả hàng cho khách.', '/warranty?tab=WAITING');
