@@ -53,6 +53,8 @@ final class DemoSeed
         $n = 0;
         foreach (self::WARRANTY_MONTHS as $sku => $months) {
             $n += $db->exec('UPDATE mat_hang SET bao_hanh_thang = ? WHERE ma_hang = ? AND bao_hanh_thang = 0', [$months, $sku]);
+            // bảo hành tính theo lô (SaleCodeService đọc lo_hang): lô chưa đặt thì theo mặt hàng
+            $db->exec('UPDATE lo_hang b JOIN mat_hang i ON i.id = b.mat_hang_id SET b.bao_hanh_thang = i.bao_hanh_thang WHERE i.ma_hang = ? AND b.bao_hanh_thang = 0 AND i.bao_hanh_thang > 0', [$sku]);
         }
         return $n;
     }
@@ -61,6 +63,70 @@ final class DemoSeed
      * Phiếu xuất đã ghi sổ từ trước khi có mã bán hàng: sinh «mã lô hàng» + «mã món hàng» cho hàng có bảo hành (ngày mua = ngày xác nhận phiếu).
      * Bỏ qua phiếu đã có mã và phiếu đã bị điều chỉnh đảo. Chạy lại an toàn. @return int số chiếc đã sinh mã
      */
+    /**
+     * Phiếu bảo hành mẫu cho kho bảo hành còn trống: nhận theo mã lô hàng + mã món hàng của các chiếc đã bán (đủ các trạng thái:
+     * đang giữ, đã sửa, đổi mới, từ chối vì hết hạn, đã trả khách). Đi qua WarrantyService nên đúng quy tắc nghiệp vụ. Chạy lại an toàn. @return int số phiếu tạo
+     */
+    public static function backfillWarrantyTickets(Db $db): int
+    {
+        if ((int)$db->value('SELECT COUNT(*) FROM bao_hanh') > 0 || !(int)$db->value('SELECT COUNT(*) FROM san_pham_ban')) {
+            return 0;
+        }
+        $c = new Container();
+        $c->set(Db::class, $db);
+        $svc = $c->get(\StockFlow\Service\WarrantyService::class);
+        $managers = [];   // admin không xử lý bảo hành: dùng quản lý của đúng kho đã bán hàng
+        foreach ($db->all("SELECT id, ten_dang_nhap, ho_ten, kho_id FROM nguoi_dung WHERE vai_tro = 'MANAGER' AND hoat_dong AND kho_id IS NOT NULL") as $m) {
+            $managers[(int)$m['kho_id']] ??= new User((int)$m['id'], $m['ten_dang_nhap'], $m['ho_ten'], AccountRole::Manager, (int)$m['kho_id']);
+        }
+        $today = gmdate('Y-m-d');
+        $pick = fn(string $cond, int $limit) => $db->all("SELECT s.ma_lo, s.ma_mon, s.kho_id FROM san_pham_ban s WHERE s.da_huy = 0 AND $cond
+            AND NOT EXISTS (SELECT 1 FROM bao_hanh b WHERE b.san_pham_ban_id = s.id) AND s.id = (SELECT MIN(x.id) FROM san_pham_ban x WHERE x.phieu_nhap_xuat_id = s.phieu_nhap_xuat_id AND x.mat_hang_id = s.mat_hang_id)
+            ORDER BY s.id DESC LIMIT $limit", [$today]);
+        $valid = $pick('s.het_han >= ?', 8);
+        $expired = $pick('s.het_han < ?', 1);
+        $cases = [   // [trạng thái, khách, điện thoại, lỗi, ghi chú kết quả]
+            ['TIEP_NHAN', 'Nguyễn Văn Hùng', '0903 456 781', 'Không lên nguồn sau khi cắm sạc', ''],
+            ['TIEP_NHAN', 'Trần Thị Mai', '0912 334 556', 'Loa rè, mất tiếng bên phải', ''],
+            ['TIEP_NHAN', 'Công ty TNHH Minh Phát', '0283 822 1144', 'Pin chai, sạc không vào', ''],
+            ['DA_SUA', 'Lê Quốc Bảo', '0987 123 450', 'Cổng sạc lỏng, mất kết nối', 'Đã thay cổng sạc, kiểm tra hoạt động tốt'],
+            ['DA_SUA', 'Phạm Thị Thu', '0935 778 902', 'Màn hình chớp tắt', 'Đã cập nhật phần mềm, hết lỗi'],
+            ['DOI_MOI', 'Võ Minh Tuấn', '0977 210 365', 'Hỏng nguồn do lỗi nhà sản xuất', 'Lỗi nhà sản xuất, đổi mới cho khách'],
+            ['DA_TRA', 'Đặng Hoàng Nam', '0908 665 421', 'Tai nghe một bên không có tiếng', 'Đã thay driver'],
+            ['DA_TRA', 'Bùi Thị Lan', '0961 889 007', 'Dây cáp đứt đầu cắm', 'Đã bấm lại đầu cắm'],
+        ];
+        $n = 0;
+        foreach ($cases as $i => [$state, $name, $phone, $defect, $note]) {
+            $u = $valid[$i] ?? null;
+            if (!$u) {
+                break;
+            }
+            if (!($mgr = $managers[(int)$u['kho_id']] ?? null)) {
+                continue;
+            }
+            try {
+                $id = $svc->receiveByCode($mgr, (int)$u['kho_id'], $u['ma_lo'], $u['ma_mon'], $name, $phone, '', $defect, gmdate('Y-m-d', strtotime('-' . (8 - $i) . ' days')), gmdate('Y-m-d', strtotime('+' . (1 + $i) . ' days')));
+                if ($state !== 'TIEP_NHAN') {
+                    $svc->resolve($mgr, $id, $state === 'DA_TRA' ? 'DA_SUA' : $state, $note);
+                }
+                if ($state === 'DA_TRA') {
+                    $svc->handBack($mgr, $id);
+                }
+                $n++;
+            } catch (\StockFlow\Domain\DomainError) {   // thiếu nhà cung cấp / hết tồn để đổi mới: bỏ qua ca này
+            }
+        }
+        if (($e = $expired[0] ?? null) && ($mgr = $managers[(int)$e['kho_id']] ?? null)) {   // hàng hết hạn bảo hành ⇒ từ chối
+            try {
+                $id = $svc->receiveByCode($mgr, (int)$e['kho_id'], $e['ma_lo'], $e['ma_mon'], 'Hoàng Gia Bảo', '0918 552 036', '', 'Hỏng sau thời gian dài sử dụng');
+                $svc->resolve($mgr, $id, 'TU_CHOI', 'Đã hết thời hạn bảo hành');
+                $n++;
+            } catch (\StockFlow\Domain\DomainError) {
+            }
+        }
+        return $n;
+    }
+
     public static function backfillSaleCodes(Db $db): int
     {
         $c = new Container();

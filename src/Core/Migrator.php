@@ -117,6 +117,10 @@ final class Migrator
         ['mat_hang', 'bao_hanh_thang', 'integer NOT NULL DEFAULT 0'],
         ['lo_hang', 'bao_hanh_thang', 'integer NOT NULL DEFAULT 0'],   // thời hạn bảo hành (tháng) của từng lô hàng; lô mới lấy mặc định từ mặt hàng
         ['bao_hanh', 'san_pham_ban_id', 'bigint NULL'],   // phiếu bảo hành nhận theo mã bán hàng (san_pham_ban)
+        ['bao_hanh', 'ma_lo', 'varchar(20) NULL'],   // phiếu nhận CẢ LÔ (chỉ nhập mã lô hàng): so_luong = số chiếc trong lô, san_pham_ban_id để trống
+        ['bao_hanh', 'ngay_nhan', 'date NULL'],   // ngày khách mang hàng đến (mặc định hôm nay)
+        ['bao_hanh', 'ngay_hen_tra', 'date NULL'],   // ngày hẹn trả khách (ước lượng)
+        ['bao_hanh', 'khach_dia_chi', "varchar(255) NOT NULL DEFAULT ''"],
         ['phieu_nhap_xuat', 'cap_lai_cho_id', 'integer NULL'],
         ['giao_hang', 'thanh_toan', "varchar(6) NOT NULL DEFAULT 'DA_TT'"],
         ['giao_hang', 'phuong_thuc_tt', "varchar(12) NOT NULL DEFAULT ''"],

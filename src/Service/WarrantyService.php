@@ -130,6 +130,91 @@ final class WarrantyService
         });
     }
 
+    /**
+     * Nhận bảo hành THEO MÃ (form nhận hàng): chỉ nhập mã lô hàng ⇒ bảo hành CẢ LÔ (mọi chiếc của dòng phiếu bán đó chưa có phiếu bảo hành đang mở);
+     * nhập mã món hàng ⇒ bảo hành đúng chiếc đó. Mặt hàng, số lượng, ngày mua, hạn bảo hành đều lấy theo mã. Ngày nhận mặc định hôm nay, ngày hẹn trả là ước lượng.
+     * @return int id phiếu bảo hành
+     */
+    public function receiveByCode(User $user, int $warehouseId, string $lotCode, string $itemCode, string $customer, string $phone, string $address, string $defect, ?string $receivedOn = null, ?string $dueOn = null): int
+    {
+        $this->auth->require($user, $warehouseId, Permission::XuLyBaoHanh);
+        $customer = trim($customer);
+        $phone = trim($phone);
+        $address = trim($address);
+        $defect = trim($defect);
+        if ($customer === '' || mb_strlen($customer) > 120) {
+            throw new DomainError('Nhập tên khách hàng (tối đa 120 ký tự)');
+        }
+        if (!preg_match('/^[0-9 .+-]{8,20}$/', $phone)) {
+            throw new DomainError('Nhập số điện thoại khách để liên hệ khi trả hàng (8–20 chữ số)');
+        }
+        if (mb_strlen($address) > 255) {
+            throw new DomainError('Địa chỉ khách tối đa 255 ký tự');
+        }
+        if ($defect === '' || mb_strlen($defect) > 255) {
+            throw new DomainError('Ghi tình trạng lỗi của hàng (tối đa 255 ký tự)');
+        }
+        $today = StockQuery::today();
+        $receivedOn = $receivedOn === null || $receivedOn === '' ? $today : $receivedOn;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $receivedOn) || $receivedOn > $today) {
+            throw new DomainError('Ngày nhận bảo hành không hợp lệ (không được là ngày trong tương lai)');
+        }
+        if ($dueOn !== null && $dueOn !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueOn) || $dueOn < $receivedOn || $dueOn > date('Y-m-d', strtotime($receivedOn . ' +365 days')))) {
+            throw new DomainError('Ngày hẹn trả phải từ ngày nhận trở đi (tối đa 1 năm)');
+        }
+        $dueOn = $dueOn === '' ? null : $dueOn;
+        $lotCode = SaleCodeService::clean($lotCode);
+        $itemCode = SaleCodeService::clean($itemCode);
+        if ($lotCode === '' && $itemCode === '') {
+            throw new DomainError('Nhập mã lô hàng (bảo hành cả lô) hoặc mã món hàng (bảo hành một chiếc)');
+        }
+        if ($itemCode !== '') {   // một chiếc
+            $unit = $this->saleCodes->find($lotCode, $itemCode) ?? throw new DomainError('Mã món hàng không khớp với chiếc nào đã bán — kiểm tra lại mã trên phiếu bán');
+            $lotCode = (string)$unit['ma_lo'];
+            $units = [$unit];
+        } else {   // cả lô
+            $units = $this->saleCodes->unitsOfLot($lotCode, $warehouseId);
+            if (!$units) {
+                throw new DomainError('Mã lô hàng không khớp với lô nào đã bán ở kho này, hoặc mọi chiếc trong lô đang có phiếu bảo hành');
+            }
+        }
+        $first = $units[0];
+        if ((int)$first['da_huy']) {
+            throw new DomainError('Mã này thuộc phiếu bán đã bị điều chỉnh đảo — không còn hiệu lực');
+        }
+        if ((int)$first['kho_id'] !== $warehouseId) {
+            throw new DomainError('Hàng này được bán từ kho ' . ($first['wh_code'] ?? '') . ' — nhận bảo hành ở kho đã bán hàng');
+        }
+        if ($this->db->value("SELECT 1 FROM bao_hanh WHERE ma_lo = ? AND san_pham_ban_id IS NULL AND trang_thai <> 'DA_TRA' LIMIT 1", [$lotCode])) {
+            throw new DomainError('Lô ' . $lotCode . ' đang có phiếu bảo hành cả lô chưa trả khách');
+        }
+        if ($itemCode !== '' && $first['dang_bao_hanh']) {
+            throw new DomainError('Chiếc này đang có phiếu bảo hành ' . $first['dang_bao_hanh'] . ' chưa trả khách');
+        }
+        $itemId = (int)$first['mat_hang_id'];
+        $item = $this->db->one('SELECT ma_hang, ten FROM mat_hang WHERE id = ?', [$itemId]) ?? throw new DomainError('Mặt hàng không tồn tại');
+        $makers = array_column($this->db->all('SELECT p.ten FROM mat_hang_nha_cung_cap m JOIN doi_tac p ON p.id = m.doi_tac_id WHERE m.mat_hang_id = ? ORDER BY p.ten', [$itemId]), 'ten');
+        if (!$makers) {
+            throw new DomainError("{$item['ten']} chưa có thông tin nhà sản xuất / nhà cung cấp — bổ sung ở Hàng hoá trước khi tạo phiếu bảo hành");
+        }
+        $maker = mb_substr(implode(', ', $makers), 0, 255);
+        $whole = $itemCode === '';
+        $qty = count($units);
+        return $this->db->transaction(function () use ($user, $warehouseId, $itemId, $qty, $customer, $phone, $address, $defect, $receivedOn, $dueOn, $first, $item, $maker, $whole, $lotCode) {
+            if (!$this->db->value('SELECT 1 FROM kho WHERE id = ? AND hoat_dong', [$warehouseId])) {
+                throw new DomainError('Kho không tồn tại hoặc đã ngừng hoạt động');
+            }
+            $seq = $this->db->nextSequence('warranty');
+            $id = $this->db->insert(
+                'INSERT INTO bao_hanh (ma, kho_id, mat_hang_id, so_luong, khach_ten, khach_sdt, khach_dia_chi, ngay_mua, het_han, con_han, loi, nguoi_lap_id, phieu_mua_id, nha_san_xuat, san_pham_ban_id, ma_lo, ngay_nhan, ngay_hen_tra) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [sprintf('BH-%s-%05d', gmdate('ymd'), $seq), $warehouseId, $itemId, $qty, $customer, $phone, $address, $first['ngay_mua'], $first['het_han'], (int)($first['het_han'] >= $receivedOn),
+                 $defect, $user->id, (int)$first['phieu_nhap_xuat_id'], $maker, $whole ? null : (int)$first['id'], $lotCode, $receivedOn, $dueOn]
+            );
+            $this->audit->record($user->id, 'warranty.receive', 'warranty', $id, $item['ma_hang'] . ' × ' . $qty . ($whole ? ' (cả lô ' . $lotCode . ')' : ' (' . $first['ma_mon'] . ')') . ' · ' . $customer);
+            return $id;
+        });
+    }
+
     public function find(int $id): array
     {
         return $this->db->one(self::SELECT . ' WHERE b.id = ?', [$id]) ?? throw new NotFound('Không tìm thấy phiếu bảo hành');
@@ -156,8 +241,8 @@ final class WarrantyService
             $args[] = $tab;
         }
         if (($q = mb_strtolower(trim($q))) !== '') {
-            $where .= ' AND (LOWER(b.ma) LIKE ? OR LOWER(b.khach_ten) LIKE ? OR b.khach_sdt LIKE ? OR LOWER(i.ten) LIKE ? OR LOWER(i.ma_hang) LIKE ?)';
-            array_push($args, "%$q%", "%$q%", "%$q%", "%$q%", "%$q%");
+            $where .= ' AND (LOWER(b.ma) LIKE ? OR LOWER(b.khach_ten) LIKE ? OR b.khach_sdt LIKE ? OR LOWER(i.ten) LIKE ? OR LOWER(i.ma_hang) LIKE ? OR LOWER(b.ma_lo) LIKE ? OR LOWER(sp.ma_mon) LIKE ?)';
+            array_push($args, "%$q%", "%$q%", "%$q%", "%$q%", "%$q%", "%$q%", "%$q%");
         }
         return $this->db->all(self::SELECT . " WHERE $where ORDER BY b.id DESC LIMIT 500", $args);
     }

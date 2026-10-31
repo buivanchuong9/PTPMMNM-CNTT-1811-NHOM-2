@@ -9,7 +9,6 @@ use StockFlow\Core\Response;
 use StockFlow\Core\Session;
 use StockFlow\Core\View;
 use StockFlow\Domain\Permission;
-use StockFlow\Domain\StockRules;
 use StockFlow\Domain\User;
 use StockFlow\Service\Authorizer;
 use StockFlow\Service\SaleCodeService;
@@ -64,21 +63,40 @@ final class WarrantyController extends Controller
     public function lookup(Request $r, array $p, ?User $user): Response
     {
         $this->need($user, Permission::XemBaoHanh);
-        $u = $this->saleCodes->find($r->str('lot'), $r->str('item'));
+        $whole = $r->str('item') === '' && $r->str('lot') !== '';   // chỉ có mã lô ⇒ bảo hành cả lô
+        $units = $whole ? $this->saleCodes->unitsOfLot($r->str('lot'), (int)$user->warehouseId) : [];
+        $u = $whole ? ($units[0] ?? null) : $this->saleCodes->find($r->str('lot'), $r->str('item'));
+        if ($u && $whole) {
+            $u['con_han'] = $u['het_han'] >= StockQuery::today() ? 1 : 0;
+            $u['dang_bao_hanh'] = null;
+        }
         $body = ['found' => false];
         if ($u && in_array((int)$u['kho_id'], $this->auth->visibleWarehouseIds($user), true)) {
-            $body = ['found' => true, 'item' => $u['ma_hang'] . ' — ' . $u['item_name'], 'lot' => $u['so_lo'] === 'NOLOT' ? '' : $u['so_lo'], 'wh' => $u['wh_code'],
+            $body = ['found' => true, 'whole' => $whole, 'count' => $whole ? count($units) : 1, 'code' => $u['ma_lo'] . ($whole ? '' : ' · ' . $u['ma_mon']),
+                'item' => $u['ma_hang'] . ' — ' . $u['item_name'], 'lot' => $u['so_lo'] === 'NOLOT' ? '' : $u['so_lo'], 'wh' => $u['wh_code'],
                 'voucher' => $u['voucher_code'], 'customer' => (string)$u['customer'], 'bought' => $u['ngay_mua'], 'months' => (int)$u['bao_hanh_thang'], 'expiry' => $u['het_han'],
                 'valid' => (bool)$u['con_han'] && !(int)$u['da_huy'], 'void' => (bool)(int)$u['da_huy'], 'open' => $u['dang_bao_hanh']];
         }
         return new Response(json_encode($body, JSON_UNESCAPED_UNICODE), 200, ['Content-Type' => 'application/json; charset=utf-8']);
     }
 
+    /**
+     * Gợi ý mã khi gõ: field=lot ⇒ theo mã lô đang gõ (chưa có mã món thì liệt kê lô; có rồi thì liệt kê chiếc); field=item ⇒ chiếc theo mã món đang gõ,
+     * kèm mã lô tương ứng để điền luôn ô còn lại.
+     */
+    public function suggest(Request $r, array $p, ?User $user): Response
+    {
+        $this->need($user, Permission::XemBaoHanh);
+        $wh = $user->warehouseId !== null ? [(int)$user->warehouseId] : $this->auth->visibleWarehouseIds($user);   // nhận bảo hành ở đúng kho đã bán hàng
+        $body = $this->saleCodes->suggest($r->str('lot'), $r->str('item'), $wh, $r->str('field') === 'item');
+        return new Response(json_encode($body, JSON_UNESCAPED_UNICODE), 200, ['Content-Type' => 'application/json; charset=utf-8']);
+    }
+
     public function store(Request $r, array $p, ?User $user): Response
     {
         return $this->act(function () use ($r, $user) {
-            $this->warranty->receive($user, (int)$user->warehouseId, (int)$r->int('item_id'), StockRules::parseQty($r->str('qty')) ?? 0,
-                $r->str('customer'), $r->str('phone'), $r->str('phieu_mua'), $r->str('defect'), $r->str('lot_code'), $r->str('item_code'));
+            $this->warranty->receiveByCode($user, (int)$user->warehouseId, $r->str('lot_code'), $r->str('item_code'), $r->str('customer'), $r->str('phone'),
+                $r->str('address'), $r->str('defect'), $r->str('received_on'), $r->str('due_on'));
         }, 'Đã nhận hàng vào kho bảo hành.', '/warranty');
     }
 
