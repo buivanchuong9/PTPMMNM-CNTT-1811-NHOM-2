@@ -32,8 +32,9 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
   <?php foreach ($rows as $b): $st = W::STATUS[$b['trang_thai']]; ?>
     <tr data-tone="<?= $b['trang_thai'] === 'TIEP_NHAN' ? 'warn' : ($b['trang_thai'] === 'TU_CHOI' ? 'bad' : 'ok') ?>">
       <td class="nw"><b><?= e($b['ma']) ?></b><br><small class="muted"><?= e(dt_short($b['ngay_tao'])) ?> · <?= e($b['wh_code']) ?></small></td>
-      <td><?= e($b['item_name']) ?> <small class="muted">× <?= n($b['so_luong']) ?> <?= e($b['unit']) ?></small><br><small class="muted"><?= e($b['ma_hang']) ?></small></td>
-      <td><?= e($b['khach_ten']) ?><?= $b['khach_sdt'] !== '' ? '<br><small class="muted">' . e($b['khach_sdt']) . '</small>' : '' ?></td>
+      <td><?= e($b['item_name']) ?> <small class="muted">× <?= n($b['so_luong']) ?> <?= e($b['unit']) ?></small><br><small class="muted"><?= e($b['ma_hang']) ?><?= $b['sale_item'] ? ' · ' . e($b['sale_item']) : ($b['ma_lo'] ? ' · cả lô ' . e($b['ma_lo']) : '') ?></small></td>
+      <td><?= e($b['khach_ten']) ?><?= $b['khach_sdt'] !== '' ? '<br><small class="muted">' . e($b['khach_sdt']) . '</small>' : '' ?>
+        <?php if ($b['ngay_nhan']): ?><br><small class="muted">Nhận <?= e(dt($b['ngay_nhan'], false)) ?><?php if ($b['ngay_hen_tra']): $late = $b['trang_thai'] === 'TIEP_NHAN' && $b['ngay_hen_tra'] < $today; ?> · hẹn trả <span<?= $late ? ' class="neg"' : '' ?>><?= e(dt($b['ngay_hen_tra'], false)) ?></span><?= $late ? ' (quá hẹn)' : '' ?><?php endif; ?></small><?php endif; ?></td>
       <td class="nw"><?= e(dt($b['het_han'], false)) ?><br><?= (int)$b['con_han'] ? '<span class="tag tag-ok">Còn hạn</span>' : '<span class="tag tag-danger">Hết hạn</span>' ?></td>
       <td class="wrap"><?= e($b['loi']) ?></td>
       <td class="wrap">
@@ -68,20 +69,20 @@ $tabs = ['TIEP_NHAN' => ['Đang giữ', 'warn'], 'WAITING' => ['Chờ trả khá
     <?php if (!$items): ?><p class="muted">Chưa có mặt hàng nào được đặt thời hạn bảo hành. Quản trị viên đặt ở <a href="/inventory">Hàng hoá → Sửa</a>.</p><?php else: ?>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Mã lô hàng<input name="lot_code" maxlength="20" autocomplete="off" spellcheck="false" placeholder="LB-XXXXXXXX" data-sale-lot></label>
-      <label>Mã món hàng<input name="item_code" maxlength="20" autocomplete="off" spellcheck="false" placeholder="SP-XXXXXXXX" data-sale-item></label>
+      <label>Mã món hàng (bỏ trống = cả lô)<input name="item_code" maxlength="20" autocomplete="off" spellcheck="false" placeholder="SP-XXXXXXXX" data-sale-item></label>
     </div>
-    <p class="sale-lookup muted small" data-sale-info>Nhập cả hai mã in trên phiếu bán để tự điền thông tin và hạn bảo hành. Hàng bán trước khi có mã: chọn mặt hàng và nhập mã phiếu mua bên dưới.</p>
-    <label>Mặt hàng<select name="item_id" required data-sale-need><option value="">Chọn mặt hàng…</option><?php foreach ($items as $i): ?><option value="<?= (int)$i['id'] ?>"><?= e($i['ma_hang'] . ' — ' . $i['ten'] . ' (BH ' . $i['bao_hanh_thang'] . ' tháng)') ?></option><?php endforeach; ?></select></label>
-    <div class="row-3" style="grid-template-columns:1fr 1fr">
-      <label>Số lượng<input type="number" name="qty" min="1" max="1000" value="1" required></label>
-      <label>Mã phiếu mua (chỉ khi không có mã)<input name="phieu_mua" maxlength="30" autocomplete="off" placeholder="vd: PX-261030-000010" data-sale-need></label>
-    </div>
+    <p class="sale-lookup muted small" data-sale-info>Chỉ nhập mã lô hàng: nhận bảo hành cả lô. Nhập thêm mã món hàng: chỉ bảo hành đúng chiếc đó. Mặt hàng, số lượng và hạn bảo hành tự lấy theo mã.</p>
     <div class="row-3" style="grid-template-columns:1fr 1fr">
       <label>Tên khách<input name="customer" maxlength="120" required></label>
-      <label>Điện thoại<input name="phone" maxlength="20" inputmode="tel"></label>
+      <label>Điện thoại<input name="phone" maxlength="20" inputmode="tel" required></label>
+    </div>
+    <label>Địa chỉ khách <span class="muted">(không bắt buộc)</span><input name="address" maxlength="255"></label>
+    <div class="row-3" style="grid-template-columns:1fr 1fr">
+      <label>Ngày nhận bảo hành<input type="date" name="received_on" value="<?= e($today) ?>" max="<?= e($today) ?>" required data-warranty-from></label>
+      <label>Hẹn trả khách (ước lượng)<input type="date" name="due_on" value="<?= e(date('Y-m-d', strtotime($today . ' +7 days'))) ?>" min="<?= e($today) ?>" data-warranty-due></label>
     </div>
     <label>Tình trạng lỗi<input name="defect" maxlength="255" required placeholder="Không lên nguồn, vỡ màn hình…"></label>
-    <p class="muted small">Ngày mua lấy theo phiếu mua; mặt hàng phải có nhà sản xuất / nhà cung cấp. Quá hạn bảo hành vẫn nhận được, nhưng không đổi mới miễn phí. Hàng của khách không tính vào tồn kho.</p>
+    <p class="muted small">Mặt hàng phải có nhà sản xuất / nhà cung cấp. Quá hạn bảo hành vẫn nhận được, nhưng không đổi mới miễn phí. Hàng của khách không tính vào tồn kho.</p>
     <div class="actions"><button type="submit"><?= icon('check') ?>Nhận hàng</button><button type="button" class="btn-ghost" data-dialog-close>Huỷ</button></div>
     <?php endif; ?>
   </form>

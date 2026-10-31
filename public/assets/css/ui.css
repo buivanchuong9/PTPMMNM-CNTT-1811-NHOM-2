@@ -187,6 +187,20 @@ td.row-actions button, td.row-actions .btn { width: 100%; }
 
 .kpis { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
+/* Tổng quan kho: bốn chỉ số gộp thành một ô dài, ngăn nhau bằng vạch dọc; icon bên trái, số và nhãn xếp dọc bên phải */
+.kpis.kpis-strip { gap: 0; padding: 4px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.kpis-strip .kpi { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; align-items: center; padding: 14px 22px; border: 0; border-radius: 0; background: none; box-shadow: none; animation: none; }
+.kpis-strip .kpi + .kpi { border-left: 1px solid var(--line); }
+.kpis-strip .kpi:hover { transform: none; box-shadow: none; background: var(--bg); }
+.kpis-strip .kpi-ic { grid-row: 1 / span 2; margin: 0; }
+.kpis-strip .kpi b { font-size: 1.6rem; align-self: end; }
+.kpis-strip .kpi > span:last-child { align-self: start; font-size: .85rem; }
+@media (max-width: 900px) {
+  .kpis.kpis-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis-strip .kpi:nth-child(odd) { border-left: 0; }
+  .kpis-strip .kpi:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+
 /* lọc tự động: làm mờ nhẹ kết quả cũ trong lúc chờ kết quả mới */
 [data-live] { transition: opacity .15s ease; }
 .is-filtering [data-live="results"] { opacity: .5; pointer-events: none; }
@@ -212,6 +226,12 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 .app-shell main { height: 100%; overflow-x: auto; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-right: calc(clamp(14px, 2.2vw, 30px) + 14px); }
 .app-shell main::-webkit-scrollbar { display: none; }
 @media (min-width: 1001px) { .app-shell .sidebar { position: static; height: calc(100% - 28px); } }   /* 28px = lề trên + dưới của thẻ menu */
+@media (min-width: 1001px) { .app-shell .shell { position: relative; grid-template-columns: var(--sb-w, 264px) minmax(0, 1fr); } }   /* --sb-w do JS đặt khi kéo mép menu */
+.side-grip { position: absolute; z-index: 6; width: 10px; cursor: col-resize; touch-action: none; }
+.side-grip[hidden] { display: none; }
+.side-grip::after { content: ""; position: absolute; left: 4px; top: 50%; width: 3px; height: 36px; margin-top: -18px; border-radius: 3px; background: var(--brand); opacity: 0; transition: opacity .2s; }
+.side-grip:hover::after, body.side-resizing .side-grip::after { opacity: .7; }
+body.side-resizing { cursor: col-resize; user-select: none; }
 .app-shell .sidebar { scrollbar-width: none; }
 .app-shell .sidebar::-webkit-scrollbar { display: none; }
 
@@ -220,8 +240,22 @@ body.app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex;
 @keyframes truck-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -1.5px; } }
 .truck-bar { position: absolute; z-index: 5; top: 10px; bottom: 10px; right: 3px; width: 26px; display: block; visibility: hidden; touch-action: none; user-select: none; cursor: pointer; }   /* ẩn bằng visibility (không phải display) để vẫn đo được chiều cao đường chạy */
 .truck-bar.on { visibility: visible; }
-.truck-road { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 2px dashed var(--line); transform: translateX(-50%); opacity: .9; transition: border-color .2s; }
+/* Gợi ý mã lô / mã món hàng ở form nhận bảo hành */
+label.has-suggest { position: relative; }
+.sale-suggest { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 2px 0 0; padding: 4px; list-style: none; max-height: 260px; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-lg); font-weight: 400; }
+.sale-suggest li { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: baseline; padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.sale-suggest li:hover, .sale-suggest li.on { background: var(--brand-50); }
+.sale-suggest .code { font-family: Consolas, 'Courier New', monospace; letter-spacing: .03em; }
+.sale-suggest span { color: var(--muted); font-family: Consolas, 'Courier New', monospace; font-size: .85rem; justify-self: end; }
+.sale-suggest small { grid-column: 1 / -1; color: var(--muted); }
+.truck-bar { opacity: .3; transition: opacity .35s ease; }   /* mờ khi không dùng; hiện rõ khi cuộn / rê chuột / kéo */
+.truck-bar.awake, .truck-bar:hover, .truck-bar.drag { opacity: 1; }
+.truck-road { position: absolute; left: 50%; top: 0; bottom: 16px; border-left: 2px dashed var(--line); transform: translateX(-50%); opacity: .9; transition: border-color .2s; }
 .truck-bar:hover .truck-road, .truck-bar.drag .truck-road { border-color: var(--brand); }
+.truck-fill { position: absolute; left: 50%; top: 0; width: 2px; height: 0; margin-left: -1px; background: var(--brand); border-radius: 2px; pointer-events: none; }   /* đoạn đường xe đã chạy */
+.truck-flag { position: absolute; left: 50%; bottom: 0; width: 16px; height: 16px; padding: 0; margin-left: -8px; border: 0; background: none; color: var(--muted, #8a93a6); cursor: pointer; transition: color .2s, transform .2s; }
+.truck-flag svg { width: 100%; height: 100%; display: block; }
+.truck-flag:hover, .truck-bar.end .truck-flag { color: var(--brand); transform: scale(1.15); }
 .truck-thumb { position: absolute; left: 0; top: 0; width: 26px; height: 40px; cursor: grab; will-change: transform; }
 .truck-bar.drag .truck-thumb { cursor: grabbing; }
 .truck-thumb svg { position: absolute; left: 50%; top: 50%; width: 38px; height: 22px; overflow: visible; transform: translate(-50%, -50%) rotate(90deg); transition: transform .28s ease; filter: drop-shadow(0 2px 2px rgba(17, 24, 39, .28)); }

@@ -100,6 +100,7 @@ final class App
 
         $r->get('/warranty', [C\WarrantyController::class, 'index']);
         $r->get('/warranty/lookup', [C\WarrantyController::class, 'lookup']);
+        $r->get('/warranty/suggest', [C\WarrantyController::class, 'suggest']);
         $r->post('/warranty', [C\WarrantyController::class, 'store']);
         $r->post('/warranty/{id}/resolve', [C\WarrantyController::class, 'resolve']);
         $r->post('/warranty/{id}/return', [C\WarrantyController::class, 'handBack']);

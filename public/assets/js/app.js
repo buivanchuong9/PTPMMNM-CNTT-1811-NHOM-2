@@ -1416,21 +1416,28 @@
     const bar = document.createElement('div');
     bar.className = 'truck-bar';
     bar.setAttribute('aria-hidden', 'true');
-    bar.innerHTML = '<span class="truck-road"></span><div class="truck-thumb"><svg viewBox="0 0 36 20" fill="none">'
+    bar.innerHTML = '<span class="truck-road"></span><span class="truck-fill"></span>'
+      + '<button type="button" class="truck-flag" tabindex="-1" title="Xuống cuối trang"><svg viewBox="0 0 12 16"><path d="M2 15V1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M2.6 2h8L8.6 5l2 3h-8z" fill="currentColor"/></svg></button>'
+      + '<div class="truck-thumb" title="Bấm để về đầu trang"><svg viewBox="0 0 36 20" fill="none">'
       + '<rect x="1" y="2.5" width="21" height="11.5" rx="2" fill="var(--brand)"/><rect x="4" y="5" width="15" height="1.6" rx=".8" fill="#fff" opacity=".4"/><rect x="4" y="8.4" width="15" height="1.6" rx=".8" fill="#fff" opacity=".4"/>'
       + '<path d="M22.6 6h6.5l4.9 5v3H22.6z" fill="var(--brand-600, #b32433)"/><path d="M24.6 7.4h3.9l2.7 2.8h-6.6z" fill="#fff" opacity=".85"/>'
       + '<g class="truck-wh"><circle cx="8" cy="15.6" r="3.1" fill="#2b2f3a"/><path d="M8 13.4v4.4M5.8 15.6h4.4" stroke="#cbd2de" stroke-width=".9"/></g>'
       + '<g class="truck-wh"><circle cx="28.5" cy="15.6" r="3.1" fill="#2b2f3a"/><path d="M28.5 13.4v4.4M26.3 15.6h4.4" stroke="#cbd2de" stroke-width=".9"/></g></svg></div>';
     wrap.appendChild(bar);
-    const thumb = bar.querySelector('.truck-thumb');
-    let last = 0, movingTimer = 0, raf = 0, drag = null;
-    const metrics = () => ({ max: scroller.scrollHeight - scroller.clientHeight, free: bar.clientHeight - thumb.offsetHeight });
+    const thumb = bar.querySelector('.truck-thumb'), fill = bar.querySelector('.truck-fill'), flag = bar.querySelector('.truck-flag');
+    let last = 0, movingTimer = 0, awakeTimer = 0, raf = 0, drag = null;
+    const metrics = () => ({ max: scroller.scrollHeight - scroller.clientHeight, free: bar.clientHeight - flag.offsetHeight - thumb.offsetHeight });
+    const wake = () => { bar.classList.add('awake'); clearTimeout(awakeTimer); awakeTimer = setTimeout(() => bar.classList.remove('awake'), 1400); };   // thanh mờ đi khi không dùng
     const place = () => {
       raf = 0;
       const { max, free } = metrics();
       const on = max > 2 && free > 0;
       bar.classList.toggle('on', on);
-      if (on) thumb.style.transform = 'translateY(' + (scroller.scrollTop / max * free) + 'px)';
+      if (!on) return;
+      const y = scroller.scrollTop / max * free;
+      thumb.style.transform = 'translateY(' + y + 'px)';
+      fill.style.height = (y + thumb.offsetHeight / 2) + 'px';
+      bar.classList.toggle('end', scroller.scrollTop >= max - 2);
     };
     const queue = () => { if (!raf) raf = requestAnimationFrame(place); };
     scroller.addEventListener('scroll', () => {
@@ -1440,6 +1447,7 @@
       bar.classList.add('moving');
       clearTimeout(movingTimer);
       movingTimer = setTimeout(() => bar.classList.remove('moving'), 160);
+      wake();
       queue();
     }, { passive: true });
     addEventListener('resize', queue);
@@ -1447,22 +1455,71 @@
     new MutationObserver(queue).observe(scroller, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style', 'open'] });
     thumb.addEventListener('pointerdown', (e) => {
       const m = metrics();
-      drag = { y: e.clientY, top: scroller.scrollTop, max: m.max, free: m.free };
+      drag = { y: e.clientY, top: scroller.scrollTop, max: m.max, free: m.free, moved: false };
       thumb.setPointerCapture(e.pointerId);
       bar.classList.add('drag', 'moving');
       e.preventDefault();
     });
-    thumb.addEventListener('pointermove', (e) => { if (drag && drag.free > 0) scroller.scrollTop = drag.top + (e.clientY - drag.y) / drag.free * drag.max; });
+    thumb.addEventListener('pointermove', (e) => {
+      if (!drag || drag.free <= 0) return;
+      if (Math.abs(e.clientY - drag.y) > 4) drag.moved = true;
+      scroller.scrollTop = drag.top + (e.clientY - drag.y) / drag.free * drag.max;
+    });
     const stop = () => { drag = null; bar.classList.remove('drag'); };
-    thumb.addEventListener('pointerup', stop);
+    thumb.addEventListener('pointerup', () => {                                    // bấm xe (không kéo): về đầu trang
+      if (drag && !drag.moved) scroller.scrollTo({ top: 0, behavior: 'smooth' });
+      stop();
+    });
     thumb.addEventListener('pointercancel', stop);
+    flag.addEventListener('click', () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }));
     bar.addEventListener('pointerdown', (e) => {                                   // bấm lên đường chạy: xe chạy tới chỗ đó
-      if (e.target.closest('.truck-thumb')) return;
+      if (e.target.closest('.truck-thumb, .truck-flag')) return;
       const { max, free } = metrics(), r = bar.getBoundingClientRect();
       if (free > 0) scroller.scrollTo({ top: Math.min(1, Math.max(0, (e.clientY - r.top - thumb.offsetHeight / 2) / free)) * max, behavior: 'smooth' });
     });
     place();
   }
+})();
+
+// Menu trái: kéo mép phải để nới rộng trong khoảng giới hạn (đọc rõ tên mục dài); bấm đúp để về mặc định; nhớ độ rộng
+(() => {
+  const shell = document.querySelector('.app-shell .shell'), side = document.getElementById('sidebar');
+  if (!shell || !side) return;
+  const MIN = 240, MAX = 340, KEY = 'sidebar-w', desktop = matchMedia('(min-width: 1001px)');
+  const clamp = (w) => Math.min(MAX, Math.max(MIN, w));
+  const grip = document.createElement('div');
+  grip.className = 'side-grip';
+  grip.setAttribute('aria-hidden', 'true');
+  grip.title = 'Kéo để chỉnh độ rộng menu (bấm đúp: mặc định)';
+  shell.appendChild(grip);
+  const set = (w) => { if (w) shell.style.setProperty('--sb-w', clamp(w) + 'px'); else shell.style.removeProperty('--sb-w'); place(); };
+  const place = () => {
+    grip.hidden = !desktop.matches;
+    grip.style.left = (side.offsetLeft + side.offsetWidth - 5) + 'px';
+    grip.style.top = side.offsetTop + 'px';
+    grip.style.height = side.offsetHeight + 'px';
+  };
+  try { const w = parseInt(localStorage.getItem(KEY), 10); if (w) shell.style.setProperty('--sb-w', clamp(w) + 'px'); } catch (e) {}
+  let drag = null;
+  grip.addEventListener('pointerdown', (e) => {
+    drag = { x: e.clientX, w: side.offsetWidth };
+    grip.setPointerCapture(e.pointerId);
+    document.body.classList.add('side-resizing');
+    e.preventDefault();
+  });
+  grip.addEventListener('pointermove', (e) => { if (drag) set(drag.w + e.clientX - drag.x); });
+  const stop = () => {
+    if (!drag) return;
+    drag = null;
+    document.body.classList.remove('side-resizing');
+    try { localStorage.setItem(KEY, side.offsetWidth); } catch (e) {}
+  };
+  grip.addEventListener('pointerup', stop);
+  grip.addEventListener('pointercancel', stop);
+  grip.addEventListener('dblclick', () => { set(0); try { localStorage.removeItem(KEY); } catch (e) {} });
+  addEventListener('resize', place);
+  new ResizeObserver(place).observe(side);
+  place();
 })();
 
 // Thêm lô: chọn loại hàng hoá trước thì danh sách mặt hàng chỉ còn hàng thuộc loại đó
@@ -1547,21 +1604,27 @@ document.addEventListener('change', (ev) => {
     const needs = form.querySelectorAll('[data-sale-need]');
     const setNeed = (on) => needs.forEach((n) => { if (n.dataset.wasRequired === undefined) n.dataset.wasRequired = n.required ? '1' : ''; n.required = on && n.dataset.wasRequired === '1'; });
     const l = lot.value.trim(), i = item.value.trim();
-    if (!l || !i) { info.className = 'sale-lookup muted small'; setNeed(true); return; }
+    if (!l && !i) { info.className = 'sale-lookup muted small'; info.textContent = info.dataset.hint || info.textContent; setNeed(true); return; }
+    if (info.dataset.hint === undefined) info.dataset.hint = info.textContent;
     const mine = ++seq;
     info.className = 'sale-lookup muted small'; info.textContent = 'Đang tra mã…';
     try {
       const res = await fetch('/warranty/lookup?lot=' + encodeURIComponent(l) + '&item=' + encodeURIComponent(i), { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
       const d = await res.json();
       if (mine !== seq) return;
-      if (!d.found) { setNeed(true); info.className = 'sale-lookup neg small'; info.textContent = 'Không tìm thấy chiếc nào khớp hai mã này — kiểm tra lại mã trên phiếu bán.'; return; }
+      if (!d.found) { setNeed(true); info.className = 'sale-lookup neg small'; info.textContent = i ? 'Không tìm thấy chiếc nào khớp mã này — kiểm tra lại mã trên phiếu bán.' : 'Không tìm thấy lô này ở kho — hoặc mọi chiếc trong lô đang có phiếu bảo hành.'; return; }
       setNeed(false);
       const state = d.void ? '<b class="neg">Phiếu bán đã bị đảo — mã không còn hiệu lực</b>' : d.open ? '<b class="neg">Đang có phiếu bảo hành ' + esc(d.open) + '</b>' : d.valid ? '<b class="pos">Còn bảo hành</b>' : '<b class="neg">Đã hết hạn bảo hành</b> (vẫn nhận được, không đổi mới miễn phí)';
       info.className = 'sale-lookup small';
-      info.innerHTML = '<b>' + esc(d.item) + '</b>' + (d.lot ? ' · lô ' + esc(d.lot) : '') + ' · kho ' + esc(d.wh) + '<br>Hoá đơn ' + esc(d.voucher) + (d.customer ? ' · ' + esc(d.customer) : '') +
+      info.innerHTML = (d.whole ? '<b>Bảo hành cả lô ' + esc(l) + ' — ' + d.count + ' chiếc</b><br>' : '<b>Bảo hành 1 chiếc</b> · ' + esc(d.code) + '<br>') + esc(d.item) + (d.lot ? ' · lô ' + esc(d.lot) : '') + ' · kho ' + esc(d.wh) + '<br>Hoá đơn ' + esc(d.voucher) + (d.customer ? ' · ' + esc(d.customer) : '') +
         ' · mua ' + fmt(d.bought) + ' · bảo hành ' + d.months + ' tháng, đến ' + fmt(d.expiry) + '<br>' + state;
     } catch (e) { if (mine === seq) { info.className = 'sale-lookup muted small'; info.textContent = 'Không tra được lúc này — thử lại.'; } }
   };
+  document.addEventListener('change', (e) => {   // hẹn trả không được trước ngày nhận
+    if (!e.target.matches || !e.target.matches('[data-warranty-from]')) return;
+    const due = e.target.closest('form').querySelector('[data-warranty-due]');
+    if (due && e.target.value) { due.min = e.target.value; if (due.value && due.value < e.target.value) due.value = e.target.value; }
+  });
   document.addEventListener('input', (e) => {
     if (!e.target.matches || !e.target.matches('[data-sale-lot], [data-sale-item]')) return;
     e.target.value = e.target.value.toUpperCase().replace(/\s+/g, '');
@@ -1569,6 +1632,75 @@ document.addEventListener('change', (ev) => {
     const form = e.target.closest('form');
     timer = setTimeout(() => run(form), 250);
   });
+
+  // Gợi ý mã: gõ / bấm vào ô mã lô ⇒ liệt kê lô (rồi chiếc trong lô đó); gõ ô mã món ⇒ liệt kê chiếc kèm mã lô, chọn là điền cả hai ô.
+  const SEL = '[data-sale-lot], [data-sale-item]';
+  let pop = null, rows = [], act = -1, sugTimer = 0, sugSeq = 0;
+  const closePop = () => { if (pop) { pop.remove(); pop = null; } rows = []; act = -1; };
+  const choose = (row) => {
+    const form = pop && pop.closest('form');
+    if (!form || !row) return;
+    const lot = form.querySelector('[data-sale-lot]'), item = form.querySelector('[data-sale-item]');
+    lot.value = row.lot;
+    if (row.code) { item.value = row.code; closePop(); run(form); item.focus(); return; }
+    closePop();
+    item.value = '';
+    run(form);      // chỉ có mã lô ⇒ nhận bảo hành cả lô
+    item.focus();   // muốn một chiếc thôi: ô mã món hàng tự gợi ý các chiếc trong lô
+  };
+  const paint = () => [...pop.children].forEach((li, i) => li.classList.toggle('on', i === act));
+  const suggest = async (input) => {
+    const form = input.closest('form'), label = input.closest('label'), mine = ++sugSeq;
+    const lot = form.querySelector('[data-sale-lot]'), item = form.querySelector('[data-sale-item]');
+    const field = input === item ? 'item' : 'lot';
+    try {
+      const res = await fetch('/warranty/suggest?field=' + field + '&lot=' + encodeURIComponent(lot.value) + '&item=' + encodeURIComponent(item.value), { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      const d = await res.json();
+      if (mine !== sugSeq || document.activeElement !== input) return;
+      closePop();
+      rows = d.rows.map((r) => ({ ...r, units: d.mode === 'units' }));
+      if (!rows.length) return;
+      pop = document.createElement('ul');
+      pop.className = 'sale-suggest';
+      pop.setAttribute('role', 'listbox');
+      pop.innerHTML = rows.map((r, i) => '<li role="option" data-i="' + i + '">' + (r.units
+        ? '<b class="code">' + esc(field === 'item' ? r.code : r.lot) + '</b><span>' + esc(field === 'item' ? r.lot : r.code) + '</span><small>' + esc(r.sku + ' — ' + r.name) + '</small>'
+        : '<b class="code">' + esc(r.lot) + '</b><span>' + esc(r.n) + ' chiếc</span><small>' + esc(r.sku + ' — ' + r.name + ' · ' + r.voucher) + '</small>') + '</li>').join('');
+      label.classList.add('has-suggest');
+      label.appendChild(pop);
+    } catch (e) { /* không gợi ý được thì thôi, vẫn gõ tay bình thường */ }
+  };
+  document.addEventListener('focusin', (e) => {
+    if (!e.target.matches || !e.target.matches(SEL)) return;
+    clearTimeout(sugTimer);
+    sugTimer = setTimeout(() => suggest(e.target), 120);
+  });
+  document.addEventListener('input', (e) => {
+    if (!e.target.matches || !e.target.matches(SEL)) return;
+    clearTimeout(sugTimer);
+    sugTimer = setTimeout(() => suggest(e.target), 150);
+  });
+  document.addEventListener('focusout', (e) => { if (e.target.matches && e.target.matches(SEL)) setTimeout(() => { if (!document.activeElement || !document.activeElement.matches(SEL)) closePop(); }, 120); });
+  document.addEventListener('mousedown', (e) => {   // mousedown (không phải click) để ô nhập chưa kịp mất focus
+    const li = e.target.closest && e.target.closest('.sale-suggest li');
+    if (!li) return;
+    e.preventDefault();
+    choose(rows[+li.dataset.i]);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!pop || !e.target.matches || !e.target.matches(SEL)) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      act = (act + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+      paint();
+    } else if (e.key === 'Enter' && act >= 0) {
+      e.preventDefault();
+      choose(rows[act]);
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();   // chỉ đóng gợi ý, không đóng hộp thoại
+      closePop();
+    }
+  }, true);
 })();
 
 // Lọc ngay trên trình duyệt cho trang ít dữ liệu, không phân trang (kho & nhân sự, phân quyền).

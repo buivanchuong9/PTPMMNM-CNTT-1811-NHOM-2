@@ -100,6 +100,9 @@ function cmdSeed(array $argv): int
     if ($n = \StockFlow\Seeds\DemoSeed::backfillSaleCodes(connect())) {   // phiếu xuất cũ chưa có mã bảo hành
         echo "✔ Đã sinh mã lô hàng / mã món hàng cho $n chiếc đã bán (hàng có bảo hành)\n";
     }
+    if ($n = \StockFlow\Seeds\DemoSeed::backfillWarrantyTickets(connect())) {   // kho bảo hành còn trống
+        echo "✔ Đã nạp $n phiếu bảo hành mẫu (đang giữ, đã sửa, đổi mới, từ chối, đã trả khách)\n";
+    }
     if ($n = \StockFlow\Seeds\DemoSeed::backfillTransport(connect())) {   // CSDL demo có từ trước khi có tải trọng / bằng lái
         echo "✔ Đã nạp cân nặng, thông số xe và bằng lái tài xế mẫu ($n dòng)
 ";
