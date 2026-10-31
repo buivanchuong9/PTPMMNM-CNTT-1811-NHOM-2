@@ -1,0 +1,141 @@
+/* Bảng màu navy — nạp CUỐI CÙNG (sau erp.css) nên chỉ ghi đè.
+   Navy là màu chính (nút, liên kết, mục đang chọn, thanh trên; menu trái sáng, chỉ nền tối mới là navy). Đỏ chỉ còn cho lỗi, huỷ, số âm và nút nguy hiểm (--danger).
+   Muốn đổi sắc navy: sửa các biến ở đầu file, không cần đụng các file CSS khác. */
+:root {
+  --brand: #3d73c4; --brand-600: #2f5fa8; --brand-700: #254c88; --brand-50: #eaf2fd; --brand-100: #cfe0f7;
+  --navy: #3a6bb8; --navy-2: #172d4b; --navy-line: rgba(255,255,255,.12);
+  --ring: rgba(61,115,196,.24); --glow: rgba(58,107,184,.4);
+  --dark: #3a6bb8;
+}
+:root[data-theme="dark"] {
+  --brand: #4f84d4; --brand-600: #78a3e6; --brand-700: #a3c1ef; --brand-50: rgba(79,132,212,.18); --brand-100: rgba(79,132,212,.36);
+  --navy: #0f1c30; --navy-2: #0b1626; --navy-line: rgba(255,255,255,.08);
+  --ring: rgba(79,132,212,.32); --glow: rgba(0,0,0,.5);
+}
+
+/* ── vòng sáng khi chọn ô, bóng nút: trước đây viết cứng màu đỏ ── */
+:focus-visible, .switch input:focus-visible + span { outline-color: var(--brand); }
+input:focus, select:focus, textarea:focus, .pick-box > input:focus { box-shadow: 0 0 0 3px var(--ring); }
+.topsearch:focus-within { box-shadow: 0 0 0 3px var(--ring); }
+button, .btn { box-shadow: 0 1px 2px var(--glow); }
+button:hover, .btn:hover { box-shadow: 0 4px 12px -4px var(--glow); }
+.pg.on { box-shadow: none; }
+.kpi:hover { border-color: var(--brand-100); box-shadow: 0 10px 28px -16px var(--glow); }
+.login .login-form button { box-shadow: 0 1px 2px var(--glow); }
+.login .login-form button:hover { box-shadow: 0 4px 12px var(--glow); }
+.dlg-confirm { --cf-ring: var(--ring); }
+:root[data-theme="dark"] .kpi:hover, :root[data-theme="dark"] .sidebar nav a.active { box-shadow: none; }
+:root[data-theme="dark"] input:focus, :root[data-theme="dark"] select:focus, :root[data-theme="dark"] textarea:focus,
+:root[data-theme="dark"] .topsearch:focus-within, :root[data-theme="dark"] .login .login-form input:focus { box-shadow: 0 0 0 3px var(--ring); }
+
+/* nút nguy hiểm giữ kiểu viền đỏ nền trắng của erp.css (chỉ bỏ bóng màu chính) */
+button.btn-danger, .btn-danger, .btn-danger-ghost { box-shadow: none; }
+
+/* loại phiếu: xuất = cam (đỏ dành cho lỗi) */
+.chip-out { color: var(--warn); }
+.type-big.type-out { background: var(--warn); }
+
+/* ── thanh trên cùng ── */
+.topbar { background: var(--navy); color: #eaf0f8; }
+.topbar .notif-count { border-color: var(--navy); }
+.topsearch { background: rgba(255,255,255,.14); color: rgba(255,255,255,.82); }
+.topbar form.topsearch input[type=search] { color: #fff; }
+.topbar form.topsearch input[type=search]::placeholder { color: rgba(255,255,255,.72); }
+.topsearch:focus-within { background: var(--surface); border-color: transparent; color: var(--ink); }
+.topsearch:focus-within input[type=search] { color: var(--ink); }
+.topbar form.topsearch:focus-within input[type=search]::placeholder { color: var(--muted); }
+.topbar .acct-btn { color: #dbe6f4; }
+
+/* ── menu trái: sáng ở chế độ thường (theo erp.css), chỉ chế độ nền tối mới là navy tối chữ sáng ── */
+:root[data-theme="dark"] .sidebar { background: var(--navy-2); border-right: 0; }
+:root[data-theme="dark"] .sidebar nav a { color: rgba(255,255,255,.8); }
+:root[data-theme="dark"] .sidebar nav a .icon { color: rgba(255,255,255,.55); }
+:root[data-theme="dark"] .sidebar nav a:hover { background: rgba(255,255,255,.08); color: #fff; }
+:root[data-theme="dark"] .sidebar nav a:hover .icon { color: #fff; }
+:root[data-theme="dark"] .sidebar nav a.active { background: rgba(255,255,255,.12); color: #fff; border-left-color: #7fb0ea; box-shadow: none; }
+:root[data-theme="dark"] .sidebar nav a.active .icon { color: #9cc3f0; }
+:root[data-theme="dark"] .nav-group { color: rgba(255,255,255,.45); }
+:root[data-theme="dark"] .nav-sub::before { background: var(--navy-line); }
+:root[data-theme="dark"] .sidebar nav .nav-sub a.active { background: rgba(255,255,255,.12); color: #fff; }
+:root[data-theme="dark"] .sidebar nav .nav-sub a.active .icon { color: #9cc3f0; }
+:root[data-theme="dark"] .nav-tree:has(.nav-sub a.active) > a:not(.active) { color: #fff; }
+:root[data-theme="dark"] .nav-caret:hover { background: rgba(255,255,255,.14); }
+:root[data-theme="dark"] .nav-tree:not(.open):has(.nav-sub .nav-pills) .nav-caret::after { box-shadow: 0 0 0 2px var(--navy-2); }
+:root[data-theme="dark"] .sidebar a .nav-new { background: rgba(127,176,234,.22); color: #cfe1f7; }
+:root[data-theme="dark"] .sidebar a .nav-badge { background: #f59e0b; color: #1a1205; }
+
+/* ── nội dung ── */
+.tabs a.active, .tabs a.active .count { border-bottom-color: var(--brand); }
+
+/* ── trang đăng nhập (đỏ chỉ còn ở logo) ── */
+.login-hero { background: linear-gradient(160deg, var(--navy), var(--navy-2)); }
+
+/* ── trạng thái, loại phiếu, nút theo loại: nền ĐẶC màu, chữ trắng (không dùng nền nhạt chữ màu) ── */
+:root {
+  --ok-solid: #15803d; --warn-solid: #c2610c; --danger-solid: #dc2626; --info-solid: #2563eb; --mute-solid: #64748b; --adj-solid: #7c3aed;
+}
+.tag { background: var(--mute-solid); color: #fff; }
+.tag-ok { background: var(--ok-solid); color: #fff; }
+.tag-warn { background: var(--warn-solid); color: #fff; }
+.tag-danger { background: var(--danger-solid); color: #fff; }
+.tag-info { background: var(--info-solid); color: #fff; }
+.tag-muted { background: var(--mute-solid); color: #fff; }
+.chip-in, .chip-out, .chip-xfer, .chip-adj { color: #fff; border-color: transparent; }
+.chip-in { background: var(--ok-solid); }
+.chip-out { background: var(--warn-solid); }
+.chip-xfer { background: var(--info-solid); }
+.chip-adj { background: var(--adj-solid); }
+.type-big.type-out { background: var(--warn-solid); }
+.type-big.type-in { background: var(--ok-solid); }
+.type-big.type-adj { background: var(--adj-solid); }
+
+/* nút tạo phiếu theo loại — cùng màu với thẻ loại phiếu: nhập = xanh lá, xuất = cam, điều chuyển = xanh dương */
+.btn.btn-act { background: var(--c); color: #fff; border: 1px solid var(--c); box-shadow: none; }
+.btn.btn-act:hover { background: color-mix(in srgb, var(--c) 82%, #000); border-color: transparent; color: #fff; box-shadow: none; }
+.btn-act-in { --c: var(--ok-solid); }
+.btn-act-out { --c: var(--warn-solid); }
+.btn-act-xfer { --c: var(--info-solid); }
+
+/* nút «Xoá lọc» trong thanh lọc: vừa chữ, không giãn hết chiều ngang */
+.filters > a.btn { flex: 0 0 auto; }
+
+/* dòng «Chi tiết» mở ra dưới một dòng bảng (Đối chiếu tồn) */
+tr.detail-row > td { background: var(--bg); padding: 12px 16px 14px; }
+tr.detail-row table { background: var(--surface); }
+tr.detail-row[hidden] { display: none; }
+.filters > .muted.small { align-self: center; }
+
+/* Kho huỷ: khung xuất xe một chỗ + các chuyến đang đi */
+.dispatch { margin: 0 0 16px; }
+.dispatch-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 8px; }
+.dispatch-head h2 { margin: 0; }
+.dispatch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0 6px; }
+.dispatch-row select { flex: 1 1 260px; width: auto; max-width: 380px; }
+.dispatch-row .check { white-space: nowrap; }
+.dispatch [data-dispatch-summary] .load-sum { margin: 0; }
+th.chk, td.chk { width: 36px; text-align: center; }
+.trip { padding: 12px 16px; border-top: 1px solid var(--line); }
+.trip-lots { margin: 8px 0 10px; padding-left: 20px; line-height: 1.6; }
+.trip-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* logo StockFlow đầy đủ trên trang đăng nhập; biểu tượng ở thanh trên nền trắng cho nổi trên nền xanh */
+.login-mark { justify-content: center; margin-bottom: 22px; }
+.login-mark img.login-full { width: min(260px, 70%); height: auto; border-radius: 0; background: none; padding: 0; box-shadow: none; }
+.brand img { background: #fff; padding: 1px; }
+
+/* thanh trên: logo StockFlow đầy đủ (có chữ) trên nền trắng bo góc, nổi trên nền xanh */
+.topbar .brand img.brand-full { width: auto; height: 34px; padding: 3px 10px; background: #fff; border-radius: 6px; object-fit: contain; }
+@media (max-width: 1000px) { .topbar .brand img.brand-full { height: 30px; padding: 2px 8px; } }
+
+/* nhận hàng theo đơn: ô quét đếm, cột «Theo đơn», cột «Không đạt» gọn */
+.count-scan { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 10px 0; padding: 10px 12px; background: var(--brand-50); border: 1px dashed var(--brand-100); border-radius: 8px; }
+.count-scan label { flex: 1 1 320px; margin: 0; }
+.count-scan p { flex: 1 1 100%; margin: 0; }
+#count-msg.bad { color: var(--danger); font-weight: 600; }
+#count-msg.ok { color: var(--ok); font-weight: 600; }
+td.order-cell { white-space: nowrap; min-width: 110px; line-height: 1.5; }
+th.bad-th, td.bad-cell { width: 120px; min-width: 100px; }
+td.bad-cell input, td.bad-cell select { width: 100%; min-width: 0; }
+
+/* nhận hàng theo đơn: danh sách hàng đã nằm sẵn trong bảng, ẩn bộ lọc / gợi ý để bảng đếm lên đầu */
+#picker[data-order] .pick-filters, #picker[data-order] #pick-suggest, #picker[data-order] #pick-empty { display: none; }

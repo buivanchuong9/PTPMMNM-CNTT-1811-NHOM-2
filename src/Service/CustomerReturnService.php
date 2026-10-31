@@ -207,6 +207,24 @@ final class CustomerReturnService
         return filter_rows($rows, $q, fn($r) => $r['ma'] . ' ' . $r['issue_code'] . ' ' . $r['khach'] . ' ' . $r['ly_do']);
     }
 
+    /**
+     * Phiếu theo từ khoá, khách và khoảng ngày lập (giờ Việt Nam), KHÔNG lọc trạng thái — để tính số trên từng tab theo đúng bộ lọc đang chọn.
+     * @return list<array<string,mixed>>
+     */
+    public function search(array $warehouseIds, string $q = '', string $customer = '', ?string $from = null, ?string $to = null): array
+    {
+        return array_values(array_filter($this->list($warehouseIds, '', $q), fn($t) => ($customer === '' || $t['khach'] === $customer) && in_vn_range($t['ngay_tao'], $from, $to)));
+    }
+
+    /** Tên khách đã có phiếu trả ở các kho này (cho ô lọc). @return list<string> */
+    public function customers(array $warehouseIds): array
+    {
+        if ($warehouseIds === []) {
+            return [];
+        }
+        return array_column($this->db->all("SELECT DISTINCT khach FROM tra_hang_khach WHERE khach <> '' AND kho_id IN (" . implode(',', array_fill(0, count($warehouseIds), '?')) . ') ORDER BY khach', $warehouseIds), 'khach');
+    }
+
     /** @return array<string,int> */
     public function counts(array $warehouseIds): array
     {

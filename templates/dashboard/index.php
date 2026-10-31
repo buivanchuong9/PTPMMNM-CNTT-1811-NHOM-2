@@ -6,8 +6,8 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
 <header class="page-head">
   <div><h1>Tổng quan kho</h1></div>
   <div class="actions">
-    <?php if ($auth->allows($user, P::LapPhieuDieuChuyen)): ?><a class="btn" href="/transfers/new"><?= icon('truck') ?>Điều chuyển kho</a><?php endif; ?>
-    <?php if ($auth->allows($user, P::LapPhieuNhap)): ?><a class="btn btn-ghost" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Lập phiếu nhập</a><?php endif; ?>
+    <?php if ($auth->allows($user, P::LapPhieuDieuChuyen)): ?><a class="btn btn-act btn-act-xfer" href="/transfers/new"><?= icon('truck') ?>Điều chuyển kho</a><?php endif; ?>
+    <?php if ($auth->allows($user, P::LapPhieuNhap)): ?><a class="btn btn-act btn-act-in" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Lập phiếu nhập</a><?php endif; ?>
   </div>
 </header>
 

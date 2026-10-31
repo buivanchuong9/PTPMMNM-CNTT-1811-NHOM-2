@@ -13,7 +13,7 @@ $short = fn(string $s, int $n) => mb_strlen($s) > $n ? mb_substr($s, 0, $n - 1) 
   body { margin: 0; background: #eceff3; color: #000; font: 11px/1.25 system-ui, "Segoe UI", Arial, sans-serif; }
   .bar { position: sticky; top: 0; z-index: 2; display: flex; gap: 10px; align-items: center; padding: 10px 16px; background: #fff; border-bottom: 1px solid #d9dde3; font-size: 14px; }
   .bar a, .bar button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid #c9ced6; background: #fff; color: #222; text-decoration: none; cursor: pointer; }
-  .bar button { margin-left: auto; background: #d6283f; border-color: #d6283f; color: #fff; }
+  .bar button { margin-left: auto; background: #1e3a5f; border-color: #1e3a5f; color: #fff; }
   .bar span { color: #555; }
 <?php if ($thermal): ?>
   @page { size: 50mm 30mm; margin: 0; }

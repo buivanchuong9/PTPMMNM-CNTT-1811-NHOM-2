@@ -1,8 +1,12 @@
-<?php /** @var array $rows @var array $lots @var string $q @var int $cat @var array $formats @var array $categories */ ?>
+<?php /** @var array $rows @var array $lots @var string $q @var int $cat @var int $sup @var string $code @var string $lot @var array $suppliers @var array $formats @var array $categories */ ?>
 <header class="page-head"><div><h1>In tem mã vạch</h1></div></header>
 <form class="filters" method="get">
   <input type="search" name="q"<?= $q !== '' ? ' class="on"' : '' ?> maxlength="50" data-search-clean value="<?= e($q) ?>" placeholder="SKU, tên hàng, mã vạch…" aria-label="Tìm kiếm">
   <select name="category"<?= $cat ? ' class="on"' : '' ?> aria-label="Loại hàng" data-live-reload><option value="">Mọi loại hàng</option><?php foreach ($categories as $c): ?><option value="<?= (int)$c['id'] ?>"<?= $cat === (int)$c['id'] ? ' selected' : '' ?>><?= e($c['ten']) ?></option><?php endforeach; ?></select>
+  <select name="supplier"<?= $sup ? ' class="on"' : '' ?> aria-label="Nhà cung cấp" data-live-reload><?= filter_options(array_column($suppliers, 'ten', 'id'), $sup ?: '', 'Mọi nhà cung cấp') ?></select>
+  <select name="code"<?= $code !== '' ? ' class="on"' : '' ?> aria-label="Mã vạch" data-live-reload><?= filter_options(['has' => 'Đã gắn mã vạch', 'none' => 'Chưa gắn mã vạch'], $code, 'Mọi mã vạch') ?></select>
+  <select name="lot"<?= $lot !== '' ? ' class="on"' : '' ?> aria-label="Quản lý theo lô" data-live-reload><?= filter_options(['lot' => 'Hàng theo lô / hạn dùng', 'nolot' => 'Hàng không theo lô'], $lot, 'Mọi hàng') ?></select>
+  <?php if ($q !== '' || $cat || $sup || $code !== '' || $lot !== ''): ?><a class="btn btn-ghost" href="/labels">Xoá lọc</a><?php endif; ?>
 </form>
 <form method="get" action="/labels/print" target="_blank" id="label-form">
   <section class="card flush" data-live="results"><div class="table-wrap"><table class="dense">

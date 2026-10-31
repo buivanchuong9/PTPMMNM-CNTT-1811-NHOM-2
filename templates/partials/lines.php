@@ -56,7 +56,7 @@ $packData = function (array $p): array {
 };
 $pickItems = array_map(fn($p) => (!empty($p['lots']) ? ['lots' => $p['lots']] : []) + $packData($p) + [
     'k' => $p['mat_hang_id'] . ':' . $p['lo_hang_id'], 'sku' => $p['ma_hang'], 'name' => $p['ten'], 'unit' => $p['unit'],
-    'cat' => (int)($p['danh_muc_id'] ?? 0), 'sup' => $itemSuppliers[$p['mat_hang_id']] ?? [], 'lot' => $p['quan_ly_lo'] ? $p['so_lo'] : '', 'exp' => $p['quan_ly_lo'] && $p['han_dung'] ? dt($p['han_dung'], false) : '', 'tracked' => (bool)$p['quan_ly_lo'], 'cost' => (int)($p['gia_von'] ?? 0),
+    'cat' => (int)($p['danh_muc_id'] ?? 0), 'sup' => $itemSuppliers[$p['mat_hang_id']] ?? [], 'lot' => $p['quan_ly_lo'] ? $p['so_lo'] : '', 'exp' => $p['quan_ly_lo'] && $p['han_dung'] ? dt($p['han_dung'], false) : '', 'bc' => (string)($p['ma_vach'] ?? ''), 'tracked' => (bool)$p['quan_ly_lo'], 'cost' => (int)($p['gia_von'] ?? 0), 'ord' => $orderInfo[$p['mat_hang_id']] ?? null,
 ], $pickRows);
 if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét mã vạch: chọn sẵn mặt hàng vừa quét (1 đơn vị)
     foreach ($pickItems as $pi) {
@@ -68,7 +68,7 @@ if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét m
 }
 ?>
 <fieldset class="lines picker" id="picker"<?= !empty($suppliers) || !empty($supplierMode) ? ' data-supplier="1"' : '' ?> data-items="<?= e(json_encode($pickItems, JSON_UNESCAPED_UNICODE)) ?>"
-          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-bad-reasons="<?= e(json_encode(array_map(null, array_keys(\StockFlow\Service\SupplierReturnService::REASONS), array_values(\StockFlow\Service\SupplierReturnService::REASONS)), JSON_UNESCAPED_UNICODE)) ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($supplierFirst) && $showSup && empty($lockPick) ? ' data-sup-first="1"' : '' ?><?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
+          data-stock="<?= e(json_encode((object)($stock ?? []))) ?>" data-check="<?= !empty($checkStock) ? '1' : '' ?>" data-newlots="<?= !empty($newLots) ? '1' : '' ?>" data-bad-reasons="<?= e(json_encode(array_map(null, array_keys(\StockFlow\Service\SupplierReturnService::REASONS), array_values(\StockFlow\Service\SupplierReturnService::REASONS)), JSON_UNESCAPED_UNICODE)) ?>" data-auto="<?= !empty($autoLots) ? '1' : '' ?>"<?= !empty($orderLines) ? ' data-order="' . e(json_encode($orderLines)) . '"' : '' ?><?= !empty($supplierFirst) && $showSup && empty($lockPick) ? ' data-sup-first="1"' : '' ?><?= !empty($prefill) ? ' data-prefill="' . e(json_encode($prefill)) . '"' : '' ?>>
   <legend>Dòng hàng</legend>
   <?php $showSup = empty($suppliers) && !empty($pickSups); ?>
   <?php if (!empty($supplierFirst) && $showSup && empty($lockPick)): ?>
@@ -89,9 +89,18 @@ if (empty($prefill) && !empty($prefillItem)) {   // mở từ màn hình quét m
     <ul id="pick-list" role="listbox" hidden></ul>
   </div>
   <p class="empty" id="pick-empty"<?= !empty($lockPick) ? ' hidden' : '' ?>>Chưa chọn mặt hàng nào. Bấm vào một mặt hàng ở danh sách phía trên, hoặc gõ tên / SKU để tìm.</p>
+  <?php if (!empty($orderLines)): ?>
+  <div class="count-scan" data-count-scan>
+    <label>Quét mã để đếm
+      <input type="text" id="count-code" placeholder="Quét mã vạch bằng máy quét (hoặc gõ SKU) rồi Enter — mỗi lần quét tăng 1 kiện" autocomplete="off" inputmode="text" aria-label="Quét mã vạch để đếm số lượng nhận">
+    </label>
+    <button type="button" class="btn-ghost" data-scan-count><?= icon('scan') ?>Mở camera</button>
+    <p class="small muted" id="count-msg" role="status">Quét từng kiện khi nhận hàng: số «Thực nhận» tăng theo kiện (hàng không đóng kiện thì tăng 1; muốn đếm từng cái, tích «lẻ» ở dòng hàng) và so với đơn. Hàng không có trong đơn sẽ được báo.</p>
+  </div>
+  <?php endif; ?>
   <div class="table-wrap" id="pick-wrap" hidden>
     <table class="dense pick-table">
-      <thead><tr><th>Mặt hàng</th><th class="num">Tồn tại kho</th><th class="num"><?= !empty($newLots) ? 'Số lượng nhận' : 'Số lượng' ?></th><?php if (!empty($newLots)): ?><th>Kiểm tra chất lượng (không đạt)</th><?php endif; ?><th></th></tr></thead>
+      <thead><tr><th>Mặt hàng</th><th class="num">Tồn tại kho</th><?php if (!empty($orderLines)): ?><th class="num" title="Số đặt, số còn phải nhận theo đơn và kết quả so với số đang đếm">Theo đơn</th><?php endif; ?><th class="num"><?= !empty($orderLines) ? 'Thực nhận' : (!empty($newLots) ? 'Số lượng nhận' : 'Số lượng') ?></th><?php if (!empty($newLots)): ?><th class="bad-th" title="Số lượng không đạt chất lượng, sẽ trả lại nhà cung cấp">Không đạt</th><?php endif; ?><th></th></tr></thead>
       <tbody id="pick-rows"></tbody>
     </table>
   </div>

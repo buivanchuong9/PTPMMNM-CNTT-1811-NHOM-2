@@ -112,7 +112,10 @@
         const t = await decodeFrame(Z, reader);
         if (!camOn) return;
         if (t && checkDigitOk(t)) {
-          if (t === lastRead) { stopCam(); lookup(t); return; }   // phải đọc trùng 2 lần liên tiếp mới nhận, tránh đọc nhầm
+          if (t === lastRead) {   // phải đọc trùng 2 lần liên tiếp mới nhận, tránh đọc nhầm
+            if (target && target.count) { lookup(t); lastRead = ''; loopTimer = setTimeout(tick, 1500); return; }   // đếm hàng: camera vẫn chạy, nghỉ một nhịp để không đếm trùng cùng một mã
+            stopCam(); lookup(t); return;
+          }
           lastRead = t;
         } else if (t === null) lastRead = '';
         loopTimer = setTimeout(tick, 120);
@@ -128,6 +131,12 @@
   const lookup = async (raw) => {
     const code = String(raw || '').trim();
     if (!code) return;
+    if (target && target.count) {   // đếm hàng nhận theo đơn: trang tự cộng số thực nhận, hộp thoại giữ mở để quét tiếp
+      const r = window.countScan ? window.countScan(code) : { ok: false, text: 'Trang này không hỗ trợ đếm bằng quét mã.' };
+      say(r.text, !r.ok);
+      manual.reset(); manual.code.focus();
+      return;
+    }
     out.replaceChildren();
     say('Đang tra mã ' + code + '…');
     let data;
@@ -223,8 +232,8 @@
   const open = (tgt) => {
     target = tgt || null;
     out.replaceChildren(); say(''); manual.reset();
-    title.textContent = target && !target.fill ? 'Gán mã vạch' : 'Quét mã vạch';
-    sub.replaceChildren(document.createTextNode(target && target.fill ? 'Quét mã để tìm đúng dòng hàng cần đếm.' : target ? target.label + '. Quét hoặc nhập mã để gán cho mặt hàng này.' : defaultSub));
+    title.textContent = target && target.count ? 'Quét để đếm hàng nhận' : target && !target.fill ? 'Gán mã vạch' : 'Quét mã vạch';
+    sub.replaceChildren(document.createTextNode(target && target.count ? 'Quét lần lượt từng thùng / món: mỗi mã quét được tăng số «Thực nhận» lên 1. Camera giữ mở để quét tiếp.' : target && target.fill ? 'Quét mã để tìm đúng dòng hàng cần đếm.' : target ? target.label + '. Quét hoặc nhập mã để gán cho mặt hàng này.' : defaultSub));
     if (target && target.code) sub.append(document.createTextNode(' Mã hiện tại: ' + target.code + ' '), postForm('/items/barcode', { item_id: target.id, code: '' }, 'Gỡ mã', 'btn-ghost'));
     dlg.showModal();
     manual.code.focus();
@@ -232,6 +241,7 @@
 
   document.addEventListener('click', (ev) => {
     if (ev.target.closest('[data-scan-open]')) { open(null); return; }
+    if (ev.target.closest('[data-scan-count]')) { open({ count: true }); return; }
     const f = ev.target.closest('[data-scan-fill]');
     if (f) { open({ fill: f.dataset.scanFill }); return; }
     const a = ev.target.closest('[data-scan-assign]');

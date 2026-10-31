@@ -200,8 +200,22 @@ $fleetD = $f->c->get(StockFlow\Service\FleetService::class);
 $dispD = $f->c->get(StockFlow\Service\DisposalService::class);
 $fleetD->addVehicleWithDriver($f->approverA, '29C-' . random_int(10000, 99999), 'Xe tải 2 tấn', $f->wa, 'Tài xế Huỷ', (string)random_int(100000000000, 999999999999), '0912345671');
 $f->receive($f->wa, 'y', 5);
-$dispD->propose($f->approverA, $f->wa, $f->it['y']['item'], $f->it['y']['batch'], 2, 'VO_HONG', '');
+$dispId = $dispD->propose($f->approverA, $f->wa, $f->it['y']['item'], $f->it['y']['batch'], 2, 'VO_HONG', '')['id'];
 [$st, $dBody] = $get('/disposals?status=TRONG_KHO_HUY');
-truthy($st === 200 && $noPhpError($dBody) && str_contains($dBody, 'name="vehicle_id"') && str_contains($dBody, 'Hàng cần chở') && str_contains($dBody, 'đủ điều kiện') || str_contains($dBody, 'chưa khai đủ'), 'Kho huỷ: chọn xe có ghi chú đủ điều kiện và tóm tắt hàng cần chở');
+truthy($st === 200 && $noPhpError($dBody) && str_contains($dBody, 'id="dispatch-form"') && str_contains($dBody, 'name="vehicle_id"') && str_contains($dBody, 'data-pick-dispose') && substr_count($dBody, 'name="vehicle_id"') === 1, 'Kho huỷ: một khung chọn xe chung, mỗi lô chỉ có ô tích (không còn ô chọn xe từng dòng)');
+[$stF, $fitBody] = $get('/disposals/fit?ids[]=' . $dispId);
+$fitJson = json_decode($fitBody, true);
+truthy($stF === 200 && is_array($fitJson) && $fitJson['count'] === 1 && str_contains($fitJson['summary'], 'Hàng cần chở') && (str_contains($fitJson['options'], 'đủ điều kiện') || str_contains($fitJson['options'], 'chưa khai đủ')), 'Kho huỷ: chọn lô thì máy chủ trả tóm tắt tải và xe đủ điều kiện cho đúng các lô đã tích');
+
+section('Nhận hàng theo đơn đặt: bảng đối chiếu «Theo đơn» và ô quét đếm');
+$ordSvc = $f->c->get(StockFlow\Service\OrderService::class);
+$supPo = (int)$f->db->insert("INSERT INTO doi_tac (loai, ma, ten) VALUES ('SUPPLIER', ?, ?)", ['NCCPO' . $f->tag, 'NCC đặt hàng ' . $f->tag]);
+$f->db->exec('INSERT INTO mat_hang_nha_cung_cap (mat_hang_id, doi_tac_id) VALUES (?, ?)', [$f->it['y']['item'], $supPo]);
+$poId = $ordSvc->create($f->approverA, $f->wa, 'NCC đặt hàng ' . $f->tag, [['mat_hang_id' => $f->it['y']['item'], 'so_luong' => 10]], null, '');
+$ordSvc->markSent($f->approverA, $poId);
+[$stP, $poBody] = $get('/vouchers/new?type=RECEIPT&po=' . $poId);
+truthy($stP === 200 && $noPhpError($poBody) && str_contains($poBody, 'data-order=') && str_contains($poBody, 'id="count-code"') && str_contains($poBody, 'Theo đơn') && str_contains($poBody, 'Thực nhận') && str_contains($poBody, 'data-scan-count'), 'nhận theo đơn: có cột «Theo đơn», «Thực nhận» và ô quét để đếm');
+[$stN, $noPoBody] = $get('/vouchers/new?type=RECEIPT');
+truthy($stN === 200 && !str_contains($noPoBody, 'data-order=') && !str_contains($noPoBody, 'id="count-code"'), 'phiếu nhập thường không có cột «Theo đơn» và ô quét đếm');
 
 finish();

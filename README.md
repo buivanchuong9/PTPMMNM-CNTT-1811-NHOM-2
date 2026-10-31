@@ -1,7 +1,7 @@
 <div align="center">
 
 
-<img src="docs/images/hero.svg" alt="Chương Đại Dương — quản lý kho" width="100%">
+<img src="docs/images/hero.svg" alt="StockFlow — quản lý kho" width="100%">
 
 
 <a href="https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=2600&pause=800&color=EE4D2D&center=true&vCenter=true&width=700&lines=Qu%E1%BA%A3n+l%C3%BD+kho+%C4%91a+%C4%91i%E1%BB%83m;%C4%90i%E1%BB%81u+chuy%E1%BB%83n+h%C3%A0ng+k%C3%A8m+xe+v%C3%A0+t%C3%A0i+x%E1%BA%BF;Ki%E1%BB%83m+k%C3%AA+%E2%86%92+%C4%91i%E1%BB%81u+ch%E1%BB%89nh+c%C3%B3+d%E1%BA%A5u+v%E1%BA%BFt;T%E1%BB%93n+lu%C3%B4n+kh%E1%BB%9Bp+s%E1%BB%95+ph%C3%A1t+sinh" alt="Typing SVG"></a>
@@ -10,7 +10,7 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](#-cấu-trúc-mã-nguồn)
 [![Kiểm thử](https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2/actions/workflows/test.yml/badge.svg)](https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT-fbbf24)](LICENSE)
-# Chương Đại Dương — Quản lý kho
+# StockFlow — Quản lý kho
 
 Hệ thống quản lý nhiều kho viết bằng **PHP thuần + MySQL**, không dùng framework. Đề tài môn *Phát triển phần mềm mã nguồn mở*, lớp CNTT 1811, nhóm 2.
 

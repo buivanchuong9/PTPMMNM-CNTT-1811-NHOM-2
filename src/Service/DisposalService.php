@@ -74,9 +74,9 @@ final class DisposalService
         return ['id' => $id, 'approved' => $approved];
     }
 
-    private const SELECT = 'SELECT h.*, w.ma AS wh_code, w.ten AS wh_name, i.ma_hang, i.ten AS item_name, u.ma AS unit, b.so_lo, b.han_dung, i.quan_ly_lo,
+    private const SELECT = 'SELECT h.*, w.ma AS wh_code, w.ten AS wh_name, i.ma_hang, i.ten AS item_name, u.ma AS unit, b.so_lo, b.han_dung, i.quan_ly_lo, i.danh_muc_id, dm.ten AS category_name,
                                    lu.ho_ten AS creator_name, du.ho_ten AS approver_name, v.ma AS voucher_code, xe.bien_so, tx.ho_ten AS tai_xe_ten, h.so_luong * h.gia_von AS value
-                            FROM huy_hang h JOIN kho w ON w.id = h.kho_id JOIN mat_hang i ON i.id = h.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id
+                            FROM huy_hang h JOIN kho w ON w.id = h.kho_id JOIN mat_hang i ON i.id = h.mat_hang_id JOIN don_vi_tinh u ON u.id = i.don_vi_tinh_id LEFT JOIN danh_muc dm ON dm.id = i.danh_muc_id
                             JOIN lo_hang b ON b.id = h.lo_hang_id JOIN nguoi_dung lu ON lu.id = h.nguoi_lap_id LEFT JOIN nguoi_dung du ON du.id = h.nguoi_duyet_id
                             LEFT JOIN phieu_nhap_xuat v ON v.id = h.phieu_nhap_xuat_id LEFT JOIN xe ON xe.id = h.xe_id LEFT JOIN tai_xe tx ON tx.id = h.tai_xe_id';
 
@@ -101,6 +101,16 @@ final class DisposalService
             array_push($args, "%$q%", "%$q%", "%$q%", "%$q%");
         }
         return $this->db->all(self::SELECT . " WHERE $where ORDER BY h.id DESC LIMIT 500", $args);
+    }
+
+    /**
+     * Phiếu huỷ theo từ khoá, lý do, loại hàng, kho và khoảng ngày lập (giờ Việt Nam), KHÔNG lọc trạng thái — để tính số trên từng tab theo đúng bộ lọc đang chọn.
+     * @return list<array<string,mixed>>
+     */
+    public function search(array $warehouseIds, string $q = '', string $reason = '', int $category = 0, int $warehouse = 0, ?string $from = null, ?string $to = null): array
+    {
+        return array_values(array_filter($this->list($warehouseIds, '', $q), fn($h) => ($reason === '' || $h['ly_do'] === $reason) && (!$category || (int)$h['danh_muc_id'] === $category)
+            && (!$warehouse || (int)$h['kho_id'] === $warehouse) && in_vn_range($h['ngay_tao'], $from, $to)));
     }
 
     /** @return array<string,int> số phiếu theo trạng thái */
@@ -311,7 +321,21 @@ final class DisposalService
      */
     public function load(User $user, int $id, int $vehicleId, int $driverId, bool $driverOk): void
     {
-        $peek = $this->find($id);
+        $this->loadMany($user, [$id], $vehicleId, $driverId, $driverOk);
+    }
+
+    /**
+     * Nhiều lô hàng trong kho huỷ lên CHUNG MỘT xe, một tài xế (một chuyến đi tiêu huỷ). Tổng tải của cả đợt phải vừa xe; các lô phải cùng kho.
+     * Các lô của cùng chuyến có cùng xe và cùng giờ xuất (ngay_xuat) — dùng để gom nhóm khi hiển thị và khi xác nhận «đã đến nơi».
+     * @param list<int> $ids @return int số lô đã lên xe
+     */
+    public function loadMany(User $user, array $ids, int $vehicleId, int $driverId, bool $driverOk): int
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            throw new DomainError('Chọn ít nhất một lô hàng cần xuất đi tiêu huỷ');
+        }
+        $peek = $this->find($ids[0]);
         $wh = (int)$peek['kho_id'];
         $this->auth->require($user, $wh, Permission::XacNhanHuy);
         if (!$vehicleId || !$driverId) {
@@ -320,21 +344,76 @@ final class DisposalService
         if (!$driverOk) {
             throw new DomainError('Tài xế phải xác nhận đã nhận đủ hàng lên xe');
         }
-        $this->db->transaction(function () use ($user, $id, $vehicleId, $driverId, $wh) {
-            $h = $this->db->one('SELECT * FROM huy_hang WHERE id = ? FOR UPDATE', [$id]);
-            if ($h['trang_thai'] !== 'TRONG_KHO_HUY' || $h['xe_id'] !== null) {
-                throw new DomainError('Chỉ hàng đang nằm trong kho huỷ mới xuất đi tiêu huỷ được');
+        return $this->db->transaction(function () use ($user, $ids, $vehicleId, $driverId, $wh) {
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            $rows = $this->db->all("SELECT * FROM huy_hang WHERE id IN ($in) ORDER BY id FOR UPDATE", $ids);
+            if (count($rows) !== count($ids)) {
+                throw new DomainError('Có lô hàng không tồn tại');
+            }
+            $lines = [];
+            foreach ($rows as $h) {
+                if ((int)$h['kho_id'] !== $wh) {
+                    throw new DomainError('Chỉ gom hàng của cùng một kho lên một xe');
+                }
+                if ($h['trang_thai'] !== 'TRONG_KHO_HUY' || $h['xe_id'] !== null) {
+                    throw new DomainError('Chỉ hàng đang nằm trong kho huỷ mới xuất đi tiêu huỷ được (' . $h['ma'] . ' không đúng trạng thái)');
+                }
+                $lines[] = ['mat_hang_id' => (int)$h['mat_hang_id'], 'so_luong' => (int)$h['so_luong']];
             }
             $xe = $this->db->one('SELECT * FROM xe WHERE id = ? FOR UPDATE', [$vehicleId]);
             if (!$xe || !$xe['hoat_dong'] || (int)$xe['thue_ngoai'] || (int)($xe['kho_hien_tai_id'] ?? 0) !== $wh) {
                 throw new DomainError('Chọn xe của kho đang đứng tại kho này');
             }
             $tx = $this->fleet->assignableDriver($driverId, $wh);
-            $this->transport->assertCanCarry($vehicleId, [['mat_hang_id' => (int)$h['mat_hang_id'], 'so_luong' => (int)$h['so_luong']]], (int)$tx['id']);
+            $this->transport->assertCanCarry($vehicleId, $lines, (int)$tx['id']);   // tải của CẢ đợt phải vừa xe
             $site = $this->site($wh);
-            $this->db->exec('UPDATE huy_hang SET xe_id = ?, tai_xe_id = ?, ngay_xuat = CURRENT_TIMESTAMP, don_vi_tieu_huy = ?, dia_chi_tieu_huy = ? WHERE id = ?',
-                [$vehicleId, (int)$tx['id'], $site['name'], $site['address'], $id]);
-            $this->audit->record($user->id, 'disposal.load', 'disposal', $id, $h['ma'] . " · {$xe['bien_so']} · {$tx['ho_ten']} → {$site['name']}, {$site['address']}");
+            $at = gmdate('Y-m-d H:i:s');   // cùng một mốc cho cả chuyến
+            foreach ($rows as $h) {
+                $this->db->exec('UPDATE huy_hang SET xe_id = ?, tai_xe_id = ?, ngay_xuat = ?, don_vi_tieu_huy = ?, dia_chi_tieu_huy = ? WHERE id = ?',
+                    [$vehicleId, (int)$tx['id'], $at, $site['name'], $site['address'], (int)$h['id']]);
+                $this->audit->record($user->id, 'disposal.load', 'disposal', (int)$h['id'], $h['ma'] . " · {$xe['bien_so']} · {$tx['ho_ten']} → {$site['name']}, {$site['address']}" . (count($rows) > 1 ? ' · chung chuyến ' . count($rows) . ' lô' : ''));
+            }
+            return count($rows);
+        });
+    }
+
+    /**
+     * Xác nhận cả chuyến đã đến nơi tiêu huỷ (nhiều lô cùng xe). Một lô sai trạng thái ⇒ cả đợt quay lại, không lô nào đổi.
+     * @param list<int> $ids @return int số lô đã tiêu huỷ
+     */
+    public function destroyMany(User $user, array $ids): int
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            throw new DomainError('Chưa chọn lô hàng nào');
+        }
+        return $this->db->transaction(function () use ($user, $ids) {
+            foreach ($ids as $id) {
+                $this->destroy($user, $id);
+            }
+            return count($ids);
+        });
+    }
+
+    /**
+     * Cả chuyến xuống xe, quay lại kho huỷ (nhiều lô cùng xe). Chỉ áp dụng cho hàng đang trên xe.
+     * @param list<int> $ids @return int số lô đã xuống xe
+     */
+    public function unloadMany(User $user, array $ids): int
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            throw new DomainError('Chưa chọn lô hàng nào');
+        }
+        return $this->db->transaction(function () use ($user, $ids) {
+            foreach ($ids as $id) {
+                $h = $this->find($id);
+                if ($h['trang_thai'] !== 'TRONG_KHO_HUY' || $h['xe_id'] === null) {
+                    throw new DomainError($h['ma'] . ' không đang trên xe nên không thể cho xuống xe');
+                }
+                $this->undo($user, $id);
+            }
+            return count($ids);
         });
     }
 
