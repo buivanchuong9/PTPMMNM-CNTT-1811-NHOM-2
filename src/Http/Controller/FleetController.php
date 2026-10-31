@@ -40,7 +40,7 @@ final class FleetController extends Controller
         $hit = fn(array $row, array $keys) => $q === '' || array_filter($keys, fn($k) => mb_strpos(mb_strtolower((string)($row[$k] ?? '')), $q) !== false) !== [];
         $all = $this->fleet->vehicles($scope);
         $vehicles = array_values(array_filter($all, fn($x) => $hit($x, ['bien_so', 'loai_xe', 'tai_xe_ten', 'goc_ma', 'ht_ma', 'ht_ten', 'den_ma', 'den_ten'])
-            && ($status === '' || $status === (!$x['hoat_dong'] ? 'off' : ($x['dang_den_kho_id'] !== null ? 'running' : 'ready')))));
+            && ($status === '' || $status === (!$x['hoat_dong'] ? 'off' : ($x['dang_den_kho_id'] !== null || $x['giao_phieu_id'] !== null ? 'running' : 'ready')))));
         $drivers = array_values(array_filter($this->fleet->drivers($scope, $month), fn($d) => $hit($d, ['ho_ten', 'cccd', 'so_dien_thoai', 'xe_dang_chay', 'kho_ma', 'hang_gplx', 'so_gplx'])));
         $losses = array_values(array_filter($this->fleet->lossRecords(500, $scope, $month), fn($h) => $hit($h, ['phieu_den_ma', 'tai_xe_ten', 'bien_so', 'ly_do', 'di_kho', 'den_kho']) && ($bearer === '' || $h['nguoi_chiu'] === $bearer)));
         $trips = array_values(array_filter($this->fleet->recentTrips(200, $scope), fn($t) => $hit($t, ['phieu_di_ma', 'phieu_den_ma', 'bien_so', 'tai_xe_ten', 'di_kho', 'den_kho', 'sai_lech'])));

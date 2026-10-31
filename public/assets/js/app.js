@@ -211,14 +211,25 @@
     const whSelect = form.querySelector('[name=warehouse_id], [name=from_wh]'); // ô chọn (quản trị) hoặc kho cố định của tài khoản
     let shown = [], active = -1;
     // Phiếu nhập: chỉ hiện mặt hàng của nhà cung cấp đã chọn
-    const supSel = form.querySelector('#supplier-select');
-    const supId = () => (supSel && supSel.selectedOptions[0] ? supSel.selectedOptions[0].dataset.sup || '' : '');
-    const catSel = picker.querySelector('#pick-cat'), supFilter = picker.querySelector('#pick-sup');   // ô lọc danh mục / nhà cung cấp (phiếu xuất, điều chuyển…)
+    // Phiếu xuất: chọn nhà cung cấp TRƯỚC (ô #pick-sup), rồi mới hiện danh mục của nhà đó và danh sách hàng
+    const supFirst = !!picker.dataset.supFirst;
+    const supSel = supFirst ? picker.querySelector('#pick-sup') : form.querySelector('#supplier-select');
+    const supId = () => (supFirst ? supSel.value : (supSel && supSel.selectedOptions[0] ? supSel.selectedOptions[0].dataset.sup || '' : ''));
+    const catSel = picker.querySelector('#pick-cat'), supFilter = supFirst ? null : picker.querySelector('#pick-sup');   // ô lọc danh mục / nhà cung cấp (điều chuyển…)
+    const ofSupplier = (i, id) => (id === 'none' ? !(i.sup || []).length : (i.sup || []).map(String).includes(id));
     const pool = () => {
-      let base = supSel ? (supId() ? items.filter((i) => (i.sup || []).map(String).includes(supId())) : []) : items;
+      let base = supSel ? (supId() ? items.filter((i) => ofSupplier(i, supId())) : []) : items;
       if (catSel && catSel.value) base = base.filter((i) => String(i.cat) === catSel.value);
-      if (supFilter && supFilter.value) base = base.filter((i) => (i.sup || []).map(String).includes(supFilter.value));
+      if (supFilter && supFilter.value) base = base.filter((i) => ofSupplier(i, supFilter.value));
       return base;
+    };
+    // Danh mục chỉ liệt kê loại có hàng của nhà cung cấp đang chọn; chưa chọn nhà cung cấp thì ẩn cả ô
+    const syncCats = () => {
+      if (!supFirst || !catSel) return;
+      const label = picker.querySelector('#pick-cat-label'), has = new Set(items.filter((i) => supId() && ofSupplier(i, supId())).map((i) => String(i.cat)));
+      [...catSel.options].forEach((o) => { o.hidden = o.disabled = !!o.value && !has.has(o.value); });
+      if (catSel.value && !has.has(catSel.value)) catSel.value = '';
+      label.hidden = !supId() || has.size < 2;   // chỉ một loại thì không cần lọc
     };
 
     const todayIso = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);   // hôm nay theo giờ Việt Nam
@@ -288,7 +299,30 @@
     };
 
     const open = (on) => { list.hidden = !on; search.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+    // Phiếu nhập: chọn nhà cung cấp xong là hiện sẵn 5 mặt hàng của nhà đó (nút «Xem thêm» mở hết); ô tìm chỉ lọc trong hàng của nhà cung cấp
+    const INLINE = 5;
+    let expanded = false, sug = null;
+    if (supSel) {
+      sug = document.createElement('div');
+      sug.id = 'pick-suggest';
+      sug.className = 'pick-suggest';
+      picker.querySelector('.pick-box').after(sug);
+    }
+    const renderInline = () => {
+      if (!sug) return;
+      const q = search.value.trim();
+      if (!supId()) { shown = []; sug.hidden = true; sug.innerHTML = ''; return; }
+      const base = pool(), all = q ? base.filter((i) => matches(i.hay, q)) : base;
+      shown = expanded || q ? all : all.slice(0, INLINE);
+      if (active >= shown.length) active = shown.length - 1;
+      sug.hidden = false;
+      sug.innerHTML = shown.length
+        ? shown.map((i, n) => `<button type="button" class="pick-item${n === active ? ' on' : ''}" data-n="${n}"><span><b>${esc(i.sku)}</b> ${esc(i.name)}${lotTag(i)}</span><small class="muted">${stockText(i)}</small><i aria-hidden="true">+</i></button>`).join('')
+          + (!q && all.length > INLINE ? `<button type="button" class="pick-more" data-more>${expanded ? 'Thu gọn' : `Xem thêm ${all.length - INLINE} mặt hàng`}</button>` : '')
+        : `<p class="muted">${q ? 'Không tìm thấy mặt hàng phù hợp của nhà cung cấp này' : 'Nhà cung cấp này chưa được gắn mặt hàng nào'}</p>`;
+    };
     const render = () => {
+      if (supSel) { renderInline(); return; }
       const q = search.value.trim();
       const base = pool();
       const all = q ? base.filter((i) => matches(i.hay, q)) : base;
@@ -429,7 +463,7 @@
       }
       if (lotRow && !tr._alloc) { tr._alloc = {}; syncLots(tr); }
       tr.classList.remove('flash-row'); void tr.offsetWidth; tr.classList.add('flash-row');
-      search.value = ''; active = -1; open(false); refresh(); search.focus();
+      search.value = ''; active = -1; open(false); refresh(); renderInline(); search.focus();
     };
 
     search.addEventListener('focus', render);
@@ -438,14 +472,14 @@
     search.addEventListener('keydown', (ev) => {
       if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
         ev.preventDefault();
-        if (list.hidden) return render();
+        if (list.hidden && !supSel) return render();
         active = (active + (ev.key === 'ArrowDown' ? 1 : -1) + shown.length) % Math.max(1, shown.length);
         render();
-        list.querySelector('.on')?.scrollIntoView({ block: 'nearest' });
+        (supSel ? sug : list).querySelector('.on')?.scrollIntoView({ block: 'nearest' });
       } else if (ev.key === 'Enter') {
         ev.preventDefault(); // Enter ở ô tìm kiếm không được gửi form
         const i = shown[active >= 0 ? active : 0];
-        if (!list.hidden && i) add(i);
+        if ((supSel || !list.hidden) && i) add(i);
       } else if (ev.key === 'Escape') open(false);
     });
     list.addEventListener('mousedown', (ev) => {
@@ -453,6 +487,11 @@
       if (!li) return;
       ev.preventDefault(); // giữ focus ở ô tìm kiếm
       add(shown[+li.dataset.n]);
+    });
+    if (sug) sug.addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-more]')) { expanded = !expanded; renderInline(); return; }
+      const b = ev.target.closest('.pick-item');
+      if (b) add(shown[+b.dataset.n]);
     });
     document.addEventListener('click', (ev) => { if (picker.isConnected && !picker.querySelector('.pick-box').contains(ev.target)) open(false); });
 
@@ -503,15 +542,18 @@
         err.hidden = false;
       }
     });
-    if (whSelect) whSelect.addEventListener('change', () => { [...body.rows].forEach((tr) => { if (tr._alloc) syncLots(tr); }); refresh(); if (!list.hidden) render(); });
+    if (whSelect) whSelect.addEventListener('change', () => { [...body.rows].forEach((tr) => { if (tr._alloc) syncLots(tr); }); refresh(); if (supSel || !list.hidden) render(); });
     [catSel, supFilter].forEach((sel) => { if (sel) sel.addEventListener('change', () => { render(); search.focus(); }); });
     if (supSel) supSel.addEventListener('change', () => {
+      syncCats();
       const ok = new Set(pool().map((i) => i.k));
-      [...body.rows].forEach((tr) => { if (!ok.has(tr.dataset.k)) tr.remove(); });   // dòng của nhà cung cấp trước bị bỏ
-      refresh(); if (!list.hidden) render();
-      search.placeholder = supId() ? 'Bấm để chọn, hoặc gõ tên / SKU để tìm trong hàng của nhà cung cấp…' : 'Hãy chọn nhà cung cấp trước…';
+      if (!supFirst) [...body.rows].forEach((tr) => { if (!ok.has(tr.dataset.k)) tr.remove(); });   // phiếu nhập: dòng của nhà cung cấp trước bị bỏ (phiếu xuất giữ lại, có thể bán hàng nhiều nhà)
+      expanded = false;
+      refresh(); render();
+      setPlaceholder();
     });
-    if (supSel) search.placeholder = 'Hãy chọn nhà cung cấp trước…';
+    const setPlaceholder = () => { search.placeholder = supId() ? 'Gõ tên / SKU để tìm trong hàng của nhà cung cấp…' : 'Hãy chọn nhà cung cấp trước…'; };
+    if (supSel) { syncCats(); setPlaceholder(); renderInline(); }
 
     // Điền lại các dòng hàng đã chọn sau khi lưu phiếu bị từ chối
     picker.restoreLines = (keys, qtys, lotNos, exps) => {
@@ -575,7 +617,7 @@
     const box = document.createElement('div');
     box.className = 'combo';
     const input = document.createElement('input');
-    input.type = 'text'; input.autocomplete = 'off'; input.className = 'combo-input';
+    input.type = 'text'; input.autocomplete = 'off'; input.spellcheck = false; input.className = 'combo-input';
     input.placeholder = hasBlank ? first.textContent.trim() : 'Chọn…';
     input.setAttribute('role', 'combobox'); input.setAttribute('aria-label', sel.getAttribute('aria-label') || input.placeholder);
     const ul = document.createElement('ul');
@@ -1485,7 +1527,7 @@
 (() => {
   const shell = document.querySelector('.app-shell .shell'), side = document.getElementById('sidebar');
   if (!shell || !side) return;
-  const MIN = 240, MAX = 340, KEY = 'sidebar-w', desktop = matchMedia('(min-width: 1001px)');
+  const MIN = 220, MAX = 320, KEY = 'sidebar-w', desktop = matchMedia('(min-width: 1001px)');
   const clamp = (w) => Math.min(MAX, Math.max(MIN, w));
   const grip = document.createElement('div');
   grip.className = 'side-grip';

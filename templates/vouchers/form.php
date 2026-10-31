@@ -21,7 +21,7 @@ $isIn = $type === \StockFlow\Domain\VoucherType::Receipt;
     <label>Ghi chú<input name="note" maxlength="255" placeholder="Số phiếu gốc, lý do…"></label>
   </div>
   <?php if ($isIn): ?><p class="muted small">Với mỗi dòng: <b>Số lượng</b> là số nhận từ nhà cung cấp, <b>Không đạt</b> là phần kiểm tra thấy không đạt chất lượng. Tồn kho chỉ cộng phần đạt (nhận − không đạt); phần không đạt được lập phiếu trả nhà cung cấp để cấp lại.</p><?php endif; ?>
-  <?php $checkStock = !$isIn; $newLots = $isIn; $autoLots = !$isIn; require __DIR__ . '/../partials/lines.php'; ?>
-  <div class="actions"><button type="submit">Lưu phiếu nháp</button><a class="btn btn-ghost" href="<?= !empty($replace) ? '/returns/' . (int)$replace['id'] : '/vouchers' ?>">Quay lại</a></div>
+  <?php $checkStock = !$isIn; $newLots = $isIn; $autoLots = !$isIn; $supplierFirst = !$isIn; require __DIR__ . '/../partials/lines.php'; ?>
+  <div class="actions"><button type="submit">Bước tiếp theo</button><a class="btn btn-ghost" href="<?= !empty($replace) ? '/returns/' . (int)$replace['id'] : '/vouchers' ?>">Quay lại</a></div>
 </form>
 <?php endif; ?>

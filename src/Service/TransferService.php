@@ -190,6 +190,9 @@ final class TransferService
                 if ((int)($xe['kho_hien_tai_id'] ?? 0) !== (int)$out['kho_id']) {
                     throw new DomainError('Xe ' . $xe['bien_so'] . ' hiện không ở kho đi — chọn xe đang đứng tại kho này');
                 }
+                if (!$external && $this->fleet->vehicleOnDelivery($vehicleId)) {
+                    throw new DomainError('Xe ' . $xe['bien_so'] . ' đang đi giao hàng cho khách — chọn xe khác');
+                }
                 if ($driverId !== null && !$external) {
                     $tx = $this->fleet->assignableDriver($driverId, (int)$out['kho_id']);   // xe và tài xế không gắn cố định: tài xế nào có bằng đúng hạng, đang rảnh đều lái được
                 } else {

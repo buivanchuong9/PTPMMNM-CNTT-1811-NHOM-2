@@ -17,7 +17,7 @@ body { font-size: 14px; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; border-radius: 2px; }
 
 /* thanh trên: xám than trung tính, chữ sáng, thấp */
-.topbar { height: var(--top); background: #2f353c; color: #e6e8eb; border-bottom: 0; padding: 0 16px; }
+.topbar { height: var(--top); background: #4a525c; color: #eef0f2; border-bottom: 0; padding: 0 16px; }
 .topbar .brand, .topbar .brand b { color: #fff; }
 .brand { font-size: 1.05rem; }
 .brand img { width: 30px; height: 30px; border-radius: 4px; box-shadow: none; }
@@ -33,7 +33,7 @@ a.avatar:hover { box-shadow: none; }
 .topsearch:focus-within input[type=search]::placeholder { color: var(--muted); }
 .topbar .acct-btn { color: #c4c8ce; }
 .topbar .acct-btn:hover, .topbar .acct-btn[aria-expanded="true"] { background: rgba(255,255,255,.14); color: #fff; }
-.topbar .notif-count { border-color: #2f353c; }
+.topbar .notif-count { border-color: #4a525c; }
 
 /* menu trái: phẳng, sát mép, vạch xanh bên mục đang chọn */
 .shell { grid-template-columns: 220px minmax(0, 1fr); }
@@ -67,6 +67,10 @@ h1 { font-size: 1.25rem; }
 .kpi-info .kpi-ic { background: var(--info-bg); color: #0369a1; }
 .report:hover { box-shadow: none; }
 .empty { border-radius: 3px; }
+.warranty-act { gap: 4px; min-width: 250px; }   /* ba nút xử lý nằm một hàng dưới ô ghi chú */
+.warranty-act input { flex: 1 1 100%; }
+.warranty-act button { padding: 5px 10px; font-size: 13px; }
+p.empty { padding: 8px 0; border: 0; background: none; text-align: left; color: var(--muted); }   /* ô trống trong thẻ: một dòng chữ, không khung nét đứt */
 
 /* bảng: dày hơn, tiêu đề xám, không sọc đỏ */
 th, td { padding: 7px 12px; }
@@ -190,3 +194,25 @@ th { letter-spacing: .03em; }
 /* Ô tìm ngay trên trình duyệt (kho, phân quyền) */
 .wh-card[hidden], .matrix tr[hidden] { display: none !important; }
 .filter-empty { margin: 0; align-self: center; }
+
+/* Phiếu nhập: danh sách hàng của nhà cung cấp hiện sẵn dưới ô tìm (5 dòng, «Xem thêm» mở hết) */
+.pick-suggest { margin: 8px 0 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-height: 340px; overflow-y: auto; scrollbar-width: thin; }
+.pick-suggest[hidden] { display: none; }
+.pick-suggest .pick-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; background: none; color: var(--ink); text-align: left; font: inherit; font-weight: 400; cursor: pointer; }
+.pick-suggest .pick-item > span { flex: 1 1 auto; min-width: 0; }
+.pick-suggest .pick-item > small { flex: none; }
+.pick-suggest .pick-item > i { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--brand-50); color: var(--brand); font-style: normal; font-weight: 700; }
+.pick-suggest .pick-item:hover, .pick-suggest .pick-item.on { background: var(--bg); }
+.pick-suggest .pick-more { display: block; width: 100%; padding: 8px; border: 0; border-radius: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; }
+.pick-suggest .pick-more:hover { background: var(--bg); }
+.pick-suggest p { margin: 0; padding: 10px 12px; }
+
+/* Nút xác nhận / huỷ phiếu nằm cuối cột phải, dưới nhật ký thao tác */
+.side-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.side-actions .inline-form { width: 100%; }
+.side-actions .inline-form button { width: 100%; justify-content: center; }
+
+/* Giao hàng cho khách: ba cách nhận hàng nằm một hàng, thưa hơn; thanh toán gọn lại */
+.pay-mode { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 12px 0; }
+.pay-money { padding-top: 6px; padding-bottom: 8px; }
+.pay-money .check { margin: 4px 0; }

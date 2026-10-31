@@ -119,7 +119,7 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
   <div class="table-wrap"><table class="dense">
     <thead><tr><th>Biển số</th><th>Loại xe</th><th>Tải trọng · kích thước · giấy tờ</th><th>Kho gốc</th><th>Đang ở / đang tới</th><th>Trạng thái</th><?php if ($canManage): ?><th>Thao tác</th><?php endif; ?></tr></thead>
     <tbody>
-    <?php foreach ($vehicles as $x): $moving = $x['dang_den_kho_id'] !== null; ?>
+    <?php foreach ($vehicles as $x): $moving = $x['dang_den_kho_id'] !== null; $delivering = $x['giao_phieu_id'] !== null; ?>
       <tr class="<?= $x['hoat_dong'] ? '' : 'row-off' ?><?= is_new($changes, $x['id']) ? ' is-new' : '' ?>">
         <td><b><?= e($x['bien_so']) ?></b><?= new_tag($changes, $x['id']) ?></td>
         <td><?= e($x['loai_xe'] ?: '—') ?></td>
@@ -135,19 +135,21 @@ $keep = array_filter(['q' => $q, 'thang' => $month !== date('Y-m') ? $month : ''
           echo '<br>' . ($isMoto ? '' : $docTag($x['han_dang_kiem'] ?? null, 'Đăng kiểm') . ' ') . $docTag($x['han_bao_hiem'] ?? null, 'Bảo hiểm');
         ?></td>
         <td><span class="wh-code"><?= e($x['goc_ma']) ?></span></td>
-        <td><?= $moving
+        <td><?= $delivering
+            ? '<span class="tag tag-info">Đang giao khách</span> <a href="/vouchers/' . (int)$x['giao_phieu_id'] . '">' . e($x['giao_phieu_ma']) . '</a><br><small class="muted">tài xế ' . e($x['giao_tai_xe'] ?? '—') . ' · ' . e($x['giao_dia_chi']) . '</small>'
+            : ($moving
             ? '<span class="tag tag-info">Đang chạy</span> <span class="arrow">→</span> <span class="wh-code">' . e($x['den_ma']) . '</span> ' . e($x['den_ten']) . (!empty($x['chay_tai_xe']) ? '<br><small class="muted">tài xế ' . e($x['chay_tai_xe']) . '</small>' : '')
-            : '<span class="wh-code">' . e($x['ht_ma']) . '</span> ' . e($x['ht_ten']) ?></td>
-        <td><?= !$x['hoat_dong'] ? '<span class="tag tag-danger">Ngừng dùng</span>' : ($moving ? '<span class="tag tag-info">Trên đường</span>' : '<span class="tag tag-ok">Sẵn sàng</span>') ?></td>
+            : '<span class="wh-code">' . e($x['ht_ma']) . '</span> ' . e($x['ht_ten']) )?></td>
+        <td><?= !$x['hoat_dong'] ? '<span class="tag tag-danger">Ngừng dùng</span>' : ($moving || $delivering ? '<span class="tag tag-info">Trên đường</span>' : '<span class="tag tag-ok">Sẵn sàng</span>') ?></td>
         <?php if ($canManage): ?><td>
           <div style="display:grid;gap:6px">
           <div class="inline-form">
             <button type="button" class="btn-ghost btn-sm" data-dialog-open="vehicle-edit-dlg" data-fill-label="<?= e($x['bien_so']) ?>"
               data-fill="<?= e(json_encode(['vehicle_id' => (int)$x['id'], 'plate' => $x['bien_so'], 'type' => $x['loai_xe'], 'warehouse_id' => (string)$x['kho_goc_id']] + $specFill($x), JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
-            <?php if (!$moving): ?><form method="post" action="/fleet/vehicles/delete" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$x['id'] ?>">
+            <?php if (!$moving && !$delivering): ?><form method="post" action="/fleet/vehicles/delete" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$x['id'] ?>">
               <button class="btn-danger btn-sm" data-confirm="Xoá xe <?= e($x['bien_so']) ?>? Chỉ xoá được xe chưa từng chạy chuyến nào.">Xoá</button></form><?php endif; ?>
           </div>
-          <?php if ($moving): ?><span class="muted small">Vị trí tự cập nhật khi kho đến nhận hàng</span>
+          <?php if ($moving || $delivering): ?><span class="muted small"><?= $delivering ? 'Xe về sẵn sàng khi tài xế báo giao đến nơi' : 'Vị trí tự cập nhật khi kho đến nhận hàng' ?></span>
           <?php else: ?>
           <form method="post" action="/fleet/vehicles/move" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$x['id'] ?>">
             <select name="warehouse_id" aria-label="Chuyển xe tới kho"><?= wh_options($warehouses, (int)$x['kho_hien_tai_id']) ?></select>

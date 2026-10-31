@@ -4,22 +4,19 @@ $tabs = ['' => 'Tất cả', 'DRAFT' => 'Chờ xác nhận', 'CONFIRMED' => 'Đ�
 $total = array_sum($counts);
 $qs = fn(array $over) => http_build_query(array_filter(array_merge(['type' => $type, 'status' => $status, 'q' => $q, 'warehouse' => $wh, 'category' => $catSel, 'item' => $item, 'range' => $rangeSel === 'custom' ? '' : $rangeSel, 'from' => $rangeSel === 'custom' ? $from : null, 'to' => $rangeSel === 'custom' ? $to : null, 'sort' => $sort === 'old' ? 'old' : null], $over), fn($v) => $v !== null && $v !== ''));
 ?>
-<header class="page-head">
-  <div><h1>Phiếu nhập xuất</h1></div>
-</header>
 <?php use StockFlow\Domain\Permission as Pm;
 $create = array_filter([
-    [Pm::LapPhieuNhap, '/vouchers/new?type=RECEIPT', 'in', 'in', 'Lập phiếu nhập hàng'],
-    [Pm::LapPhieuXuat, '/vouchers/new?type=ISSUE', 'out', 'out', 'Lập phiếu xuất bán'],
-    [Pm::LapPhieuDieuChuyen, '/transfers/new', 'truck', 'xfer', 'Điều chuyển kho'],
+    [Pm::LapPhieuNhap, '/vouchers/new?type=RECEIPT', 'in', 'Lập phiếu nhập'],
+    [Pm::LapPhieuXuat, '/vouchers/new?type=ISSUE', 'out', 'Lập phiếu xuất'],
+    [Pm::LapPhieuDieuChuyen, '/transfers/new', 'truck', 'Điều chuyển kho'],
 ], fn($c) => $auth->allows($user, $c[0]));
-if ($create): ?>
-<section class="create-cards" aria-label="Lập phiếu mới">
-  <?php foreach ($create as [, $href, $ic, $tone, $title]): ?>
-  <a class="create-card tone-<?= $tone ?>" href="<?= e($href) ?>"><span class="cc-ic"><?= icon($ic) ?></span><span class="cc-tx"><b><?= e($title) ?></b></span><i class="cc-go" aria-hidden="true">→</i></a>
-  <?php endforeach; ?>
-</section>
-<?php endif; ?>
+?>
+<header class="page-head">
+  <div><h1>Phiếu nhập xuất</h1></div>
+  <?php if ($create): ?><div class="actions">
+    <?php foreach ($create as [, $href, $ic, $title]): ?><a class="btn btn-ghost" href="<?= e($href) ?>"><?= icon($ic) ?><?= e($title) ?></a><?php endforeach; ?>
+  </div><?php endif; ?>
+</header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
   <?php foreach ($tabs as $k => $label): $n = $k === '' ? $total : ($counts[$k] ?? 0); ?>
   <a href="/vouchers?<?= e($qs(['status' => $k])) ?>" data-tone="<?= $tones[$k] ?>"<?= ($status ?? '') === $k || ($k === '' && !$status) ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($n) ?></span></a>
@@ -41,7 +38,7 @@ if ($create): ?>
   <thead><tr><th>Mã phiếu</th><th>Loại</th><th>Kho</th><th>Đối tác / lý do</th><th>Hàng hoá</th><th>Trạng thái</th><th>Người lập</th><th>Thời gian</th></tr></thead>
   <tbody>
   <?php foreach ($rows as $v): ?>
-    <tr data-tone="<?= status_tone($v['trang_thai']) ?>"<?= is_new($changes, $v['id']) ? ' class="is-new"' : '' ?>><td><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= hl($v['ma'], $q) ?></b></a><?= new_tag($changes, $v['id']) ?></td><td><?= type_chip($v['loai']) ?></td><td class="nw"><span class="wh-code"><?= e($v['wh_code']) ?></span><?= $v['cp_code'] ? ' <span class="arrow">' . ($v['loai'] === 'TRANSFER_IN' ? '←' : '→') . '</span> <span class="wh-code">' . e($v['cp_code']) . '</span>' : '' ?></td>
+    <tr data-tone="<?= voucher_tone($v) ?>"<?= is_new($changes, $v['id']) ? ' class="is-new"' : '' ?>><td><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= hl($v['ma'], $q) ?></b></a><?= new_tag($changes, $v['id']) ?></td><td><?= type_chip($v['loai']) ?></td><td class="nw"><span class="wh-code"><?= e($v['wh_code']) ?></span><?= $v['cp_code'] ? ' <span class="arrow">' . ($v['loai'] === 'TRANSFER_IN' ? '←' : '→') . '</span> <span class="wh-code">' . e($v['cp_code']) . '</span>' : '' ?></td>
       <td class="muted wrap"><?= hl($v['doi_tac'] ?: ($v['ly_do'] ?: '—'), $q) ?></td><td class="wrap"><?= $item || $catSel !== '' ? '<mark class="hl">' . e($v['first_item'] ?? '—') . '</mark>' : e($v['first_item'] ?? '—') ?><br><small class="muted"><?= (int)$v['line_count'] > 1 ? '+' . n((int)$v['line_count'] - 1) . ' mặt hàng khác' : ($v['loai'] === 'ADJUSTMENT' ? signed((int)$v['first_qty']) : n(abs((int)$v['first_qty']))) . ' ' . e($v['first_unit'] ?? '') ?></small></td><td><?= voucher_status_tag($v) ?></td>
       <td class="nw"><?= e($v['creator_name']) ?></td><td class="muted"><?= e(dt_short($v['ngay_tao'])) ?></td></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="8" class="empty">Không có phiếu phù hợp.</td></tr><?php endif; ?>
