@@ -88,7 +88,11 @@
   // Biểu đồ (Chart.js nạp cục bộ từ /assets/vendor)
   const initCharts = () => {
     if (!window.Chart) return;
-    const palette = ['#2b5797', '#2b2f3a', '#f59e0b', '#2563eb', '#16a34a', '#7a8190', '#0ea5e9'];
+    const palette = ['#3a6bb8', '#0d9488', '#7c3aed', '#c2610c', '#be185d', '#15803d', '#64748b'];
+    const fmt = (v) => Number(v).toLocaleString('vi-VN');
+    const money = (v) => (v >= 1e9 ? (v / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + ' tỷ' : v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu' : fmt(v)) + ' đ';
+    const axisY = { beginAtZero: true, ticks: { precision: 0, callback: (v) => fmt(v) }, grid: { color: () => css('--line') }, border: { display: false }, afterFit: (a) => { a.width = Math.max(a.width + 10, 56); } };
+    const legend = { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } };
     Chart.defaults.font.family = '"Be Vietnam Pro", system-ui, sans-serif';
     const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
     const paintChartTheme = () => { Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line'); };
@@ -102,6 +106,35 @@
           data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: (c) => (fixed ? fixed[c.dataIndex] : c.dataIndex === 1 && document.documentElement.dataset.theme === 'dark' ? '#8b95b3' : palette[c.dataIndex % palette.length]), borderWidth: 2, borderColor: () => css('--surface'), hoverOffset: 6 }] },
           options: { cutout: '66%', maintainAspectRatio: false, animation: reduce ? false : { duration: 900 },
             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } } } } });
+      } else if (cv.dataset.chart === 'trend') {
+        const nhap = JSON.parse(cv.dataset.nhap || '[]'), xuat = JSON.parse(cv.dataset.xuat || '[]');
+        new Chart(cv, { type: 'bar', data: { labels, datasets: [
+            { type: 'bar', label: 'Nhập', data: nhap, backgroundColor: '#15803d', borderRadius: 4, maxBarThickness: 26, order: 2 },
+            { type: 'bar', label: 'Xuất', data: xuat, backgroundColor: '#c2610c', borderRadius: 4, maxBarThickness: 26, order: 2 },
+            { type: 'line', label: 'Chênh lệch (nhập − xuất)', data: nhap.map((v, i) => v - xuat[i]), borderColor: '#3a6bb8', backgroundColor: '#3a6bb8', borderWidth: 2, tension: 0, pointRadius: 2, order: 1 } ] },
+          options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 700 }, interaction: { mode: 'index', intersect: false },
+            scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { ...axisY, beginAtZero: false } },
+            plugins: { legend, tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + fmt(c.parsed.y) } } } } });
+      } else if (cv.dataset.chart === 'catbar') {
+        new Chart(cv, { type: 'bar', data: { labels, datasets: [
+            { label: 'Nhập', data: JSON.parse(cv.dataset.nhap || '[]'), backgroundColor: '#15803d', borderRadius: 4, maxBarThickness: 18 },
+            { label: 'Xuất', data: JSON.parse(cv.dataset.xuat || '[]'), backgroundColor: '#c2610c', borderRadius: 4, maxBarThickness: 18 } ] },
+          options: { indexAxis: 'y', maintainAspectRatio: false, animation: reduce ? false : { duration: 700 },
+            scales: { x: { beginAtZero: true, ticks: { precision: 0, maxTicksLimit: 6, callback: (v) => fmt(v) }, grid: { color: () => css('--line') }, border: { display: false } }, y: { grid: { display: false } } },
+            plugins: { legend, tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + fmt(c.parsed.x) } } } } });
+      } else if (cv.dataset.chart === 'minstock') {
+        const q = JSON.parse(cv.dataset.q || '[]'), dm = JSON.parse(cv.dataset.dm || '[]'), names = JSON.parse(cv.dataset.names || '[]');
+        new Chart(cv, { type: 'bar', data: { labels, datasets: [
+            { type: 'bar', label: 'Tồn hiện có', data: q, backgroundColor: (c) => (q[c.dataIndex] <= dm[c.dataIndex] ? '#dc2626' : '#3a6bb8'), borderRadius: 4, maxBarThickness: 30, order: 2 },
+            { type: 'line', label: 'Định mức tối thiểu', data: dm, borderColor: '#111827', borderWidth: 0, showLine: false, pointStyle: 'rectRot', pointRadius: 6, pointBackgroundColor: '#111827', pointBorderColor: '#fff', order: 1 } ] },
+          options: { maintainAspectRatio: false, animation: reduce ? false : { duration: 700 }, interaction: { mode: 'index', intersect: false },
+            scales: { x: { grid: { display: false }, ticks: { maxRotation: 0 } }, y: axisY },
+            plugins: { legend, tooltip: { callbacks: { title: (it) => labels[it[0].dataIndex] + ' — ' + (names[it[0].dataIndex] || ''), label: (c) => c.dataset.label + ': ' + fmt(c.parsed.y) } } } } });
+      } else if (cv.dataset.chart === 'moneydonut') {
+        new Chart(cv, { type: 'doughnut',
+          data: { labels, datasets: [{ data: JSON.parse(cv.dataset.values || '[]'), backgroundColor: (c) => palette[c.dataIndex % palette.length], borderWidth: 2, borderColor: () => css('--surface'), hoverOffset: 6 }] },
+          options: { cutout: '62%', maintainAspectRatio: false, animation: reduce ? false : { duration: 700 },
+            plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 8, font: { size: 11 } } }, tooltip: { callbacks: { label: (c) => ' ' + c.label + ': ' + money(c.parsed) } } } } });
       } else if (cv.dataset.chart === 'flowbar') {
         new Chart(cv, { type: 'bar',
           data: { labels, datasets: [
@@ -130,6 +163,7 @@
     });
   };
   if (document.readyState === 'complete') initCharts(); else addEventListener('load', initCharts);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (window.Chart) Object.values(Chart.instances).forEach((c) => c.resize()); });
 
   // Ô tìm kiếm có data-search-clean: chỉ nhận chữ, số, khoảng trắng và - . /; tự chuyển thành chữ thường (máy chủ cũng lọc lại)
   document.addEventListener('input', (e) => {
@@ -142,6 +176,11 @@
   // Menu trên mobile
   const toggle = document.querySelector('[data-menu-toggle]');
   if (toggle) toggle.addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+  // khung ứng dụng (thanh trên + menu trái) đứng yên: nếu trình duyệt tự cuộn ngang / dọc cả khung (vd. khi bấm vào ô nằm ngoài tầm nhìn) thì trả về 0
+  document.addEventListener('scroll', (e) => {
+    const t = e.target === document ? document.scrollingElement : e.target;
+    if (t && (t === document.scrollingElement || t === document.body || (t.matches && t.matches('.app-shell .shell, .app-shell .main-wrap'))) && (t.scrollLeft || t.scrollTop)) { t.scrollLeft = 0; t.scrollTop = 0; }
+  }, true);
 
   // ── Tìm kiếm: chữ thường, bỏ dấu (đ → d), mọi từ khoá đều phải khớp ──
   const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
@@ -1648,45 +1687,8 @@
 })();
 
 // Menu trái: kéo mép phải để nới rộng trong khoảng giới hạn (đọc rõ tên mục dài); bấm đúp để về mặc định; nhớ độ rộng
-(() => {
-  const shell = document.querySelector('.app-shell .shell'), side = document.getElementById('sidebar');
-  if (!shell || !side) return;
-  const MIN = 220, MAX = 320, KEY = 'sidebar-w', desktop = matchMedia('(min-width: 1001px)');
-  const clamp = (w) => Math.min(MAX, Math.max(MIN, w));
-  const grip = document.createElement('div');
-  grip.className = 'side-grip';
-  grip.setAttribute('aria-hidden', 'true');
-  grip.title = 'Kéo để chỉnh độ rộng menu (bấm đúp: mặc định)';
-  shell.appendChild(grip);
-  const set = (w) => { if (w) shell.style.setProperty('--sb-w', clamp(w) + 'px'); else shell.style.removeProperty('--sb-w'); place(); };
-  const place = () => {
-    grip.hidden = !desktop.matches;
-    grip.style.left = (side.offsetLeft + side.offsetWidth - 5) + 'px';
-    grip.style.top = side.offsetTop + 'px';
-    grip.style.height = side.offsetHeight + 'px';
-  };
-  try { const w = parseInt(localStorage.getItem(KEY), 10); if (w) shell.style.setProperty('--sb-w', clamp(w) + 'px'); } catch (e) {}
-  let drag = null;
-  grip.addEventListener('pointerdown', (e) => {
-    drag = { x: e.clientX, w: side.offsetWidth };
-    grip.setPointerCapture(e.pointerId);
-    document.body.classList.add('side-resizing');
-    e.preventDefault();
-  });
-  grip.addEventListener('pointermove', (e) => { if (drag) set(drag.w + e.clientX - drag.x); });
-  const stop = () => {
-    if (!drag) return;
-    drag = null;
-    document.body.classList.remove('side-resizing');
-    try { localStorage.setItem(KEY, side.offsetWidth); } catch (e) {}
-  };
-  grip.addEventListener('pointerup', stop);
-  grip.addEventListener('pointercancel', stop);
-  grip.addEventListener('dblclick', () => { set(0); try { localStorage.removeItem(KEY); } catch (e) {} });
-  addEventListener('resize', place);
-  new ResizeObserver(place).observe(side);
-  place();
-})();
+// Độ rộng menu trái cố định (không còn kéo mép để chỉnh); xoá độ rộng cũ đã lưu ở trình duyệt.
+try { localStorage.removeItem('sidebar-w'); } catch (e) {}
 
 // Bảng Hàng hoá: «Hiện thêm cột» bật / tắt các cột ít dùng (nhớ lựa chọn). Lớp đặt ở <html> để vẫn giữ khi bảng được tải lại theo bộ lọc.
 (() => {

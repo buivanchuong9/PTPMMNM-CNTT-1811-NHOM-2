@@ -36,11 +36,13 @@ $groups = [
         'audit' => ['/audit', 'clipboard', 'Nhật ký thao tác', [P::XemLichSu]],
         'reports-group' => ['#', 'chart', 'Báo cáo', [P::XemBaoCao], [
             'nxt' => ['/reports/nxt', 'scale', 'Nhập – Xuất – Tồn', [P::XemBaoCao]],
-            'valuation' => ['/valuation', 'scale', 'Vốn kho', [P::XemBaoCao]],
-            'money-in' => ['/money/in', 'in', 'Tiền nhập', [P::XemBaoCao]],
-            'money-out' => ['/money/out', 'out', 'Tiền xuất', [P::XemBaoCao]],
-            'money-profit' => ['/money/profit', 'chart', 'Tiền lãi', [P::XemBaoCao]],
             'reports' => ['/reports', 'chart', 'Tổng hợp & xuất CSV', [P::XemBaoCao]],
+        ]],
+        'finance-group' => ['#', 'scale', 'Tài chính', [P::XemBaoCao], [
+            'valuation' => ['/valuation', 'scale', 'Giá trị tồn kho', [P::XemBaoCao]],
+            'money-in' => ['/money/in', 'in', 'Chi phí nhập hàng', [P::XemBaoCao]],
+            'money-out' => ['/money/out', 'out', 'Doanh thu bán hàng', [P::XemBaoCao]],
+            'money-profit' => ['/money/profit', 'chart', 'Lãi gộp', [P::XemBaoCao]],
         ]],
     ],
     'Danh mục' => [
@@ -101,7 +103,7 @@ $roleSummary = $user->role->label() . ' · ' . $whLabel;
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <header class="topbar">
   <button class="menu-toggle" type="button" aria-label="Mở menu" data-menu-toggle><?= icon('layers') ?></button>
-  <a class="brand" href="/" aria-label="<?= e(strip_tags(app_brand())) ?> — Tổng quan" title="Tổng quan"><img class="brand-full" src="/assets/img/stockflow-logo.png" alt="<?= e(APP_NAME) ?>" width="62" height="34"></a>
+  <a class="brand" href="/" aria-label="<?= e(strip_tags(app_brand())) ?> — Tổng quan" title="Tổng quan"><img class="brand-full" src="/assets/img/stockflow-logo.png" alt="<?= e(APP_NAME) ?>" width="62" height="34"><span class="brand-tag">Quản lý kho hàng</span></a>
   <form class="topsearch" action="/history" method="get" role="search">
     <?= icon('search') ?><input type="search" name="q" maxlength="50" data-search-clean placeholder="Tìm mã phiếu, SKU, số lô…" aria-label="Tìm kiếm nhanh">
   </form>

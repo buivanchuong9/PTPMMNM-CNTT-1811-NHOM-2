@@ -472,4 +472,87 @@ final class StockQuery
             'daily' => $this->dailyFlow($ids, 14),
         ];
     }
+
+    /**
+     * Số liệu cho các biểu đồ ở Tổng quan theo kỳ $days ngày gần nhất (kèm kỳ liền trước để so sánh).
+     * Chỉ tính phiếu nhập (RECEIPT) và xuất (ISSUE); chuyển kho không tính vì chỉ là dời chỗ.
+     * @param list<int> $ids
+     * @return array{nhap:int,xuat:int,prev_nhap:int,prev_xuat:int,series:list<array{ngay:string,nhap:int,xuat:int}>,by_cat:list<array{ten:string,nhap:int,xuat:int}>,by_wh:array<int,array{nhap:int,xuat:int}>,transit:int,min_stock:list<array{ma_hang:string,ten:string,dm:int,q:int}>}
+     */
+    public function dashboardPeriod(array $ids, int $days): array
+    {
+        $out = ['nhap' => 0, 'xuat' => 0, 'prev_nhap' => 0, 'prev_xuat' => 0, 'series' => [], 'by_cat' => [], 'by_wh' => [], 'transit' => 0, 'min_stock' => [], 'phieu_nhap' => 0, 'phieu_xuat' => 0, 'hang_nhap' => 0, 'hang_xuat' => 0];
+        $days = max(1, $days);
+        $series = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = gmdate('Y-m-d', time() - $i * 86400);
+            $series[$d] = ['ngay' => $d, 'nhap' => 0, 'xuat' => 0];
+        }
+        if ($ids === []) {
+            $out['series'] = array_values($series);
+            return $out;
+        }
+        $in = $this->in($ids);
+        $curFrom = array_key_first($series);
+        $prevFrom = gmdate('Y-m-d', time() - (2 * $days - 1) * 86400);
+        foreach ($this->db->all(
+            "SELECT DATE(m.ngay_ghi_so) AS ngay, v.loai, SUM(ABS(m.bien_dong)) AS q
+             FROM so_phat_sinh m JOIN phieu_nhap_xuat v ON v.id = m.phieu_nhap_xuat_id
+             WHERE m.kho_id IN ($in) AND v.loai IN ('RECEIPT','ISSUE') AND m.ngay_ghi_so >= ? GROUP BY DATE(m.ngay_ghi_so), v.loai",
+            [...$ids, $prevFrom . ' 00:00:00']
+        ) as $r) {
+            $k = $r['loai'] === 'RECEIPT' ? 'nhap' : 'xuat';
+            if ((string)$r['ngay'] >= $curFrom) {
+                $out[$k] += (int)$r['q'];
+                if (isset($series[$r['ngay']])) {
+                    $series[$r['ngay']][$k] = (int)$r['q'];
+                }
+            } else {
+                $out['prev_' . $k] += (int)$r['q'];
+            }
+        }
+        $out['series'] = array_values($series);
+        foreach ($this->db->all(
+            "SELECT v.loai, COUNT(DISTINCT m.phieu_nhap_xuat_id) AS p, COUNT(DISTINCT m.mat_hang_id) AS i
+             FROM so_phat_sinh m JOIN phieu_nhap_xuat v ON v.id = m.phieu_nhap_xuat_id
+             WHERE m.kho_id IN ($in) AND v.loai IN ('RECEIPT','ISSUE') AND m.ngay_ghi_so >= ? GROUP BY v.loai",
+            [...$ids, $curFrom . ' 00:00:00']
+        ) as $r) {
+            $k = $r['loai'] === 'RECEIPT' ? 'nhap' : 'xuat';
+            $out['phieu_' . $k] = (int)$r['p'];
+            $out['hang_' . $k] = (int)$r['i'];
+        }
+        $cats = [];
+        foreach ($this->db->all(
+            "SELECT COALESCE(c.ten, 'Chưa phân loại') AS ten, v.loai, SUM(ABS(m.bien_dong)) AS q
+             FROM so_phat_sinh m JOIN phieu_nhap_xuat v ON v.id = m.phieu_nhap_xuat_id JOIN mat_hang i ON i.id = m.mat_hang_id LEFT JOIN danh_muc c ON c.id = i.danh_muc_id
+             WHERE m.kho_id IN ($in) AND v.loai IN ('RECEIPT','ISSUE') AND m.ngay_ghi_so >= ? GROUP BY c.ten, v.loai",
+            [...$ids, $curFrom . ' 00:00:00']
+        ) as $r) {
+            $cats[$r['ten']] ??= ['ten' => (string)$r['ten'], 'nhap' => 0, 'xuat' => 0];
+            $cats[$r['ten']][$r['loai'] === 'RECEIPT' ? 'nhap' : 'xuat'] = (int)$r['q'];
+        }
+        usort($cats, fn($a, $b) => ($b['nhap'] + $b['xuat']) <=> ($a['nhap'] + $a['xuat']));
+        $out['by_cat'] = array_slice(array_values($cats), 0, 8);
+        foreach ($this->db->all(
+            "SELECT m.kho_id, v.loai, SUM(ABS(m.bien_dong)) AS q
+             FROM so_phat_sinh m JOIN phieu_nhap_xuat v ON v.id = m.phieu_nhap_xuat_id
+             WHERE m.kho_id IN ($in) AND v.loai IN ('RECEIPT','ISSUE') AND m.ngay_ghi_so >= ? GROUP BY m.kho_id, v.loai",
+            [...$ids, $curFrom . ' 00:00:00']
+        ) as $r) {
+            $out['by_wh'][(int)$r['kho_id']] ??= ['nhap' => 0, 'xuat' => 0];
+            $out['by_wh'][(int)$r['kho_id']][$r['loai'] === 'RECEIPT' ? 'nhap' : 'xuat'] = (int)$r['q'];
+        }
+        $out['transit'] = (int)$this->db->value(
+            "SELECT COALESCE(SUM(l.so_luong), 0) FROM chi_tiet_phieu_nhap_xuat l JOIN phieu_nhap_xuat v ON v.id = l.phieu_nhap_xuat_id
+             WHERE v.loai = 'TRANSFER_IN' AND v.trang_thai = 'DRAFT' AND v.kho_id IN ($in)", $ids);
+        foreach ($this->db->all(
+            "SELECT i.ma_hang, i.ten, i.dinh_muc_toi_thieu AS dm, COALESCE(SUM(m.bien_dong), 0) AS q
+             FROM mat_hang i LEFT JOIN so_phat_sinh m ON m.mat_hang_id = i.id AND m.kho_id IN ($in)
+             WHERE i.hoat_dong AND i.dinh_muc_toi_thieu > 0 GROUP BY i.id, i.ma_hang, i.ten, i.dinh_muc_toi_thieu
+             ORDER BY COALESCE(SUM(m.bien_dong), 0) * 1.0 / i.dinh_muc_toi_thieu, i.ma_hang LIMIT 10", $ids) as $r) {
+            $out['min_stock'][] = ['ma_hang' => (string)$r['ma_hang'], 'ten' => (string)$r['ten'], 'dm' => (int)$r['dm'], 'q' => (int)$r['q']];
+        }
+        return $out;
+    }
 }

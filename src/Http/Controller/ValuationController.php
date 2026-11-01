@@ -16,9 +16,9 @@ use StockFlow\Service\PricingService;
 
 /**
  * Hai trang báo cáo tiền:
- *  - «Vốn kho» (/valuation): trong kho còn bao nhiêu hàng, đáng giá bao nhiêu (giá gốc / giá bán).
- *  - mục con «Tiền nhập» (/money/in) và «Tiền xuất» (/money/out): từng phiếu đã xác nhận nhập / bán bao nhiêu tiền;
- *    «Tiền lãi» (/money/profit): bán ra lãi bao nhiêu, theo từng mặt hàng.
+ *  - «Giá trị tồn kho» (/valuation): trong kho còn bao nhiêu hàng, đáng giá bao nhiêu (giá gốc / giá bán).
+ *  - nhóm «Tài chính»: «Chi phí nhập hàng» (/money/in) và «Doanh thu bán hàng» (/money/out): từng phiếu đã xác nhận nhập / bán bao nhiêu tiền;
+ *    «Lãi gộp» (/money/profit): bán ra lãi bao nhiêu, theo từng mặt hàng.
  */
 final class ValuationController extends Controller
 {
@@ -84,7 +84,7 @@ final class ValuationController extends Controller
             'totals' => $totals, 'byWh' => array_values($byWh), 'rows' => $itemRows, 'pg' => $pg, 'unpriced' => $unpriced,
             'wh' => $wh, 'q' => $q, 'price' => $price, 'sort' => $sort, 'category' => $catRaw, 'categories' => $this->db->all('SELECT id, ten FROM danh_muc WHERE hoat_dong ORDER BY ten'),
             'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
-        ], 'Vốn kho');
+        ], 'Giá trị tồn kho');
     }
 
     public function moneyIn(Request $r, array $p, ?User $user): Response
@@ -120,7 +120,7 @@ final class ValuationController extends Controller
             'rows' => $rows, 'pg' => $pg, 'total' => $total, 'items' => count($all), 'best' => $all[0] ?? null, 'q' => $q,
             'wh' => $wh, 'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
             'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to,
-        ], 'Tiền lãi');
+        ], 'Lãi gộp');
     }
 
     /** Danh sách phiếu nhập (tiền chi ra) hoặc phiếu xuất (tiền thu về, kèm lãi) đã xác nhận, có dòng tổng cho cả bộ lọc. */
@@ -147,6 +147,6 @@ final class ValuationController extends Controller
             'dir' => $dir, 'rows' => $rows, 'pg' => $pg, 'total' => $total, 'q' => $q,
             'wh' => $wh, 'warehouses' => $this->db->all('SELECT id, ma, ten FROM kho WHERE hoat_dong ORDER BY ma'), 'visible' => $visible,
             'rangeSel' => $rangeSel, 'from' => $from, 'to' => $to,
-        ], $dir === 'in' ? 'Tiền nhập' : 'Tiền xuất');
+        ], $dir === 'in' ? 'Chi phí nhập hàng' : 'Doanh thu bán hàng');
     }
 }

@@ -88,8 +88,16 @@ truthy($st === 200 && $noPhpError($pr) && str_contains($pr, 'Phiếu xuất kho'
 truthy($st === 200 && $noPhpError($pr) && str_contains($pr, 'Tài xế nhận hàng') && str_contains($pr, 'Giá gốc') && !str_contains($pr, 'Thuế GTGT'), 'phiếu điều chuyển đi đã ghi sổ: có ô ký tài xế, ghi giá gốc và tổng giá trị, không có thuế');
 same($get("/vouchers/{$xferDraft['id']}/print")[0], 303, 'phiếu nháp chưa in được ⇒ chuyển về trang phiếu');
 same($get('/items')[0], 303, 'trang «Mặt hàng & lô» cũ chuyển sang «Hàng hoá» (/inventory)');
+foreach (['in', 'low', 'out'] as $stk) {
+    [$st, $inv] = $get('/inventory?stock=' . $stk);
+    truthy($st === 200 && $noPhpError($inv) && str_contains($inv, 'name="stock"'), 'trang Hàng hoá lọc theo số lượng còn (' . $stk . ') mở được và có ô chọn');
+}
+foreach (['qty_asc', 'qty_desc'] as $srt) {
+    [$st, $inv] = $get('/inventory?price=' . $srt);
+    truthy($st === 200 && $noPhpError($inv) && str_contains($inv, 'Số lượng: ít → nhiều'), 'trang Hàng hoá sắp xếp theo số lượng (' . $srt . ') mở được');
+}
 [, $dash] = $get('/');
-truthy(str_contains($dash, 'Nhập – xuất theo kho') && str_contains($dash, 'A' . $f->tag) && str_contains($dash, 'B' . $f->tag), 'tổng quan có biểu đồ nhập – xuất theo từng kho');
+truthy(str_contains($dash, 'So sánh các kho') && str_contains($dash, 'A' . $f->tag) && str_contains($dash, 'B' . $f->tag), 'tổng quan có bảng so sánh nhập – xuất theo từng kho');
 [, $rep] = $get('/reports');
 truthy(str_contains($rep, 'Từng kho: tồn') && str_contains($rep, 'A' . $f->tag) && str_contains($rep, 'B' . $f->tag), 'trang Báo cáo liệt kê từng kho: tồn và xuất nhập');
 foreach (['/vouchers/new?type=RECEIPT', '/vouchers/new?type=ISSUE', '/transfers/new'] as $p) {

@@ -3,7 +3,7 @@ $vnd = fn($v) => n((int)$v) . ' đ';
 $pct = fn($a, $b) => $b > 0 ? round($a / $b * 100, 1) . '%' : '—';
 ?>
 <header class="page-head">
-  <div><h1>Tiền lãi</h1></div>
+  <div><h1>Lãi gộp</h1></div>
 </header>
 
 <form class="filters" method="get">
@@ -14,15 +14,15 @@ $pct = fn($a, $b) => $b > 0 ? round($a / $b * 100, 1) . '%' : '—';
 </form>
 
 <section class="cards-3" style="margin-bottom:16px" aria-label="Tổng hợp lãi">
-  <div class="card pad"><p class="muted small">Tổng tiền lãi</p><p class="stat"><b class="money <?= $total['lai'] >= 0 ? 'pos' : 'neg' ?>"><?= $vnd($total['lai']) ?></b></p><p class="muted small">biên lãi <?= $pct($total['lai'], $total['tien']) ?> · <?= n($items) ?> mặt hàng đã bán</p></div>
-  <div class="card pad"><p class="muted small">Tiền bán (chưa thuế)</p><p class="stat"><b class="money"><?= $vnd($total['tien']) ?></b></p><p class="muted small">vốn hàng đã bán <?= $vnd($total['gia_von']) ?></p></div>
+  <div class="card pad"><p class="muted small">Tổng lãi gộp</p><p class="stat"><b class="money <?= $total['lai'] >= 0 ? 'pos' : 'neg' ?>"><?= $vnd($total['lai']) ?></b></p><p class="muted small">biên lãi <?= $pct($total['lai'], $total['tien']) ?> · <?= n($items) ?> mặt hàng đã bán</p></div>
+  <div class="card pad"><p class="muted small">Doanh thu (chưa thuế)</p><p class="stat"><b class="money"><?= $vnd($total['tien']) ?></b></p><p class="muted small">giá vốn hàng bán <?= $vnd($total['gia_von']) ?></p></div>
   <div class="card pad"><p class="muted small">Lãi nhiều nhất</p><p class="stat"><b><?= $best ? e($best['ma_hang']) : '—' ?></b></p><p class="muted small"><?= $best ? e($best['ten']) . ' · ' . $vnd($best['lai']) : 'chưa có phiếu xuất có giá' ?></p></div>
 </section>
 
 <section class="card flush" data-live="results">
-  <div class="card-head pad"><h2>Lãi theo từng mặt hàng</h2><span class="muted small">phiếu xuất đã xác nhận<?= $rangeSel ? '' : ' · mọi thời gian' ?> · lãi = tiền bán − vốn (giá gốc lúc xuất) · lãi nhiều trước</span></div>
+  <div class="card-head pad"><h2>Lãi theo từng mặt hàng</h2><span class="muted small">phiếu xuất đã xác nhận<?= $rangeSel ? '' : ' · mọi thời gian' ?> · lãi gộp = doanh thu − giá vốn (giá gốc lúc xuất) · lãi nhiều trước</span></div>
   <div class="table-wrap"><table class="dense">
-    <thead><tr><th>SKU</th><th>Tên hàng</th><th class="num">Phiếu xuất</th><th class="num">Đã bán</th><th class="num">Tiền bán</th><th class="num">Vốn</th><th class="num">Tiền lãi</th><th class="num">Biên lãi</th></tr></thead>
+    <thead><tr><th>SKU</th><th>Tên hàng</th><th class="num">Phiếu xuất</th><th class="num">Đã bán</th><th class="num">Doanh thu</th><th class="num">Giá vốn</th><th class="num">Lãi gộp</th><th class="num">Biên lãi</th></tr></thead>
     <tbody>
     <?php foreach ($rows as $i): $lai = (int)$i['lai']; ?>
       <tr><td><b><?= e($i['ma_hang']) ?></b></td><td><?= e($i['ten']) ?></td><td class="num"><?= n($i['phieu']) ?></td>

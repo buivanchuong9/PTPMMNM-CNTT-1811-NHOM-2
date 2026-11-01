@@ -1,11 +1,31 @@
 <?php /** @var array $d */
 use StockFlow\Domain\Permission as P;
-$maxUnits = max(1, ...array_map(fn($w) => (int)$w['units'], $d['warehouses'] ?: [['units' => 1]]));
-$dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['ngay'], 5, 2), $d['daily']);
+$rangeLabels = ['7' => '7 ngày', '30' => '30 ngày', '90' => '90 ngày', 'month' => 'Tháng này'];
+$scope = $user->isAdmin ? 'toàn hệ thống' : 'kho của bạn';
+// kỳ dài (90 ngày) gộp theo tuần cho biểu đồ đỡ dày
+$bucket = $days > 31 ? 7 : 1;
+$trend = [];
+foreach (array_chunk($period['series'], $bucket) as $chunk) {
+    $a = substr($chunk[0]['ngay'], 8, 2) . '/' . substr($chunk[0]['ngay'], 5, 2);
+    $trend[] = ['l' => $bucket > 1 ? $a . '–' . substr(end($chunk)['ngay'], 8, 2) . '/' . substr(end($chunk)['ngay'], 5, 2) : $a, 'nhap' => array_sum(array_column($chunk, 'nhap')), 'xuat' => array_sum(array_column($chunk, 'xuat'))];
+}
+$span = $range === 'month' ? 'tháng này' : $days . ' ngày qua';
+$before = $range === 'month' ? 'cùng số ngày trước đó' : $days . ' ngày trước đó';
+$delta = function (int $cur, int $prev) use ($before): string {
+    if ($prev <= 0) {
+        return '<small class="kpi-delta">' . ($cur > 0 ? $before . ' chưa có phát sinh' : '—') . '</small>';
+    }
+    $p = (int)round(($cur - $prev) / $prev * 100);
+    return '<small class="kpi-delta ' . ($p >= 0 ? 'up' : 'down') . '">' . ($p >= 0 ? '▲ ' : '▼ ') . abs($p) . '% so với ' . e($before) . '</small>';
+};
+$donut = $user->isAdmin
+    ? ['title' => 'Giá trị tồn theo kho', 'rows' => array_filter(array_column($value['rows'], 'value', 'code'), fn($v) => $v > 0)]
+    : ['title' => 'Giá trị tồn theo danh mục', 'rows' => $value['cats']];
 ?>
 <header class="page-head">
-  <div><h1>Tổng quan kho</h1></div>
+  <div><h1>Tổng quan kho</h1><p class="muted small">Số liệu <?= e($scope) ?> · <?= e($rangeLabels[$range]) ?> gần nhất</p></div>
   <div class="actions">
+    <nav class="seg" aria-label="Khoảng thời gian"><?php foreach ($rangeLabels as $k => $lb): ?><a href="/?range=<?= e((string)$k) ?>"<?= $range === (string)$k ? ' class="on" aria-current="true"' : '' ?>><?= e($lb) ?></a><?php endforeach; ?></nav>
     <?php if ($auth->allows($user, P::LapPhieuDieuChuyen)): ?><a class="btn btn-act btn-act-xfer" href="/transfers/new"><?= icon('truck') ?>Điều chuyển kho</a><?php endif; ?>
     <?php if ($auth->allows($user, P::LapPhieuNhap)): ?><a class="btn btn-act btn-act-in" href="/vouchers/new?type=RECEIPT"><?= icon('in') ?>Lập phiếu nhập</a><?php endif; ?>
   </div>
@@ -16,120 +36,68 @@ $dailyLabels = array_map(fn($r) => substr($r['ngay'], 8, 2) . '/' . substr($r['n
   <?php foreach ($todo as [$label, $count, $href]): ?><a href="<?= e($href) ?>"><span class="todo-n"><?= n($count) ?></span> <?= e($label) ?></a><?php endforeach; ?>
 </nav>
 <?php endif; ?>
-<section class="kpis kpis-strip" aria-label="Chỉ số chính">
-  <a class="kpi" href="/inventory"><span class="kpi-ic"><?= icon('layers') ?></span><b data-count="<?= (int)$d['units'] ?>"><?= n($d['units']) ?></b><span>Đơn vị đang tồn</span></a>
-  <a class="kpi kpi-warn" href="/vouchers?status=DRAFT"><span class="kpi-ic"><?= icon('file') ?></span><b data-count="<?= (int)$d['drafts'] ?>"><?= n($d['drafts']) ?></b><span>Phiếu chờ xác nhận</span></a>
-  <a class="kpi kpi-ok" href="/vouchers?status=CONFIRMED"><span class="kpi-ic"><?= icon('check') ?></span><b data-count="<?= (int)$d['confirmed_today'] ?>"><?= n($d['confirmed_today']) ?></b><span>Đã xác nhận hôm nay</span></a>
-  <?php if ($value): ?>
-  <a class="kpi kpi-info" href="/valuation" title="<?= e(n($value['total'])) ?> đ theo giá gốc"><span class="kpi-ic"><?= icon('scale') ?></span><b><?= e(vnd_short($value['total'])) ?></b><span>Giá trị tồn kho (giá gốc, mọi kho)</span></a>
-  <?php else: ?>
-  <a class="kpi kpi-warn" href="/inventory?stock=low"><span class="kpi-ic"><?= icon('box') ?></span><b data-count="<?= (int)$d['low_count'] ?>"><?= n($d['low_count']) ?></b><span>Mặt hàng sắp hết</span></a>
-  <?php endif; ?>
+
+<section class="kpis kpis-5" aria-label="Chỉ số chính">
+  <a class="kpi kpi-info" href="<?= $user->isAdmin ? '/valuation' : '/inventory' ?>" title="<?= e(n($value['total'])) ?> đ theo giá gốc"><span class="kpi-ic"><?= icon('scale') ?></span><span class="kpi-label">Giá trị tồn kho</span><b><?= e(vnd_short($value['total'])) ?> <small>đ</small></b><small class="kpi-delta">theo giá gốc<?= $value['missing'] ? ' · ' . n($value['missing']) . ' dòng chưa có giá' : '' ?></small></a>
+  <a class="kpi kpi-ok" href="/vouchers?type=RECEIPT" title="Tổng số lượng hàng đã nhập kho (đã xác nhận), cộng mọi mặt hàng — cái, hộp, cuộn… tính chung"><span class="kpi-ic"><?= icon('in') ?></span><span class="kpi-label">Hàng nhập kho · <?= e($span) ?></span><b><?= n($period['nhap']) ?> <small>đơn vị</small></b><small class="kpi-delta"><?= n($period['phieu_nhap']) ?> phiếu nhập · <?= n($period['hang_nhap']) ?> mặt hàng</small><?= $delta((int)$period['nhap'], (int)$period['prev_nhap']) ?></a>
+  <a class="kpi kpi-warn" href="/vouchers?type=ISSUE" title="Tổng số lượng hàng đã xuất kho (đã xác nhận), cộng mọi mặt hàng — cái, hộp, cuộn… tính chung"><span class="kpi-ic"><?= icon('out') ?></span><span class="kpi-label">Hàng xuất kho · <?= e($span) ?></span><b><?= n($period['xuat']) ?> <small>đơn vị</small></b><small class="kpi-delta"><?= n($period['phieu_xuat']) ?> phiếu xuất · <?= n($period['hang_xuat']) ?> mặt hàng</small><?= $delta((int)$period['xuat'], (int)$period['prev_xuat']) ?></a>
+  <a class="kpi" href="/vouchers?status=DRAFT"><span class="kpi-ic"><?= icon('truck') ?></span><span class="kpi-label">Hàng đang đi đường</span><b><?= n($period['transit']) ?> <small>đơn vị</small></b><small class="kpi-delta">đã xuất khỏi kho gửi, kho nhận chưa xác nhận</small></a>
+  <a class="kpi kpi-warn" href="/vouchers?status=DRAFT"><span class="kpi-ic"><?= icon('file') ?></span><span class="kpi-label">Phiếu chờ xác nhận</span><b data-count="<?= (int)$d['drafts'] ?>"><?= n($d['drafts']) ?></b><small class="kpi-delta"><?= n($d['low_count']) ?> mặt hàng dưới định mức</small></a>
 </section>
 
-<div class="grid-2">
-  <section class="card">
-    <div class="card-head"><h2>Phiếu chờ xác nhận</h2><a href="/vouchers?status=DRAFT">Xem tất cả →</a></div>
-    <?php if (!$d['pending']): ?><p class="empty">Không có phiếu nào đang chờ.</p><?php endif; ?>
-    <ul class="rows">
-    <?php foreach ($d['pending'] as $v): ?>
-      <li><span><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= e($v['ma']) ?></b></a> <?= type_chip($v['loai']) ?><br><small class="muted"><?= e($v['wh_code']) ?> · <?= e($v['creator_name']) ?> · <?= e(dt($v['ngay_tao'])) ?></small></span>
-        <?= $v['loai'] === 'TRANSFER_IN' ? '<span class="tag tag-info">Chờ nhận hàng</span>' : status_tag('DRAFT') ?></li>
-    <?php endforeach; ?>
-    </ul>
-  </section>
-
-  <?php if ($value): ?>
-  <section class="card">
-    <div class="card-head"><h2>Giá trị tồn theo kho</h2><a href="/valuation">Chi tiết →</a></div>
-    <?php if (!$value['rows']): ?><p class="empty">Chưa có kho nào.</p><?php endif; ?>
-    <ul class="rows">
-    <?php foreach ($value['rows'] as $r): ?>
-      <li><span><b><?= e($r['code']) ?></b> <span class="muted"><?= e($r['name']) ?></span><br><small class="muted"><?= $value['total'] > 0 ? round($r['value'] / $value['total'] * 100) : 0 ?>% tổng giá trị tồn</small></span>
-        <span class="tag tag-info" title="<?= e(n($r['value'])) ?> đ"><?= e(vnd_short($r['value'])) ?> đ</span></li>
-    <?php endforeach; ?>
-    </ul>
-    <?php if ($value['missing']): ?><p class="muted small pad"><?= n($value['missing']) ?> dòng tồn chưa có giá gốc nên chưa tính vào tổng.</p><?php endif; ?>
-  </section>
-  <?php else: ?>
-  <section class="card">
-    <div class="card-head"><h2>Sắp hết hàng</h2><a href="/inventory?stock=low">Xem tất cả →</a></div>
-    <?php if (!$d['low']): ?><p class="empty">Không có mặt hàng nào dưới định mức.</p><?php endif; ?>
-    <ul class="rows">
-    <?php foreach ($d['low'] as $r): ?>
-      <?php $need = max(1, 2 * (int)$r['dinh_muc_toi_thieu'] - (int)$r['so_luong']);   // gợi ý nhập đủ tới gấp đôi mức tối thiểu ?>
-      <li><span><b><?= e($r['ma_hang']) ?></b> <span class="muted"><?= e($r['ten']) ?></span><br><small class="muted">Tối thiểu <?= n($r['dinh_muc_toi_thieu']) ?> <?= e($r['unit']) ?></small></span>
-        <span><span class="tag tag-<?= (int)$r['so_luong'] <= 0 ? 'danger' : 'warn' ?>"><?= n($r['so_luong']) ?> <?= e($r['unit']) ?></span>
-        <?php if (!empty($canOrder)): ?><a class="btn btn-ghost btn-sm" href="/orders/new?restock=<?= (int)$r['id'] ?>:<?= $need ?>" title="Đặt nhà cung cấp <?= n($need) ?> <?= e($r['unit']) ?>">Đặt <?= n($need) ?></a>
-        <?php elseif (!empty($canReceive)): ?><a class="btn btn-ghost btn-sm" href="/vouchers/new?type=RECEIPT&amp;restock=<?= (int)$r['id'] ?>:<?= $need ?>" title="Lập phiếu nhập <?= n($need) ?> <?= e($r['unit']) ?>">Nhập <?= n($need) ?></a><?php endif; ?></span></li>
-    <?php endforeach; ?>
-    </ul>
-  </section>
-  <?php endif; ?>
-</div>
-
-<?php if ($user->isAdmin): ?>
-<div class="grid-2">
+<div class="dash-row">
   <section class="card chart-card">
-    <div class="card-head"><h2>Diễn biến 14 ngày</h2><span class="muted small">vào / ra mỗi ngày</span></div>
-    <div class="chart-box"><canvas data-chart="dailyline" data-labels="<?= e(json_encode($dailyLabels)) ?>"
-      data-vao="<?= e(json_encode(array_column($d['daily'], 'vao'))) ?>" data-ra="<?= e(json_encode(array_column($d['daily'], 'ra'))) ?>" role="img" aria-label="Biểu đồ đường tổng vào và ra theo ngày"></canvas></div>
+    <div class="card-head"><h2>Xu hướng nhập – xuất</h2><span class="muted small"><?= $bucket > 1 ? 'gộp theo tuần' : 'theo ngày' ?> · cột nhập, cột xuất, đường là chênh lệch</span></div>
+    <div class="chart-box"><canvas data-chart="trend" data-labels="<?= e(json_encode(array_column($trend, 'l'))) ?>" data-nhap="<?= e(json_encode(array_column($trend, 'nhap'))) ?>" data-xuat="<?= e(json_encode(array_column($trend, 'xuat'))) ?>" role="img" aria-label="Biểu đồ cột nhập và xuất theo thời gian"></canvas></div>
   </section>
   <section class="card chart-card">
-    <div class="card-head"><h2>Nhập – xuất theo kho</h2><a href="/reports">Chi tiết →</a></div>
-    <?php if (!$d['warehouses']): ?><p class="chart-empty">Chưa có dữ liệu.</p><?php else: ?>
-    <div class="chart-box"><canvas data-chart="flowbar" data-labels="<?= e(json_encode(array_column($d['warehouses'], 'ma'))) ?>"
-      data-vao="<?= e(json_encode(array_map(fn($w) => (int)($d['flow'][$w['id']]['vao'] ?? 0), $d['warehouses']))) ?>"
-      data-ra="<?= e(json_encode(array_map(fn($w) => (int)($d['flow'][$w['id']]['ra'] ?? 0), $d['warehouses']))) ?>" role="img" aria-label="Biểu đồ cột tổng nhập và xuất theo kho"></canvas></div>
+    <div class="card-head"><h2><?= e($donut['title']) ?></h2><span class="muted small">theo giá gốc</span></div>
+    <?php if (!$donut['rows']): ?><p class="chart-empty">Chưa có hàng tồn có giá gốc.</p><?php else: ?>
+    <div class="chart-box donut"><canvas data-chart="moneydonut" data-labels="<?= e(json_encode(array_keys($donut['rows']))) ?>" data-values="<?= e(json_encode(array_values($donut['rows']))) ?>" role="img" aria-label="<?= e($donut['title']) ?>"></canvas></div>
     <?php endif; ?>
   </section>
 </div>
-<?php else: ?>
-<section class="card chart-card">
-  <div class="card-head"><h2>Diễn biến 14 ngày</h2><span class="muted small">vào / ra mỗi ngày</span></div>
-  <div class="chart-box"><canvas data-chart="dailyline" data-labels="<?= e(json_encode($dailyLabels)) ?>"
-    data-vao="<?= e(json_encode(array_column($d['daily'], 'vao'))) ?>" data-ra="<?= e(json_encode(array_column($d['daily'], 'ra'))) ?>" role="img" aria-label="Biểu đồ đường tổng vào và ra theo ngày"></canvas></div>
-</section>
-<?php endif; ?>
 
 <div class="grid-2">
-  <section class="card">
-    <div class="card-head"><h2>Phát sinh gần đây</h2><a href="/history">Sổ phát sinh →</a></div>
-    <?php if (!$d['recent']): ?><p class="empty">Chưa có phát sinh nào.</p><?php endif; ?>
-    <ul class="rows">
-    <?php foreach ($d['recent'] as $m): ?>
-      <li><span><a href="/history?q=<?= urlencode($m['voucher_code']) ?>"><b><?= e($m['voucher_code']) ?></b></a> <small class="muted"><?= e($m['wh_code']) ?> · <?= e($m['ma_hang']) ?></small><br><small class="muted"><?= e(dt($m['ngay_ghi_so'])) ?></small></span>
-        <b class="<?= $m['bien_dong'] > 0 ? 'pos' : 'neg' ?>"><?= signed((int)$m['bien_dong']) ?></b></li>
-    <?php endforeach; ?>
-    </ul>
+  <section class="card chart-card">
+    <div class="card-head"><h2>Nhập – xuất theo danh mục</h2><span class="muted small"><?= e($rangeLabels[$range]) ?></span></div>
+    <?php if (!$period['by_cat']): ?><p class="chart-empty">Chưa có phát sinh trong kỳ.</p><?php else: ?>
+    <div class="chart-box"><canvas data-chart="catbar" data-labels="<?= e(json_encode(array_column($period['by_cat'], 'ten'))) ?>" data-nhap="<?= e(json_encode(array_column($period['by_cat'], 'nhap'))) ?>" data-xuat="<?= e(json_encode(array_column($period['by_cat'], 'xuat'))) ?>" role="img" aria-label="Biểu đồ thanh nhập và xuất theo danh mục"></canvas></div>
+    <?php endif; ?>
   </section>
+  <section class="card chart-card">
+    <div class="card-head"><h2>Tồn so với định mức tối thiểu</h2><a href="/inventory?stock=low">Hàng sắp hết →</a></div>
+    <?php if (!$period['min_stock']): ?><p class="chart-empty">Chưa đặt định mức tối thiểu cho mặt hàng nào.</p><?php else: ?>
+    <div class="chart-box"><canvas data-chart="minstock" data-labels="<?= e(json_encode(array_column($period['min_stock'], 'ma_hang'))) ?>" data-names="<?= e(json_encode(array_column($period['min_stock'], 'ten'))) ?>" data-q="<?= e(json_encode(array_column($period['min_stock'], 'q'))) ?>" data-dm="<?= e(json_encode(array_column($period['min_stock'], 'dm'))) ?>" role="img" aria-label="Biểu đồ cột tồn hiện có so với định mức tối thiểu"></canvas></div>
+    <p class="muted small chart-note">Cột đỏ: tồn ≤ định mức. Vạch ngang: định mức tối thiểu. Hiện 10 mặt hàng sát định mức nhất.</p>
+    <?php endif; ?>
+  </section>
+</div>
+
+<?php $nDraft = (int)$d['drafts']; $nLow = (int)$d['low_count']; ?>
+<?php if (!$nDraft && !$nLow): ?>
+<p class="all-clear"><?= icon('check') ?> Không có phiếu nào đang chờ xác nhận, không có mặt hàng nào dưới định mức.</p>
+<?php else: ?>
+<p class="all-clear warn"><?= icon('bell') ?>
+  <?php if ($nDraft): ?><a href="/vouchers?status=DRAFT"><b><?= n($nDraft) ?> phiếu</b> đang chờ xác nhận</a><?php endif; ?>
+  <?php if ($nDraft && $nLow): ?><span class="sep">·</span><?php endif; ?>
+  <?php if ($nLow): ?><a href="/inventory?stock=low"><b><?= n($nLow) ?> mặt hàng</b> dưới định mức tối thiểu</a><?php endif; ?></p>
+<?php endif; ?>
 
 <?php if ($user->isAdmin): ?>
-  <section class="card">
-    <div class="card-head"><h2>Tồn theo kho</h2><a href="/warehouses">Tất cả kho →</a></div>
-    <?php if (!$d['warehouses']): ?><p class="empty">Chưa có kho nào.</p><?php endif; ?>
-    <ul class="wh-list">
-    <?php foreach ($d['warehouses'] as $i => $w): ?>
-      <li style="--i:<?= $i ?>">
-        <div class="wh-top"><a href="/inventory?warehouse=<?= (int)$w['id'] ?>"><span class="wh-code"><?= e($w['ma']) ?></span> <?= e($w['ten']) ?></a>
-          <span class="muted"><?= n($w['units']) ?> đv<?= (int)$w['drafts'] ? ' · <b class="warn-text">' . n($w['drafts']) . ' phiếu chờ</b>' : '' ?></span></div>
-        <div class="bar"><i style="--w:<?= round($w['units'] / $maxUnits * 100, 1) ?>%"></i></div>
-      </li>
+<section class="card">
+  <div class="card-head"><h2>So sánh các kho</h2><a href="/warehouses">Tất cả kho →</a></div>
+  <?php if (!$d['warehouses']): ?><p class="empty">Chưa có kho nào.</p><?php else: ?>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kho</th><th class="num">Nhập</th><th class="num">Xuất</th><th class="num">Giá trị tồn</th><th class="num">Phiếu chờ</th></tr></thead>
+    <tbody>
+    <?php $vals = array_column($value['rows'], 'value', 'id'); foreach ($d['warehouses'] as $w): $f = $period['by_wh'][(int)$w['id']] ?? ['nhap' => 0, 'xuat' => 0]; ?>
+      <tr><td><a href="/inventory?warehouse=<?= (int)$w['id'] ?>"><span class="wh-code"><?= e($w['ma']) ?></span></a> <small class="muted"><?= e($w['ten']) ?></small></td>
+        <td class="num"><?= n($f['nhap']) ?></td><td class="num"><?= n($f['xuat']) ?></td><td class="num" title="<?= e(n($vals[(int)$w['id']] ?? 0)) ?> đ"><?= e(vnd_short((int)($vals[(int)$w['id']] ?? 0))) ?></td>
+        <td class="num"><?= (int)$w['drafts'] ? '<b class="warn-text">' . n($w['drafts']) . '</b>' : '<span class="muted">0</span>' ?></td></tr>
     <?php endforeach; ?>
-    </ul>
-  </section>
-<?php else: $topMax = max(1, ...array_map(fn($t) => (int)$t['so_luong'], $d['top'] ?: [['so_luong' => 1]])); ?>
-  <section class="card">
-    <div class="card-head"><h2>Tồn nhiều nhất</h2><a href="/inventory">Hàng hoá →</a></div>
-    <?php if (!$d['top']): ?><p class="empty">Kho chưa có hàng tồn.</p><?php endif; ?>
-    <ul class="wh-list">
-    <?php foreach ($d['top'] as $i => $t): ?>
-      <li style="--i:<?= $i ?>">
-        <div class="wh-top"><span><b><?= e($t['ma_hang']) ?></b> <?= e($t['ten']) ?></span><span class="muted"><?= n($t['so_luong']) ?> <?= e($t['unit']) ?></span></div>
-        <div class="bar"><i style="--w:<?= round($t['so_luong'] / $topMax * 100, 1) ?>%"></i></div>
-      </li>
-    <?php endforeach; ?>
-    </ul>
-  </section>
+    </tbody>
+  </table></div>
+  <?php endif; ?>
+</section>
 <?php endif; ?>
-</div>

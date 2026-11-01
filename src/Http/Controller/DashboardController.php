@@ -37,20 +37,25 @@ final class DashboardController extends Controller
     }
 
     /**
-     * Giá trị tồn kho theo giá gốc (số lượng × giá gốc) của từng kho và tổng — chỉ tổng quan của quản trị.
+     * Giá trị tồn kho theo giá gốc (số lượng × giá gốc): tổng, theo từng kho và theo danh mục hàng.
      * @param list<array<string,mixed>> $warehouses các kho hiển thị ở tổng quan
-     * @return array{total:int,missing:int,rows:list<array{code:string,name:string,value:int}>}
+     * @return array{total:int,missing:int,rows:list<array{id:int,code:string,name:string,value:int}>,cats:array<string,int>}
      */
     private function stockValue(User $user, array $warehouses): array
     {
         $by = [];
+        $cats = [];
         $missing = 0;   // dòng tồn chưa có giá gốc
         foreach ($this->pricing->valuation($this->auth->visibleWarehouseIds($user)) as $s) {
-            $by[(int)$s['kho_id']] = ($by[(int)$s['kho_id']] ?? 0) + (int)$s['so_luong'] * (int)$s['gia_von'];
+            $v = (int)$s['so_luong'] * (int)$s['gia_von'];
+            $by[(int)$s['kho_id']] = ($by[(int)$s['kho_id']] ?? 0) + $v;
+            $c = (string)($s['category'] ?? '') !== '' ? (string)$s['category'] : 'Chưa phân loại';
+            $cats[$c] = ($cats[$c] ?? 0) + $v;
             $missing += (int)$s['gia_von'] > 0 ? 0 : 1;
         }
-        $rows = array_map(fn($w) => ['code' => (string)$w['ma'], 'name' => (string)($w['ten'] ?? ''), 'value' => $by[(int)$w['id']] ?? 0], $warehouses);
-        return ['total' => array_sum($by), 'missing' => $missing, 'rows' => $rows];
+        arsort($cats);
+        $rows = array_map(fn($w) => ['id' => (int)$w['id'], 'code' => (string)$w['ma'], 'name' => (string)($w['ten'] ?? ''), 'value' => $by[(int)$w['id']] ?? 0], $warehouses);
+        return ['total' => array_sum($by), 'missing' => $missing, 'rows' => $rows, 'cats' => array_filter($cats, fn($v) => $v > 0)];
     }
 
     public function index(Request $r, array $p, ?User $user): Response
@@ -66,6 +71,9 @@ final class DashboardController extends Controller
             $this->need($user, Permission::XemTongQuan);
         }
         $d = $this->query->dashboard($user);
-        return $this->render('dashboard/index', $user, 'dashboard', ['d' => $d, 'todo' => $this->badges->todo($user), 'canReceive' => $this->auth->allows($user, Permission::LapPhieuNhap) && !$user->isAdmin, 'canOrder' => $this->auth->allows($user, Permission::LapDonDatHang) && !$user->isAdmin, 'value' => $user->isAdmin ? $this->stockValue($user, $d['warehouses']) : null], 'Tổng quan');
+        $range = in_array($r->str('range'), ['7', '30', '90', 'month'], true) ? $r->str('range') : '30';
+        $days = $range === 'month' ? (int)gmdate('j', time() + 7 * 3600) : (int)$range;   // «tháng này» = từ mùng 1 đến hôm nay
+        $period = $this->query->dashboardPeriod($this->auth->visibleWarehouseIds($user), $days);
+        return $this->render('dashboard/index', $user, 'dashboard', ['d' => $d, 'period' => $period, 'range' => $range, 'days' => $days, 'todo' => $this->badges->todo($user), 'canReceive' => $this->auth->allows($user, Permission::LapPhieuNhap) && !$user->isAdmin, 'canOrder' => $this->auth->allows($user, Permission::LapDonDatHang) && !$user->isAdmin, 'value' => $this->stockValue($user, $d['warehouses'])], 'Tổng quan');
     }
 }
