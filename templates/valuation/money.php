@@ -5,7 +5,7 @@ $pct = fn($a, $b) => $b > 0 ? round($a / $b * 100, 1) . '%' : '—';
 $profit = $total['tien'] - $total['gia_von'];
 ?>
 <header class="page-head">
-  <div><h1><?= $isIn ? 'Tiền nhập' : 'Tiền xuất' ?></h1></div>
+  <div><h1><?= $isIn ? 'Chi phí nhập hàng' : 'Doanh thu bán hàng' ?></h1></div>
 </header>
 
 <form class="filters" method="get">
@@ -16,16 +16,16 @@ $profit = $total['tien'] - $total['gia_von'];
 </form>
 
 <section class="cards-3" style="margin-bottom:16px" aria-label="Tổng hợp">
-  <div class="card pad"><p class="muted small"><?= $isIn ? 'Tổng tiền nhập' : 'Tổng tiền bán thu về' ?></p><p class="stat"><b class="money <?= $isIn ? 'neg' : 'pos' ?>"><?= $vnd($total['tien'] + $total['thue']) ?></b></p><p class="muted small"><?= n($total['phieu']) ?> phiếu <?= $isIn ? 'nhập' : 'xuất' ?> · gồm thuế</p></div>
-  <div class="card pad"><p class="muted small">Tiền hàng chưa thuế</p><p class="stat"><b class="money"><?= $vnd($total['tien']) ?></b></p><p class="muted small">thuế GTGT <?= $vnd($total['thue']) ?></p></div>
+  <div class="card pad"><p class="muted small"><?= $isIn ? 'Tổng chi phí nhập hàng (gồm thuế)' : 'Tổng doanh thu (gồm thuế)' ?></p><p class="stat"><b class="money <?= $isIn ? 'neg' : 'pos' ?>"><?= $vnd($total['tien'] + $total['thue']) ?></b></p><p class="muted small"><?= n($total['phieu']) ?> phiếu <?= $isIn ? 'nhập' : 'xuất' ?> · gồm thuế</p></div>
+  <div class="card pad"><p class="muted small"><?= $isIn ? 'Giá trị hàng chưa thuế' : 'Doanh thu chưa thuế' ?></p><p class="stat"><b class="money"><?= $vnd($total['tien']) ?></b></p><p class="muted small">thuế GTGT <?= $vnd($total['thue']) ?></p></div>
   <?php if (!$isIn): ?>
-  <div class="card pad"><p class="muted small">Lãi gộp</p><p class="stat"><b class="money <?= $profit >= 0 ? 'pos' : 'neg' ?>"><?= $vnd($profit) ?></b></p><p class="muted small">biên lãi <?= $pct($profit, $total['tien']) ?> · tiền hàng − giá gốc</p></div>
+  <div class="card pad"><p class="muted small">Lãi gộp</p><p class="stat"><b class="money <?= $profit >= 0 ? 'pos' : 'neg' ?>"><?= $vnd($profit) ?></b></p><p class="muted small">biên lãi <?= $pct($profit, $total['tien']) ?> · doanh thu − giá vốn</p></div>
   <?php endif; ?>
 </section>
 
 <section class="card flush" data-live="results">
   <div class="table-wrap"><table class="dense">
-    <thead><tr><th>Mã phiếu</th><th>Ngày xác nhận</th><th>Kho</th><th><?= $isIn ? 'Nhà cung cấp' : 'Khách hàng' ?></th><th class="num">Số lượng</th><th class="num">Tiền hàng</th><th class="num">Thuế</th><th class="num">Tổng tiền</th><?php if (!$isIn): ?><th class="num">Lãi gộp</th><?php endif; ?></tr></thead>
+    <thead><tr><th>Mã phiếu</th><th>Ngày xác nhận</th><th>Kho</th><th><?= $isIn ? 'Nhà cung cấp' : 'Khách hàng' ?></th><th class="num">Số lượng</th><th class="num"><?= $isIn ? 'Giá trị hàng' : 'Doanh thu' ?></th><th class="num">Thuế</th><th class="num">Tổng tiền</th><?php if (!$isIn): ?><th class="num">Lãi gộp</th><?php endif; ?></tr></thead>
     <tbody>
     <?php foreach ($rows as $v): $priced = (int)$v['tien'] > 0; $g = (int)$v['tien'] - (int)$v['gia_von']; ?>
       <tr><td><a href="/vouchers/<?= (int)$v['id'] ?>"><b><?= e($v['ma']) ?></b></a></td><td class="nw"><?= e(dt($v['ngay_xac_nhan'])) ?></td><td><span class="wh-code" title="<?= e($v['wh_name']) ?>"><?= e($v['wh_code']) ?></span></td>

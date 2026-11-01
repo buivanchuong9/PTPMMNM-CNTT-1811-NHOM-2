@@ -5,8 +5,8 @@ $qs = fn(array $over) => http_build_query(array_filter(array_merge(['q' => $q, '
 ?>
 <header class="page-head"><div><h1>Khách trả hàng</h1></div></header>
 <nav class="tabs" aria-label="Trạng thái" data-live="tabs">
-  <a href="/customer-returns?<?= e($qs([])) ?>"<?= $status === '' ? ' class="active" aria-current="page"' : '' ?>>Tất cả <span class="count"><?= n(array_sum($counts)) ?></span></a>
-  <?php foreach (C::STATUS as $k => [$label]): ?><a href="/customer-returns?<?= e($qs(['status' => $k])) ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a><?php endforeach; ?>
+  <a href="/customer-returns?<?= e($qs([])) ?>" data-tone="all"<?= $status === '' ? ' class="active" aria-current="page"' : '' ?>>Tất cả <span class="count"><?= n(array_sum($counts)) ?></span></a>
+  <?php foreach (C::STATUS as $k => [$label, $tn]): ?><a href="/customer-returns?<?= e($qs(['status' => $k])) ?>" data-tone="<?= ['danger' => 'bad', 'muted' => 'all'][$tn] ?? $tn ?>"<?= $status === $k ? ' class="active" aria-current="page"' : '' ?>><?= e($label) ?> <span class="count"><?= n($counts[$k] ?? 0) ?></span></a><?php endforeach; ?>
 </nav>
 <form class="filters" method="get">
   <?php if ($status !== ''): ?><input type="hidden" name="status" value="<?= e($status) ?>"><?php endif; ?>

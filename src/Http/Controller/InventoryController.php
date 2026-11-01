@@ -62,7 +62,8 @@ final class InventoryController extends Controller
         $cat = $catRaw === 'none' ? -1 : (int)$catRaw;
         $supF = (int)$r->int('supplier');   // lọc theo nhà cung cấp
         $inCat = fn(array $x) => $cat === 0 || ($cat === -1 ? (int)$x['danh_muc_id'] === 0 : (int)$x['danh_muc_id'] === $cat);
-        $priceSel = in_array($r->str('price'), ['sell_desc', 'sell_asc', 'cost_desc', 'cost_asc', 'margin_desc', 'margin_asc', 'none'], true) ? $r->str('price') : '';   // lọc / sắp xếp theo giá
+        $stockSel = in_array($r->str('stock'), ['in', 'low', 'out'], true) ? $r->str('stock') : '';   // lọc theo số lượng còn: còn hàng / sắp hết (≤ định mức) / hết hàng
+        $priceSel = in_array($r->str('price'), ['sell_desc', 'sell_asc', 'cost_desc', 'cost_asc', 'margin_desc', 'margin_asc', 'none', 'qty_asc', 'qty_desc'], true) ? $r->str('price') : '';   // lọc / sắp xếp theo giá
         $items = $this->catalog->items();
         $supBy = $this->partners->suppliersByItem();
         $hasSup = fn(int $itemId) => !$supF || in_array($supF, array_column($supBy[$itemId] ?? [], 'id'), true);
@@ -105,9 +106,15 @@ final class InventoryController extends Controller
                 // «Tình trạng» của tài khoản thuộc một kho tính theo tồn của CHÍNH KHO ĐÓ (không phải tổng các kho)
                 $own = $user->warehouseId !== null ? (int)($onHand[$i['id']]['by_wh'][(int)$user->warehouseId] ?? 0) : $total;
                 $low = (int)$i['dinh_muc_toi_thieu'] > 0 && $own <= (int)$i['dinh_muc_toi_thieu'];
+                if (($stockSel === 'in' && $own <= 0) || ($stockSel === 'low' && !$low) || ($stockSel === 'out' && $own > 0)) {
+                    continue;
+                }
                 $rows[] = $i + ['by_wh' => $onHand[$i['id']]['by_wh'] ?? [], 'total' => $total, 'own' => $own, 'low' => $low];
             }
-            if ($priceSel !== '') {
+            if ($priceSel === 'qty_asc' || $priceSel === 'qty_desc') {   // theo số lượng còn: của kho mình (admin: tổng các kho đang xem)
+                $dir = $priceSel === 'qty_asc' ? 1 : -1;
+                usort($rows, fn($x, $y) => $dir * ($x['own'] <=> $y['own']) ?: strcmp($x['ma_hang'], $y['ma_hang']));
+            } elseif ($priceSel !== '') {
                 $shownIds = array_values(array_map(fn($w) => (int)$w['id'], array_filter($warehouses, fn($w) => in_array((int)$w['id'], $scope, true))));
                 $sell = $this->sellPricesFor($shownIds, array_map(fn($x) => (int)$x['id'], $rows));
                 $avg = function (array $x) use ($sell): ?float {   // giá bán trung bình của các kho đang hiện (kho chưa đặt giá không tính)
@@ -151,13 +158,13 @@ final class InventoryController extends Controller
             'warehouses' => $warehouses, 'mine' => $this->auth->warehouseOf($user),
             'shown' => $shown,
             'rows' => $rows, 'pg' => $pg,
-            'byBatch' => $byBatch, 'q' => $q, 'wh' => $wh, 'priceSel' => $priceSel, 'canAddCat' => $user->isAdmin || $user->role === \StockFlow\Domain\AccountRole::Manager, 'cat' => $cat, 'supF' => $supF, 'suppliers' => $this->partners->suppliers(), 'uncategorized' => count(array_filter($items, fn($i) => $i['hoat_dong'] && !(int)$i['danh_muc_id'])), 'totalItems' => count(array_filter($items, fn($i) => $i['hoat_dong'])), 'categories' => $this->catalog->categories(),
+            'byBatch' => $byBatch, 'q' => $q, 'wh' => $wh, 'priceSel' => $priceSel, 'stockSel' => $stockSel, 'canAddCat' => $user->isAdmin || $user->role === \StockFlow\Domain\AccountRole::Manager, 'cat' => $cat, 'supF' => $supF, 'suppliers' => $this->partners->suppliers(), 'uncategorized' => count(array_filter($items, fn($i) => $i['hoat_dong'] && !(int)$i['danh_muc_id'])), 'totalItems' => count(array_filter($items, fn($i) => $i['hoat_dong'])), 'categories' => $this->catalog->categories(),
             'expiry' => $expiry, 'lotsOf' => $lotsOf ?? [],
             'canPrice' => $this->auth->allows($user, Permission::DieuChinhGia) && $user->warehouseId !== null, 'canCost' => $this->auth->allows($user, Permission::DatGiaGoc),
             'sellAt' => $byBatch ? [] : $this->sellPricesFor(array_map(fn($w) => (int)$w['id'], $shown), array_map(fn($x) => (int)$x['id'], $rows)),
             'priceHist' => $byBatch ? [] : $this->pricing->historyForMany(array_map(fn($x) => (int)$x['id'], $rows), $this->auth->allows($user, Permission::DatGiaGoc) ? null : (int)$user->warehouseId),
             'items' => $items, 'units' => $this->catalog->units(),
-            'canRequest' => $user->warehouseId !== null && $this->auth->allows($user, Permission::LapPhieuDieuChuyen),
+            'canOrder' => !$user->isAdmin && $this->auth->allows($user, Permission::LapDonDatHang), 'canRequest' => $user->warehouseId !== null && $this->auth->allows($user, Permission::LapPhieuDieuChuyen),
             'canAddBatch' => $this->auth->allows($user, Permission::ThemLo), 'canDispose' => $this->auth->allows($user, Permission::LapPhieuHuy), 'canBarcode' => $this->auth->allows($user, Permission::GanMaVach),
         ], 'Hàng hoá');
     }
