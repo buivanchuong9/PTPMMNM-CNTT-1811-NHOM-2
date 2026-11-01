@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/hero.svg" alt="StockFlow — quản lý kho" width="100%">
+<img src="docs/images/banner.svg" alt="StockFlow — quản lý kho" width="100%">
 
 [![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![MySQL](https://img.shields.io/badge/MySQL%208%2B%20·%20MariaDB%2010.4%2B-4479A1?logo=mysql&logoColor=white)](#chạy-thử)
