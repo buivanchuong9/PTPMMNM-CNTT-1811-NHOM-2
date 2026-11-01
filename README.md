@@ -7,6 +7,7 @@
 [![Kiểm thử](https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2/actions/workflows/test.yml/badge.svg)](https://github.com/buivanchuong9/PTPMMNM-CNTT-1811-NHOM-2/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT-3d73c4)](LICENSE)
 
+
 <img src="docs/images/screens.gif" alt="Các màn hình của StockFlow: tổng quan, phiếu nhập xuất, hàng hoá, đội xe, giá trị tồn, báo cáo, kiểm kê, giao diện tối" width="100%">
 
 </div>
