@@ -175,7 +175,12 @@ label.check input { width: auto; min-height: 0; }
 .addr-preview { margin: 0; min-height: 1.2em; }
 .dlg-wide { width: min(620px, calc(100% - 32px)); }
 @media (max-width: 600px) { .addr-row { grid-template-columns: minmax(0, 1fr); } }
-dialog.dlg:has(.addr) { overflow: visible; } .addr-list { max-height: 220px; }
+.addr-list { max-height: 220px; }
+/* form dài thì cuộn trong hộp thoại; danh sách gợi ý địa chỉ nằm trong dòng chảy (không tràn ra ngoài khung) */
+dialog.dlg { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: auto; scrollbar-gutter: stable; }
+/* thanh nút Lưu / Huỷ luôn dính đáy hộp thoại, không phải cuộn mới thấy */
+dialog.dlg form > .actions { position: sticky; bottom: 0; z-index: 3; margin-bottom: -22px; padding: 12px 0 22px; background: var(--surface, #fff); border-top: 1px solid var(--line, #e5e7eb); }
+dialog.dlg .addr-list { position: static; margin-top: 4px; box-shadow: none; }
 
 .btn-sm { min-height: 34px; padding: 5px 14px; font-size: .85rem; }
 .btn-sm .icon { width: 16px; height: 16px; }
