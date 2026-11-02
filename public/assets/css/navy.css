@@ -233,6 +233,8 @@ td { color: var(--ink); }
 :root:not([data-theme="dark"]) :is(main, dialog) :is(input, select, textarea):focus, :root:not([data-theme="dark"]) .pick-box:focus-within { border-color: var(--brand); }
 :root:not([data-theme="dark"]) :is(main, dialog) :is(fieldset, .card, .filters) { border: 1px solid var(--box-edge); }
 :root:not([data-theme="dark"]) :is(main, dialog) fieldset { border-width: 1.5px; }
+/* nhóm ô địa chỉ không có padding (ui.css: border 0) nên không vẽ khung, nếu không chữ dính sát viền */
+:root:not([data-theme="dark"]) :is(main, dialog) fieldset.addr { border: 0; }
 :root:not([data-theme="dark"]) :is(main, dialog) ::placeholder { color: #6b7686; opacity: 1; }
 :root:not([data-theme="dark"]) :is(main, dialog) label { color: var(--ink); }
 :root:not([data-theme="dark"]) :is(main, dialog) .pick-box > input { border: 0; }   /* ô tìm trong khung .pick-box: chỉ viền ngoài, không viền đôi */
