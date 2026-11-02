@@ -133,21 +133,63 @@
 
   document.getElementById('route-replay').addEventListener('click', run);
 
-  // chỉ đường theo đường bộ thật (OSRM); lỗi thì vẽ đường dự phòng
-  function start() {
-    plan();
-    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 8000);
-    fetch('https://router.project-osrm.org/route/v1/driving/' + via.map(function (p) { return p[1] + ',' + p[0]; }).join(';') + '?overview=full&geometries=geojson', { signal: ctl.signal })
+  // chỉ đường theo đường bộ thật; lỗi thì vẽ đường dự phòng
+  function thin(c) {   // c = [[vĩ độ, kinh độ], …] → bớt điểm cho nhẹ, giữ điểm cuối
+    var step = Math.max(1, Math.floor(c.length / 800)), pts = [];
+    for (var i = 0; i < c.length; i += step) { pts.push(c[i]); }
+    pts.push(c[c.length - 1]);
+    return pts;
+  }
+  function osrm(signal) {   // OSRM công cộng: không cho loại trừ cao tốc, nên chỉ dùng cho xe ưu tiên cao tốc (ô tô, xe tải, điều chuyển giữa các kho)
+    return fetch('https://router.project-osrm.org/route/v1/driving/' + via.map(function (p) { return p[1] + ',' + p[0]; }).join(';') + '?overview=full&geometries=geojson', { signal: signal })
       .then(function (res) { return res.json(); })
       .then(function (d) {
         if (!d.routes || !d.routes[0]) { throw 0; }
-        var c = d.routes[0].geometry.coordinates, step = Math.max(1, Math.floor(c.length / 800)), pts = [];
-        for (var i = 0; i < c.length; i += step) { pts.push([c[i][1], c[i][0]]); }
-        pts.push([c[c.length - 1][1], c[c.length - 1][0]]);
-        show(pts);
-      })
-      .catch(function () { show(fallback()); })
-      .then(function () { clearTimeout(timer); });
+        return thin(d.routes[0].geometry.coordinates.map(function (q) { return [q[1], q[0]]; }));
+      });
+  }
+  function decode6(str) {   // đường mã hoá polyline độ chính xác 6 chữ số của Valhalla
+    var i = 0, lat = 0, lng = 0, out = [];
+    while (i < str.length) {
+      var b, sh = 0, v = 0;
+      do { b = str.charCodeAt(i++) - 63; v |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      lat += (v & 1) ? ~(v >> 1) : (v >> 1);
+      sh = 0; v = 0;
+      do { b = str.charCodeAt(i++) - 63; v |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      lng += (v & 1) ? ~(v >> 1) : (v >> 1);
+      out.push([lat / 1e6, lng / 1e6]);
+    }
+    return out;
+  }
+  // Valhalla chọn được có đi cao tốc hay không: highways = true → ưu tiên cao tốc (ô tô, xe tải); false → chỉ quốc lộ / đường thường (xe máy, hoặc ô tô khi cao tốc không đi được)
+  function valhalla(highways, moto, signal) {
+    var costing = moto ? 'motorcycle' : 'auto', opts = {};
+    opts[costing] = { use_highways: highways ? 1 : 0 };
+    var locs = via.map(function (p, i) { return { lat: p[0], lon: p[1], type: i === 0 || i === via.length - 1 ? 'break' : 'through' }; });
+    return fetch('https://valhalla1.openstreetmap.de/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: signal, body: JSON.stringify({ locations: locs, costing: costing, costing_options: opts }) })
+      .then(function (res) { return res.json(); })
+      .then(function (d) {
+        if (!d.trip || !d.trip.legs || !d.trip.legs.length) { throw 0; }
+        var c = [];
+        d.trip.legs.forEach(function (l) { c = c.concat(decode6(l.shape)); });
+        if (!c.length) { throw 0; }
+        return thin(c);
+      });
+  }
+
+  // xe máy chỉ đi quốc lộ, không lên cao tốc; ô tô / xe tải ưu tiên cao tốc, nếu cao tốc không đi được thì chuyển sang quốc lộ
+  var moto = delivery && r.kind === 'MAY';
+  function start() {
+    plan();
+    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 12000), sg = ctl.signal, pending;
+    if (moto) {
+      pending = valhalla(false, true, sg);   // không có cách chỉ đường an toàn khác: lỗi thì vẽ đường dự phòng, tuyệt đối không dùng tuyến có cao tốc
+    } else if (delivery) {
+      pending = valhalla(true, false, sg).catch(function () { return valhalla(false, false, sg); }).catch(function () { return osrm(sg); });
+    } else {
+      pending = osrm(sg);
+    }
+    pending.then(show, function () { show(fallback()); }).then(function () { clearTimeout(timer); });
   }
 
   // số ngẫu nhiên cố định theo địa chỉ (xem lại cùng phiếu luôn ra cùng một điểm)

@@ -813,3 +813,9 @@ dialog.dlg { overflow-x: hidden; }
 .trips-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 10px 4px 0; }
 .route-map-sm { height: 380px; }
 .route-actions { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Báo cáo Nhập – Xuất – Tồn: màu theo chiều biến động (xanh tăng, đỏ giảm, số 0 mờ); tồn đầu/cuối giữ màu chữ thường để làm mốc */
+table.nxt td.nxt-in { color: var(--ok); font-weight: 600; }
+table.nxt td.nxt-out { color: var(--danger); font-weight: 600; }
+table.nxt td.nxt-zero { color: var(--muted); opacity: .55; }
+table.nxt td.nxt-open { color: var(--ink-2); }
