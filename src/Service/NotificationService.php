@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NotificationService
 {
-    public function __construct(private Db $db, private Authorizer $auth, private FleetService $fleet, private StockQuery $query, private ItemProposalService $proposals) {}
+    public function __construct(private Db $db, private Authorizer $auth, private FleetService $fleet, private StockQuery $query, private ItemProposalService $proposals, private PartnerService $partners) {}
 
     /** Hành động trong nhật ký ⇒ câu mô tả. Hành động không có ở đây (đổi ảnh, đổi mật khẩu của chính mình…) không báo. */
     private const ACTIVITY = [
@@ -23,7 +23,7 @@ final class NotificationService
         'count.open' => 'mở đợt kiểm kê', 'count.submit' => 'nộp đợt kiểm kê chờ duyệt', 'count.approve' => 'duyệt đợt kiểm kê', 'count.reject' => 'trả lại đợt kiểm kê', 'count.cancel' => 'huỷ đợt kiểm kê',
         'request.create' => 'lập yêu cầu chuyển hàng', 'request.approve' => 'xác nhận yêu cầu chuyển hàng', 'request.accept' => 'chấp nhận yêu cầu chuyển hàng', 'request.reject' => 'từ chối yêu cầu chuyển hàng', 'request.cancel' => 'huỷ yêu cầu chuyển hàng',
         'item.create' => 'thêm mặt hàng', 'item.barcode' => 'đổi mã vạch mặt hàng', 'proposal.create' => 'đề xuất mặt hàng mới', 'proposal.approve' => 'duyệt đề xuất mặt hàng mới', 'proposal.reject' => 'từ chối đề xuất mặt hàng mới', 'item.update' => 'sửa mặt hàng', 'batch.create' => 'thêm lô hàng', 'category.create' => 'thêm danh mục',
-        'partner.create' => 'thêm đối tác', 'partner.update' => 'sửa đối tác', 'warehouse.create' => 'thêm kho', 'warehouse.update' => 'sửa kho', 'warehouse.address' => 'đổi địa chỉ kho',
+        'partner.create' => 'thêm đối tác', 'partner.update' => 'sửa đối tác', 'partner.approve' => 'duyệt đối tác', 'partner.reject' => 'từ chối đối tác', 'warehouse.create' => 'thêm kho', 'warehouse.update' => 'sửa kho', 'warehouse.address' => 'đổi địa chỉ kho',
         'user.create' => 'tạo tài khoản', 'user.update' => 'sửa tài khoản', 'user.lock' => 'khoá tài khoản', 'user.unlock' => 'mở khoá tài khoản',
         'vehicle.create' => 'thêm xe', 'vehicle.update' => 'sửa xe', 'vehicle.relocate' => 'chuyển xe sang kho khác', 'driver.create' => 'thêm tài xế', 'driver.update' => 'sửa tài xế',
     ];
@@ -168,6 +168,9 @@ final class NotificationService
         $n = $this->proposals->attention($user);
         $add('box', $user->isAdmin ? 'warn' : 'info', $user->isAdmin ? 'Đề xuất mặt hàng mới chờ duyệt' : 'Đề xuất mặt hàng mới đã có kết quả',
             $user->isAdmin ? 'Quản lý kho quét ra mã vạch chưa có — chấp nhận hoặc từ chối' : 'Xem kết quả duyệt, lập phiếu nhập cho hàng được chấp nhận', $n, '/proposals');
+        if ($user->isAdmin) {
+            $add('users', 'warn', 'Đối tác chờ duyệt', 'Quản lý kho vừa thêm đối tác — duyệt hoặc từ chối', $this->partners->pendingCount(), '/partners');
+        }
         if ($user->isAdmin) {   // quản trị theo dõi mọi yêu cầu chuyển hàng đang chạy (chỉ xem)
             $n = (int)$this->db->value("SELECT COUNT(*) FROM yeu_cau_chuyen_hang WHERE trang_thai IN ('WAIT_OWN', 'WAIT_SOURCE')");
             $add('truck', 'info', 'Yêu cầu chuyển hàng đang chờ xử lý', 'Các kho đang xin hàng lẫn nhau (chỉ xem)', $n, '/requests');

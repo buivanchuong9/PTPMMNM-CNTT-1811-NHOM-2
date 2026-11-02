@@ -13,7 +13,7 @@ use StockFlow\Domain\User;
  */
 final class NavBadges
 {
-    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals, private StockQuery $stock, private OrderService $orders) {}
+    public function __construct(private Authorizer $auth, private FleetService $fleet, private VoucherRepository $vouchers, private TransferRequestService $requests, private ItemProposalService $proposals, private WarrantyService $warranty, private DisposalService $disposals, private StockQuery $stock, private OrderService $orders, private PartnerService $partners) {}
 
     /** @return array<string,int> chỉ gồm các mục có số > 0 */
     public function for(User $user): array
@@ -35,6 +35,9 @@ final class NavBadges
             $out['disposals'] = $this->disposals->counts($this->auth->visibleWarehouseIds($user))['CHO_DUYET'] ?? 0;
         }
         $out['proposals'] = $this->proposals->attention($user);
+        if ($user->isAdmin) {   // đối tác do quản lý kho thêm đang chờ duyệt
+            $out['partners'] = $this->partners->pendingCount();
+        }
         return array_filter($out);
     }
 
@@ -74,6 +77,7 @@ final class NavBadges
             ['đề xuất huỷ hàng', (int)($b['disposals'] ?? 0), '/disposals'],
             ['chuyến xe báo sai lệch', (int)($b['fleet'] ?? 0), '/fleet'],
             ['đề xuất hàng mới', (int)($b['proposals'] ?? 0), '/proposals'],
+            ['đối tác chờ duyệt', (int)($b['partners'] ?? 0), '/partners'],
         ];
         return array_values(array_filter($items, fn($i) => $i[1] > 0));
     }

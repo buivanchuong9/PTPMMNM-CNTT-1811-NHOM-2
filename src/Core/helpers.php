@@ -171,7 +171,7 @@ function audit_label(string $action): string
         'return.create' => 'Lập phiếu trả nhà cung cấp',
         'item.create' => 'Thêm mặt hàng', 'item.update' => 'Sửa mặt hàng', 'item.price' => 'Đặt giá', 'item.suppliers' => 'Gắn nhà cung cấp cho hàng', 'batch.create' => 'Thêm lô hàng',
         'category.create' => 'Thêm danh mục', 'proposal.create' => 'Đề xuất hàng mới', 'proposal.reject' => 'Từ chối đề xuất hàng',
-        'partner.create' => 'Thêm đối tác', 'partner.update' => 'Sửa đối tác', 'partner.items' => 'Gắn hàng cho nhà cung cấp', 'partner.auto' => 'Tự gắn nhà cung cấp', 'partner.enable' => 'Dùng lại đối tác', 'partner.disable' => 'Ngừng dùng đối tác',
+        'partner.create' => 'Thêm đối tác', 'partner.update' => 'Sửa đối tác', 'partner.approve' => 'Duyệt đối tác', 'partner.reject' => 'Từ chối đối tác', 'partner.items' => 'Gắn hàng cho nhà cung cấp', 'partner.auto' => 'Tự gắn nhà cung cấp', 'partner.enable' => 'Dùng lại đối tác', 'partner.disable' => 'Ngừng dùng đối tác',
         'warranty.receive' => 'Nhận hàng bảo hành', 'warranty.da_sua' => 'Bảo hành: đã sửa xong', 'warranty.doi_moi' => 'Bảo hành: đổi mới', 'warranty.tu_choi' => 'Bảo hành: từ chối', 'warranty.return' => 'Trả hàng bảo hành cho khách',
         'disposal.propose' => 'Đề xuất huỷ hàng', 'disposal.approve' => 'Duyệt huỷ hàng', 'disposal.load' => 'Xếp hàng huỷ lên xe', 'disposal.destroy' => 'Tiêu huỷ hàng', 'disposal.undo' => 'Hoàn tác huỷ hàng',
         'vehicle.create' => 'Thêm xe', 'vehicle.update' => 'Sửa xe', 'vehicle.relocate' => 'Đặt vị trí xe', 'driver.create' => 'Thêm tài xế', 'driver.update' => 'Sửa tài xế',
