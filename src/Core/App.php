@@ -164,6 +164,8 @@ final class App
         $r->post('/partners', [C\PartnerController::class, 'add']);
         $r->post('/partners/update', [C\PartnerController::class, 'update']);
         $r->post('/partners/active', [C\PartnerController::class, 'active']);
+        $r->post('/partners/approve', [C\PartnerController::class, 'approve']);
+        $r->post('/partners/reject', [C\PartnerController::class, 'reject']);
         $r->get('/items', [C\AdminController::class, 'items']);
         $r->post('/items', [C\AdminController::class, 'addItem']);
         $r->post('/items/update', [C\AdminController::class, 'updateItem']);

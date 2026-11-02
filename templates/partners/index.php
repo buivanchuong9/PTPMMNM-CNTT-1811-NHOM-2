@@ -58,7 +58,8 @@ $form = function (string $id, string $title, string $action, bool $edit) use ($t
   <thead><tr><th>Mã</th><th>Tên đối tác</th><th>Loại</th><th>Liên hệ</th><th>Địa chỉ</th><th>Mặt hàng cung cấp</th><th>Trạng thái</th><?php if ($canEdit): ?><th></th><?php endif; ?></tr></thead>
   <tbody>
   <?php foreach ($rows as $x): $sup = $x['loai'] === 'SUPPLIER'; ?>
-    <tr class="<?= $x['hoat_dong'] ? '' : 'row-off' ?><?= is_new($changes, $x['id']) ? ' is-new' : '' ?>">
+    <?php $wait = ($x['duyet'] ?? 'DA_DUYET') === 'CHO_DUYET'; ?>
+    <tr class="<?= $x['hoat_dong'] || $wait ? '' : 'row-off' ?><?= is_new($changes, $x['id']) ? ' is-new' : '' ?>">
       <td><b><?= hl($x['ma'], $q) ?></b><?= new_tag($changes, $x['id']) ?></td><td><?= hl($x['ten'], $q) ?><?= $x['ghi_chu'] !== '' ? '<br><small class="muted">' . e($x['ghi_chu']) . '</small>' : '' ?></td>
       <td><span class="tag <?= $sup ? 'tag-info' : 'tag-ok' ?>"><?= e($types[$x['loai']]) ?></span></td>
       <td class="wrap"><?= $x['nguoi_lien_he'] !== '' ? '<b>' . hl($x['nguoi_lien_he'], $q) . '</b><br>' : '' ?><small class="muted"><?= trim($x['so_dien_thoai'] . ' ' . $x['email']) !== '' ? hl(trim($x['so_dien_thoai'] . ' ' . $x['email']), $q) : '—' ?></small></td>
@@ -68,13 +69,19 @@ $form = function (string $id, string $title, string $action, bool $edit) use ($t
         $hit = fn(array $it) => ($item && (int)$it['id'] === $item) || ($q !== '' && str_contains(fold_vn($it['sku']), fold_vn($q))) || ($category && !$item && ($category === -1 ? !(int)($catOf[$it['id']] ?? 0) : (int)($catOf[$it['id']] ?? 0) === $category));
         $sk = $x['items']; usort($sk, fn($a, $b) => $hit($b) <=> $hit($a)); $shownSk = array_slice($sk, 0, 4); ?>
         <b><?= n(count($sk)) ?></b> mặt hàng: <small><?= implode(', ', array_map(fn($it) => $hit($it) ? '<mark class="hl">' . e($it['sku']) . '</mark>' : e($it['sku']), $shownSk)) ?><?= count($sk) > 4 ? ' +' . (count($sk) - 4) : '' ?></small><?php endif; ?></td>
-      <td><?= $x['hoat_dong'] ? '<span class="tag tag-ok">Đang hợp tác</span>' : '<span class="tag tag-danger">Ngừng hợp tác</span>' ?></td>
-      <?php if ($canEdit): ?><td><div class="inline-form">
+      <td><?= $wait ? '<span class="tag tag-warn">Chờ quản trị duyệt</span>' : ($x['hoat_dong'] ? '<span class="tag tag-ok">Đang hợp tác</span>' : '<span class="tag tag-danger">Ngừng hợp tác</span>') ?></td>
+      <?php if ($canEdit): ?><td><?php if ($wait && !$canApprove): ?><small class="muted">Đang chờ duyệt</small><?php else: ?><div class="inline-form">
+        <?php if ($wait): ?>
+        <form method="post" action="/partners/approve" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="partner_id" value="<?= (int)$x['id'] ?>"><button class="btn-sm"><?= icon('check') ?>Duyệt</button></form>
+        <form method="post" action="/partners/reject" class="inline-form" data-once data-confirm="Từ chối và xoá đối tác «<?= e($x['ten']) ?>»?"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="partner_id" value="<?= (int)$x['id'] ?>"><button class="btn-ghost btn-sm">Từ chối</button></form>
+        <?php endif; ?>
         <button type="button" class="btn-ghost btn-sm" data-dialog-open="partner-edit-dlg" data-fill-label="<?= e($x['ma'] . ' — ' . $x['ten']) ?>"
           data-fill="<?= e(json_encode(['partner_id' => (string)$x['id'], 'code' => $x['ma'], 'name' => $x['ten'], 'type' => $x['loai'], 'contact' => $x['nguoi_lien_he'], 'phone' => $x['so_dien_thoai'], 'email' => $x['email'], 'address' => $x['dia_chi'], ...\StockFlow\Domain\VnAddress::parse($x['dia_chi']), 'note' => $x['ghi_chu'], 'item_ids' => implode(',', array_column($x['items'], 'id'))], JSON_UNESCAPED_UNICODE)) ?>">Sửa</button>
+        <?php if (!$wait): ?>
         <form method="post" action="/partners/active" class="inline-form" data-once><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><input type="hidden" name="partner_id" value="<?= (int)$x['id'] ?>"><input type="hidden" name="active" value="<?= $x['hoat_dong'] ? '0' : '1' ?>">
           <button class="btn-ghost btn-sm"><?= $x['hoat_dong'] ? 'Ngừng' : 'Dùng lại' ?></button></form>
-      </div></td><?php endif; ?></tr>
+        <?php endif; ?>
+      </div><?php endif; ?></td><?php endif; ?></tr>
   <?php endforeach; if (!$rows): ?><tr><td colspan="<?= $canEdit ? 8 : 7 ?>" class="empty">Không có đối tác phù hợp.</td></tr><?php endif; ?>
   </tbody></table></div><?= pager($pg) ?></section>
 <?php if ($canEdit) { $form('partner-dlg', 'Thêm đối tác', '/partners', false); $form('partner-edit-dlg', 'Sửa đối tác', '/partners/update', true); } ?>

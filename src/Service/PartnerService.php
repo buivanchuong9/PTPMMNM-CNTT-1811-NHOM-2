@@ -9,7 +9,7 @@ use StockFlow\Domain\DomainError;
 use StockFlow\Domain\Forbidden;
 use StockFlow\Domain\User;
 
-/** Đối tác (nhà cung cấp / khách hàng) và quan hệ «mặt hàng ← nhà cung cấp». Chỉ tài khoản cấp cao được sửa. */
+/** Đối tác (nhà cung cấp / khách hàng) và quan hệ «mặt hàng ← nhà cung cấp». Quản lý kho thêm đối tác thì phải chờ quản trị duyệt mới được dùng. */
 final class PartnerService
 {
     public const TYPES = ['SUPPLIER' => 'Nhà cung cấp', 'CUSTOMER' => 'Khách hàng'];
@@ -20,6 +20,18 @@ final class PartnerService
     public function canEdit(User $user): bool
     {
         return $user->isAdmin || $user->role === AccountRole::Manager;
+    }
+
+    /** Chỉ quản trị hệ thống duyệt / từ chối đối tác do quản lý kho thêm. */
+    public function canApprove(User $user): bool
+    {
+        return $user->isAdmin;
+    }
+
+    /** Số đối tác đang chờ quản trị duyệt. */
+    public function pendingCount(): int
+    {
+        return (int)$this->db->value("SELECT COUNT(*) FROM doi_tac WHERE duyet = 'CHO_DUYET'");
     }
 
     private function requireEditor(User $user): void
@@ -124,10 +136,11 @@ final class PartnerService
         if ($this->db->value('SELECT 1 FROM doi_tac WHERE ma = ?', [$code])) {
             throw new DomainError("Mã đối tác $code đã tồn tại");
         }
-        $id = $this->db->insert('INSERT INTO doi_tac (ma, ten, loai, nguoi_lien_he, so_dien_thoai, email, dia_chi, ghi_chu) VALUES (?,?,?,?,?,?,?,?)',
-            [$code, $name, $type, $contact, $phone, $email, $address, $note]);
+        $pending = !$actor->isAdmin;   // quản lý kho thêm ⇒ chờ quản trị duyệt, chưa hoạt động nên chưa hiện trong phiếu
+        $id = $this->db->insert('INSERT INTO doi_tac (ma, ten, loai, nguoi_lien_he, so_dien_thoai, email, dia_chi, ghi_chu, hoat_dong, duyet) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            [$code, $name, $type, $contact, $phone, $email, $address, $note, $pending ? 0 : 1, $pending ? 'CHO_DUYET' : 'DA_DUYET']);
         $this->assignWarehouse($id, $type, $address, $actor);
-        $this->audit->record($actor->id, 'partner.create', 'partner', $id, "$code · $name");
+        $this->audit->record($actor->id, 'partner.create', 'partner', $id, "$code · $name" . ($pending ? ' (chờ quản trị duyệt)' : ''));
         return $id;
     }
 
@@ -137,6 +150,7 @@ final class PartnerService
         [$code, $name, $type, $contact, $phone, $email, $address, $note] = $this->clean($code, $name, $type, $contact, $phone, $email, $address, $note);
         $old = $this->db->one('SELECT * FROM doi_tac WHERE id = ?', [$id]) ?? throw new DomainError('Đối tác không tồn tại');
         $this->requireOwnCustomer($actor, $old);
+        $this->requireNotPending($actor, $old);
         if ($this->db->value('SELECT 1 FROM doi_tac WHERE ma = ? AND id <> ?', [$code, $id])) {
             throw new DomainError("Mã đối tác $code đã tồn tại");
         }
@@ -157,11 +171,44 @@ final class PartnerService
         }
     }
 
+    /** Đối tác chờ duyệt: chỉ quản trị được sửa / bật tắt; người thêm phải đợi quyết định. */
+    private function requireNotPending(User $actor, array $partner): void
+    {
+        if (($partner['duyet'] ?? 'DA_DUYET') === 'CHO_DUYET' && !$actor->isAdmin) {
+            throw new Forbidden('Đối tác đang chờ quản trị duyệt — chưa sửa hoặc dùng được');
+        }
+    }
+
+    /** Quản trị duyệt đối tác do quản lý kho thêm: từ đây dùng được trong phiếu. */
+    public function approve(User $actor, int $id): void
+    {
+        $this->auth->requireAdmin($actor);
+        $p = $this->db->one("SELECT ma, ten FROM doi_tac WHERE id = ? AND duyet = 'CHO_DUYET'", [$id]) ?? throw new DomainError('Đối tác không còn ở trạng thái chờ duyệt');
+        $this->db->exec("UPDATE doi_tac SET duyet = 'DA_DUYET', hoat_dong = 1 WHERE id = ?", [$id]);
+        $this->audit->record($actor->id, 'partner.approve', 'partner', $id, $p['ma'] . ' · ' . $p['ten']);
+    }
+
+    /** Quản trị từ chối: xoá đối tác chưa dùng ở đâu cả (cùng các dòng gắn mặt hàng). */
+    public function reject(User $actor, int $id): void
+    {
+        $this->auth->requireAdmin($actor);
+        $p = $this->db->one("SELECT ma, ten FROM doi_tac WHERE id = ? AND duyet = 'CHO_DUYET'", [$id]) ?? throw new DomainError('Đối tác không còn ở trạng thái chờ duyệt');
+        $this->db->transaction(function () use ($id) {
+            $this->db->exec('DELETE FROM mat_hang_nha_cung_cap WHERE doi_tac_id = ?', [$id]);
+            $this->db->exec('DELETE FROM doi_tac WHERE id = ?', [$id]);
+        });
+        $this->audit->record($actor->id, 'partner.reject', 'partner', $id, $p['ma'] . ' · ' . $p['ten']);
+    }
+
     public function setActive(User $actor, int $id, bool $active): void
     {
         $this->requireEditor($actor);
-        $p = $this->db->one('SELECT ma, loai, kho_id FROM doi_tac WHERE id = ?', [$id]) ?? throw new DomainError('Đối tác không tồn tại');
+        $p = $this->db->one('SELECT ma, loai, kho_id, duyet FROM doi_tac WHERE id = ?', [$id]) ?? throw new DomainError('Đối tác không tồn tại');
         $this->requireOwnCustomer($actor, $p);
+        $this->requireNotPending($actor, $p);
+        if ($p['duyet'] === 'CHO_DUYET' && $active) {
+            throw new DomainError('Đối tác chờ duyệt — bấm Duyệt để đưa vào sử dụng');
+        }
         $this->db->exec('UPDATE doi_tac SET hoat_dong = ? WHERE id = ?', [(int)$active, $id]);
         $this->audit->record($actor->id, $active ? 'partner.enable' : 'partner.disable', 'partner', $id, $p['ma']);
     }

@@ -76,7 +76,7 @@ php bin/stockflow test     # chạy toàn bộ test trên DB riêng <tên DB>_te
 - **Khách trả hàng** (`CustomerReturnService`): chọn phiếu xuất gốc, ghi số trả + số lỗi; DRAFT → CONFIRMED: phần tốt nhập lại kho bằng phiếu điều chỉnh có lý do bắt đầu **"Khách trả hàng …"**; phần lỗi theo nguyên nhân: lỗi nhà sản xuất → kho bảo hành, còn lại → đề xuất huỷ. Tính tiền hoàn khách và tiền bên chịu trách nhiệm phải đền.
 - **Bảo hành** (`WarrantyService`): chỉ mặt hàng `bao_hanh_thang > 0`; tra cứu bằng mã lô + mã món; TIEP_NHAN → DA_SUA | DOI_MOI | TU_CHOI → DA_TRA; đổi mới thì trừ 1 đơn vị tồn bằng phiếu điều chỉnh; in phiếu bảo hành.
 - **Kho huỷ** (`DisposalService`): CHO_DUYET → TRONG_KHO_HUY (trừ tồn) → DA_TIEU_HUY; TU_CHOI. Người có quyền duyệt tự lập thì duyệt luôn. Tính giá trị thiệt hại theo giá vốn.
-- **Danh mục & nhập liệu:** `CatalogService` (kho, mặt hàng, lô, tài khoản), `PartnerService` (NCC/khách), `ItemProposalService` (quét mã vạch chưa có → quản lý đề xuất → admin duyệt kèm giá gốc/thuế), `ImportService` (CSV: danh mục mặt hàng cho admin; tồn đầu kỳ gom thành **một phiếu nhập nháp**; luôn xem trước, dòng lỗi bị bỏ qua).
+- **Danh mục & nhập liệu:** `CatalogService` (kho, mặt hàng, lô, tài khoản), `PartnerService` (NCC/khách; quản lý thêm ⇒ chờ quản trị duyệt), `ItemProposalService` (quét mã vạch chưa có → quản lý đề xuất → admin duyệt kèm giá gốc/thuế), `ImportService` (CSV: danh mục mặt hàng cho admin; tồn đầu kỳ gom thành **một phiếu nhập nháp**; luôn xem trước, dòng lỗi bị bỏ qua).
 - **Hệ thống:** `AuthService`, `SettingsService` (3 cấp: cá nhân / kho / hệ thống; có `idle_minutes` tự đăng xuất, `canh_bao_han_ngay`…), `AuditLog` (ghi cùng giao dịch nghiệp vụ), `ChangeTracker` (số "+N" và bôi đậm mục mới theo từng tài khoản), `NavBadges`, `NotificationService` (chuông: tính từ trạng thái hiện tại, xong việc thì tự mất).
 
 ## 7. Trang và đường dẫn (menu theo `templates/layout/app.php`)
@@ -128,6 +128,7 @@ Thêm trang mới: khai báo route trong `App::routes()`, thêm controller/servi
 
 | Ngày | Thay đổi |
 |---|---|
+| 2026-11-02 | **Đối tác cần quản trị duyệt:** quản lý kho thêm đối tác ⇒ `doi_tac.duyet = CHO_DUYET`, `hoat_dong = 0` (chưa hiện trong phiếu); quản trị bấm **Duyệt** (`PartnerService::approve`) hoặc **Từ chối** (xoá). Quản lý không tự duyệt / bật / sửa đối tác chờ duyệt; quản trị thêm thì dùng ngay. Có chuông + số «+N» ở menu Đối tác cho quản trị. Test: `tests/Integration/PartnerApprovalTest.php`. Hộp thoại nhập dài cuộn được, nút Lưu/Huỷ dính đáy (`ui.css`). |
 | 2026-11-02 | Khung biểu mẫu rõ hơn (chế độ sáng, `navy.css` cuối file): viền ô nhập / ô chọn `#7d8ba1`, viền khung nhóm (fieldset), thẻ, thanh lọc `#b4bfcf`, chữ gợi ý (placeholder) đậm hơn, nhãn ô đen. |
 | 2026-11-02 | Menu trái: **bỏ kéo mép để chỉnh độ rộng** (xoá đoạn «side-grip» trong `app.js`, ẩn `.side-grip`); độ rộng cố định 220px, độ rộng đã lưu cũ bị xoá khỏi trình duyệt. |
 | 2026-11-02 | Khung ứng dụng đứng yên: thanh trên + menu trái không bị đẩy lệch khi trình duyệt tự cuộn (đặt `overflow: clip` cho `body.app-shell`, `.shell`, `.main-wrap` ở `navy.css`; `app.js` trả `scrollLeft/scrollTop` của khung về 0). Menu dài quá màn hình vẫn cuộn trong chính nó. |

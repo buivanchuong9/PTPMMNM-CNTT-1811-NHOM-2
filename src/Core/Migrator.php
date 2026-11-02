@@ -136,6 +136,7 @@ final class Migrator
         ['giao_hang', 'so_tien', 'bigint NOT NULL DEFAULT 0'],
         ['giao_hang', 'nguoi_nhan', "varchar(120) NOT NULL DEFAULT ''"],
         ['giao_hang', 'sdt_nhan', "varchar(15) NOT NULL DEFAULT ''"],
+        ['doi_tac', 'duyet', "varchar(10) NOT NULL DEFAULT 'DA_DUYET'"],   // DA_DUYET | CHO_DUYET: đối tác do quản lý kho thêm phải chờ quản trị duyệt
         ['doi_tac', 'kho_id', 'integer NULL'],   // kho phụ trách khách hàng: kho gần nhất theo địa chỉ
         ['giao_hang', 'ngay_giao_den', 'timestamp NULL'],   // tài xế đã giao tới nơi (NULL = đang giao; khách tự lấy không dùng)
         ['kho', 'gia_km_noi_bo', 'integer NOT NULL DEFAULT 8000'],

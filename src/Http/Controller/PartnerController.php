@@ -47,7 +47,7 @@ final class PartnerController extends Controller
             && ($item === 0 && $category === 0 || $supplies($x))
             && ($q === '' || str_contains(fold_vn($x['ma'] . ' ' . $x['ten'] . ' ' . $x['nguoi_lien_he'] . ' ' . $x['so_dien_thoai'] . ' ' . $x['email'] . ' ' . implode(' ', array_column($x['items'], 'sku'))), $q))));
         [$rows, $pg] = Paginator::of($rows, $r);
-        return $this->render('partners/index', $user, 'partners', ['rows' => $rows, 'pg' => $pg, 'type' => $type, 'q' => $r->search('q'), 'status' => $status, 'category' => $category, 'item' => $item, 'itemOptions' => $itemOptions, 'catOf' => $catOf, 'counts' => $counts, 'types' => PartnerService::TYPES, 'canEdit' => $this->partners->canEdit($user), 'units' => $this->catalog->units(), 'categories' => $this->catalog->categories(), 'items' => array_values(array_filter($this->catalog->items(), fn($i) => $i['hoat_dong']))], 'Đối tác');
+        return $this->render('partners/index', $user, 'partners', ['rows' => $rows, 'pg' => $pg, 'type' => $type, 'q' => $r->search('q'), 'status' => $status, 'category' => $category, 'item' => $item, 'itemOptions' => $itemOptions, 'catOf' => $catOf, 'counts' => $counts, 'types' => PartnerService::TYPES, 'canEdit' => $this->partners->canEdit($user), 'canApprove' => $user && $this->partners->canApprove($user), 'units' => $this->catalog->units(), 'categories' => $this->catalog->categories(), 'items' => array_values(array_filter($this->catalog->items(), fn($i) => $i['hoat_dong']))], 'Đối tác');
     }
 
     private function fields(Request $r): array
@@ -101,7 +101,7 @@ final class PartnerController extends Controller
                 $ids = $this->createNewItems($r, $user, $supplier ? $r->arr('item_ids') : []);
                 $this->partners->setPartnerItems($user, $id, $supplier ? $ids : []);
             });
-        }, 'Đã thêm đối tác.', '/partners');
+        }, $user->isAdmin ? 'Đã thêm đối tác.' : 'Đã gửi đối tác — chờ quản trị duyệt mới dùng được.', '/partners');
     }
 
     public function update(Request $r, array $p, ?User $user): Response
@@ -115,6 +115,16 @@ final class PartnerController extends Controller
                 $this->partners->setPartnerItems($user, $id, $supplier ? $ids : []);
             });
         }, 'Đã lưu thông tin đối tác.', '/partners');
+    }
+
+    public function approve(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(fn() => $this->partners->approve($user, (int)$r->int('partner_id')), 'Đã duyệt đối tác — dùng được trong phiếu.', '/partners');
+    }
+
+    public function reject(Request $r, array $p, ?User $user): Response
+    {
+        return $this->act(fn() => $this->partners->reject($user, (int)$r->int('partner_id')), 'Đã từ chối và xoá đối tác chờ duyệt.', '/partners');
     }
 
     public function active(Request $r, array $p, ?User $user): Response
